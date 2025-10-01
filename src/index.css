@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .sidebar-item {
+    @apply flex items-center px-4 py-3 text-gray-700 hover:bg-church-purple-50 hover:text-church-purple-700 transition-colors duration-200 cursor-pointer;
+    @apply dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-church-purple-400;
+  }
+  
+  .sidebar-item.active {
+    @apply bg-church-purple-100 text-church-purple-700 border-r-4 border-church-purple-600;
+    @apply dark:bg-gray-700 dark:text-church-purple-400 dark:border-church-purple-400;
+  }
+  
+  .card {
+    @apply bg-white rounded-lg shadow-md p-6 border border-gray-100 hover:shadow-lg transition-shadow duration-200;
+    @apply dark:bg-gray-800 dark:border-gray-700 dark:hover:shadow-gray-900/20;
+  }
+  
+  .stats-card {
+    @apply bg-gradient-to-br from-church-purple-500 to-church-purple-600 text-white rounded-lg shadow-md p-6;
+  }
+}
+
+/* Scrollbar customization */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Calendar styles */
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  background-color: #e5e7eb;
+}
+
+.calendar-day {
+  @apply bg-white p-2 min-h-[80px] text-sm;
+}
+
+.calendar-day.other-month {
+  @apply bg-gray-50 text-gray-400;
+}
+
+.calendar-day.today {
+  @apply bg-church-purple-50 border-2 border-church-purple-500;
+  @apply dark:bg-church-purple-900/20 dark:border-church-purple-400;
+}
+
+.calendar-event {
+  @apply bg-church-purple-100 text-church-purple-800 text-xs px-1 py-0.5 rounded mb-1 truncate;
+  @apply dark:bg-church-purple-800 dark:text-church-purple-200;
+}
