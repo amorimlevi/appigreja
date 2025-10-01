@@ -360,9 +360,9 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [] }
 
   const renderDashboard = () => (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard Pastoral</h1>
-        <div className="flex space-x-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Dashboard Pastoral</h1>
+        <div className="flex flex-col sm:flex-row gap-2 sm:space-x-4 w-full sm:w-auto">
           <button 
             onClick={handleAddMember}
             className="flex items-center px-4 py-2 bg-church-purple-600 text-white rounded-lg hover:bg-church-purple-700"
@@ -381,7 +381,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [] }
       </div>
 
       {/* Estatísticas principais */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <div className="stats-card">
           <div className="flex items-center justify-between">
             <div>
@@ -425,8 +425,8 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [] }
 
       {/* Filtros */}
       <div className="card">
-        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Filtros de Estatísticas</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <h3 className="text-base sm:text-lg font-semibold mb-4 text-gray-900 dark:text-white">Filtros de Estatísticas</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           <div>
             <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Gênero</label>
             <select
@@ -491,8 +491,8 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [] }
 
       {/* Gráfico de barras agrupadas */}
       <div className="card">
-        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Distribuição por Faixa Etária e Gênero</h3>
-        <div className="h-80">
+        <h3 className="text-base sm:text-lg font-semibold mb-4 text-gray-900 dark:text-white">Distribuição por Faixa Etária e Gênero</h3>
+        <div className="h-64 sm:h-80">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={memberStats.chartData}
@@ -865,12 +865,12 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [] }
   );
 
   const renderBirthdays = () => (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Aniversários</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Aniversários</h1>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         {/* Aniversários do mês */}
         <div className="card">
           <h3 className="text-lg font-semibold mb-4 flex items-center">
@@ -942,12 +942,12 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [] }
   );
 
   const renderPrayerRequests = () => (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Pedidos de Oração</h1>
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Pedidos de Oração</h1>
         <button 
           onClick={handleAddPrayer}
-          className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+          className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 w-full sm:w-auto justify-center"
         >
           <Plus className="w-4 h-4 mr-2" />
           Novo Pedido
@@ -955,7 +955,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [] }
       </div>
 
       {/* Estatísticas dos pedidos */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <div className="card bg-gradient-to-r from-red-500 to-red-600 text-white">
           <div className="flex items-center justify-between">
             <div>
@@ -997,10 +997,10 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [] }
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         {/* Pedidos Ativos */}
         <div className="card">
-          <h3 className="text-lg font-semibold mb-4 flex items-center">
+          <h3 className="text-base sm:text-lg font-semibold mb-4 flex items-center">
             <Heart className="w-5 h-5 mr-2 text-red-600" />
             Pedidos Ativos ({prayerRequests.filter(p => p.status === 'ativo').length})
           </h3>
@@ -1156,11 +1156,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [] }
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-      {/* Sidebar */}
+      {/* Sidebar - Mobile optimizado */}
       <div className={`bg-white dark:bg-gray-800 shadow-lg transition-all duration-300 ${
-        sidebarOpen ? 'w-64' : 'w-16'
-      }`}>
-        <div className="p-4">
+        sidebarOpen ? 'w-64' : 'w-0 -translate-x-full md:translate-x-0 md:w-16'
+      } md:relative fixed inset-y-0 left-0 z-50`}>
+        <div className={`p-4 ${!sidebarOpen ? 'hidden md:block' : ''}`}>
           <div className="flex items-center justify-between">
             {sidebarOpen && (
               <h2 className="text-xl font-bold text-church-purple-700 dark:text-church-purple-400">Igreja Admin</h2>
@@ -1174,13 +1174,19 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [] }
           </div>
         </div>
 
-        <nav className="mt-8">
+        <nav className={`mt-8 ${!sidebarOpen ? 'hidden md:block' : ''}`}>
           {menuItems.map(item => {
             const Icon = item.icon;
             return (
               <div
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => {
+                  setActiveTab(item.id);
+                  // Fecha sidebar no mobile ao clicar
+                  if (window.innerWidth < 768) {
+                    setSidebarOpen(false);
+                  }
+                }}
                 className={`sidebar-item ${activeTab === item.id ? 'active' : ''}`}
               >
                 <Icon className="w-5 h-5" />
@@ -1191,9 +1197,27 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [] }
         </nav>
       </div>
 
+      {/* Overlay para mobile quando sidebar está aberta */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Botão flutuante de menu (mobile) */}
+      {!sidebarOpen && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="fixed bottom-6 left-6 z-50 md:hidden bg-church-purple-600 text-white p-4 rounded-full shadow-lg hover:bg-church-purple-700 active:scale-95 transition-all"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+      )}
+
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
-        <div className="p-6">
+        <div className="p-4 md:p-6">
           {activeTab === 'dashboard' && renderDashboard()}
           {activeTab === 'members' && renderMembers()}
           {activeTab === 'events' && renderEvents()}
