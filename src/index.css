@@ -6,6 +6,7 @@
   .sidebar-item {
     @apply flex items-center px-4 py-3 text-gray-700 hover:bg-church-purple-50 hover:text-church-purple-700 transition-colors duration-200 cursor-pointer;
     @apply dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-church-purple-400;
+    @apply active:bg-church-purple-100 active:scale-95 touch-manipulation;
   }
   
   .sidebar-item.active {
@@ -21,6 +22,15 @@
   .stats-card {
     @apply bg-gradient-to-br from-church-purple-500 to-church-purple-600 text-white rounded-lg shadow-md p-6;
   }
+}
+
+/* Melhorias de touch para mobile */
+button, a, .sidebar-item {
+  @apply touch-manipulation;
+}
+
+button {
+  @apply active:scale-95 transition-transform duration-100;
 }
 
 /* Scrollbar customization */
@@ -65,4 +75,44 @@
 .calendar-event {
   @apply bg-church-purple-100 text-church-purple-800 text-xs px-1 py-0.5 rounded mb-1 truncate;
   @apply dark:bg-church-purple-800 dark:text-church-purple-200;
+}
+
+/* Mobile Optimizations */
+@media (max-width: 768px) {
+  .calendar-day {
+    @apply min-h-[60px] p-1 text-xs;
+  }
+  
+  .card {
+    @apply p-4;
+  }
+  
+  .stats-card {
+    @apply p-4;
+  }
+  
+  /* Área de toque maior para botões */
+  button {
+    @apply min-h-[44px] min-w-[44px];
+  }
+  
+  /* Espaçamento adequado para touch */
+  .sidebar-item {
+    @apply py-4;
+  }
+}
+
+@media (max-width: 640px) {
+  .calendar-grid {
+    font-size: 0.75rem;
+  }
+  
+  .calendar-day {
+    @apply min-h-[50px];
+  }
+  
+  /* Ajuste de fonte base para mobile pequeno */
+  html {
+    font-size: 14px;
+  }
 }
