@@ -52,6 +52,21 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [] }
   const [showEditMemberModal, setShowEditMemberModal] = useState(false);
   const [showDeleteMemberModal, setShowDeleteMemberModal] = useState(false);
   const [selectedMember, setSelectedMember] = useState(null);
+  const [newMemberData, setNewMemberData] = useState({
+    nome: '',
+    email: '',
+    telefone: '',
+    nascimento: '',
+    genero: 'masculino',
+    funcao: 'membro',
+    status: 'ativo'
+  });
+  const [newEventData, setNewEventData] = useState({
+    nome: '',
+    data: '',
+    local: '',
+    descricao: ''
+  });
 
   // Aplicar tema escuro ao DOM
   React.useEffect(() => {
@@ -69,11 +84,27 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [] }
 
   // Handlers para modais
   const handleAddMember = () => {
+    setNewMemberData({
+      nome: '',
+      email: '',
+      telefone: '',
+      nascimento: '',
+      genero: 'masculino',
+      funcao: 'membro',
+      status: 'ativo'
+    });
     setShowMemberModal(true);
   };
 
   const handleAddEvent = (date = null) => {
     setSelectedDate(date);
+    const formattedDate = date ? format(date, "yyyy-MM-dd'T'HH:mm") : '';
+    setNewEventData({
+      nome: '',
+      data: formattedDate,
+      local: '',
+      descricao: ''
+    });
     setShowEventModal(true);
   };
 
@@ -382,7 +413,10 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [] }
 
       {/* Estatísticas principais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="stats-card">
+        <div 
+          onClick={() => setActiveTab('members')}
+          className="stats-card cursor-pointer hover:scale-105 transition-transform"
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-blue-100">Total de Membros</p>
@@ -392,7 +426,10 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [] }
           </div>
         </div>
         
-        <div className="stats-card">
+        <div 
+          onClick={() => setActiveTab('events')}
+          className="stats-card cursor-pointer hover:scale-105 transition-transform"
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-blue-100">Eventos Futuros</p>
@@ -402,7 +439,10 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [] }
           </div>
         </div>
         
-        <div className="stats-card">
+        <div 
+          onClick={() => setActiveTab('prayers')}
+          className="stats-card cursor-pointer hover:scale-105 transition-transform"
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-blue-100">Pedidos Ativos</p>
@@ -412,7 +452,10 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [] }
           </div>
         </div>
         
-        <div className="stats-card">
+        <div 
+          onClick={() => setActiveTab('birthdays')}
+          className="stats-card cursor-pointer hover:scale-105 transition-transform"
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-blue-100">Aniversários do Mês</p>
@@ -1205,43 +1248,208 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [] }
 
       {/* Modais */}
       {showMemberModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-2xl w-full mx-4 my-8">
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Adicionar Novo Membro</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">Funcionalidade em desenvolvimento...</p>
-            <div className="flex justify-end space-x-2">
-              <button 
-                onClick={() => setShowMemberModal(false)}
-                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-              >
-                Fechar
-              </button>
-            </div>
+            
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              console.log('Novo membro:', newMemberData);
+              setShowMemberModal(false);
+            }} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                    Nome Completo *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newMemberData.nome}
+                    onChange={(e) => setNewMemberData({...newMemberData, nome: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-church-purple-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="João Silva"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={newMemberData.email}
+                    onChange={(e) => setNewMemberData({...newMemberData, email: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-church-purple-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="joao@email.com"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                    Telefone
+                  </label>
+                  <input
+                    type="tel"
+                    value={newMemberData.telefone}
+                    onChange={(e) => setNewMemberData({...newMemberData, telefone: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-church-purple-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="(11) 98765-4321"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                    Data de Nascimento
+                  </label>
+                  <input
+                    type="date"
+                    value={newMemberData.nascimento}
+                    onChange={(e) => setNewMemberData({...newMemberData, nascimento: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-church-purple-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                    Gênero *
+                  </label>
+                  <select
+                    required
+                    value={newMemberData.genero}
+                    onChange={(e) => setNewMemberData({...newMemberData, genero: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-church-purple-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="masculino">Masculino</option>
+                    <option value="feminino">Feminino</option>
+                    <option value="outro">Outro</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                    Função *
+                  </label>
+                  <select
+                    required
+                    value={newMemberData.funcao}
+                    onChange={(e) => setNewMemberData({...newMemberData, funcao: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-church-purple-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    {availableRoles.map(role => (
+                      <option key={role} value={role}>
+                        {role.charAt(0).toUpperCase() + role.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-4">
+                <button 
+                  type="button"
+                  onClick={() => setShowMemberModal(false)}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  className="px-4 py-2 bg-church-purple-600 text-white rounded-lg hover:bg-church-purple-700"
+                >
+                  Adicionar Membro
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
       {showEventModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-2xl w-full mx-4 my-8">
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Adicionar Novo Evento</h3>
-            {selectedDate && (
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                Data selecionada: {format(selectedDate, 'dd/MM/yyyy', { locale: ptBR })}
-              </p>
-            )}
-            <p className="text-gray-600 dark:text-gray-400 mb-4">Funcionalidade em desenvolvimento...</p>
-            <div className="flex justify-end space-x-2">
-              <button 
-                onClick={() => {
-                  setShowEventModal(false);
-                  setSelectedDate(null);
-                }}
-                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-              >
-                Fechar
-              </button>
-            </div>
+            
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              console.log('Novo evento:', newEventData);
+              setShowEventModal(false);
+              setSelectedDate(null);
+            }} className="space-y-4">
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                    Nome do Evento *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newEventData.nome}
+                    onChange={(e) => setNewEventData({...newEventData, nome: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-church-purple-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="Culto de Celebração"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                    Data e Hora *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={newEventData.data}
+                    onChange={(e) => setNewEventData({...newEventData, data: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-church-purple-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                    Local
+                  </label>
+                  <input
+                    type="text"
+                    value={newEventData.local}
+                    onChange={(e) => setNewEventData({...newEventData, local: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-church-purple-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="Templo Principal"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                    Descrição
+                  </label>
+                  <textarea
+                    value={newEventData.descricao}
+                    onChange={(e) => setNewEventData({...newEventData, descricao: e.target.value})}
+                    rows="3"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-church-purple-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="Descrição do evento..."
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-4">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setShowEventModal(false);
+                    setSelectedDate(null);
+                  }}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                >
+                  Adicionar Evento
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
