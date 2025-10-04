@@ -1,6 +1,17 @@
-import React, { useState, useEffect } from 'react'
-import ChurchAdminDashboard from './components/ChurchAdminDashboard'
-import Login from './components/Login'
+import React from 'react'
+
+function App() {
+  return (
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+      <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
+        <h1 className="text-3xl font-bold text-gray-900 mb-4">Teste de Renderização</h1>
+        <p className="text-gray-700">Se você está vendo isso, o React está funcionando!</p>
+      </div>
+    </div>
+  )
+}
+
+export default App
 
 // Dados de exemplo para demonstração
 const sampleMembers = [
@@ -338,9 +349,6 @@ function App() {
   const [members, setMembers] = useState([]);
   const [events, setEvents] = useState([]);
   const [prayerRequests, setPrayerRequests] = useState([]);
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem('church_authenticated') === 'true';
-  });
 
   useEffect(() => {
     // Carregar dados iniciais
@@ -412,9 +420,11 @@ function App() {
 
   const handleEditFamily = (oldFamilyName, familyData) => {
     const updatedMembers = members.map(member => {
+      // Remove família antiga de membros que não estão mais selecionados
       if (member.familia === oldFamilyName && !familyData.membrosIds.includes(member.id)) {
         return { ...member, familia: '' };
       }
+      // Adiciona/atualiza família para membros selecionados
       if (familyData.membrosIds.includes(member.id)) {
         return { ...member, familia: familyData.nome };
       }
@@ -425,22 +435,6 @@ function App() {
     dataManager.saveMembers();
   };
 
-  const handleLogin = () => {
-    localStorage.setItem('church_authenticated', 'true');
-    setIsAuthenticated(true);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('church_authenticated');
-    setIsAuthenticated(false);
-  };
-
-  console.log('Renderizando App - members:', members.length)
-
-  if (!isAuthenticated) {
-    return <Login onLogin={handleLogin} />;
-  }
-  
   return (
     <div className="App">
       <ChurchAdminDashboard 
@@ -453,7 +447,6 @@ function App() {
         onDeleteMember={handleDeleteMember}
         onAddFamily={handleAddFamily}
         onEditFamily={handleEditFamily}
-        onLogout={handleLogout}
       />
     </div>
   );

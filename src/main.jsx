@@ -3,21 +3,20 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
 
-// Register service worker for PWA
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then((registration) => {
-        console.log('SW registrado com sucesso:', registration);
-      })
-      .catch((registrationError) => {
-        console.log('Falha no registro do SW:', registrationError);
-      });
-  });
-}
+console.log('main.jsx carregado!')
+console.log('Root element:', document.getElementById('root'))
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-)
+const root = document.getElementById('root')
+
+if (!root) {
+  console.error('ERRO: Elemento root não encontrado!')
+  document.body.innerHTML = '<h1 style="color: red; padding: 20px;">ERRO: Elemento root não encontrado!</h1>'
+} else {
+  console.log('Renderizando App...')
+  ReactDOM.createRoot(root).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  )
+  console.log('App renderizado!')
+}
