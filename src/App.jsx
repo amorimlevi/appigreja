@@ -6,103 +6,223 @@ import Login from './components/Login'
 const sampleMembers = [
   {
     id: 'MBR0001',
-    nome: 'João da Silva Santos',
-    email: 'joao.santos@email.com',
-    telefone: '(11) 99999-1111',
-    nascimento: '1985-03-15',
+    nome: 'Pastor Marcos Silva',
+    email: 'pastor.marcos@email.com',
+    telefone: '(11) 98765-1111',
+    nascimento: '1975-05-12',
     genero: 'masculino',
+    funcao: 'pastor',
     status: 'ativo',
-    observacoes: 'Membro ativo da banda de louvor'
+    observacoes: 'Pastor titular da igreja'
   },
   {
     id: 'MBR0002',
-    nome: 'Maria Oliveira Costa',
-    email: 'maria.costa@email.com',
-    telefone: '(11) 99999-2222',
-    nascimento: '1990-07-22',
+    nome: 'Ana Paula Costa',
+    email: 'ana.costa@email.com',
+    telefone: '(11) 98765-2222',
+    nascimento: '1988-08-20',
     genero: 'feminino',
+    funcao: 'lider da diaconia',
     status: 'ativo',
-    observacoes: 'Professora da escola dominical'
+    observacoes: 'Líder do ministério de assistência social'
   },
   {
     id: 'MBR0003',
-    nome: 'Pedro Henrique Lima',
-    email: 'pedro.lima@email.com',
-    telefone: '(11) 99999-3333',
-    nascimento: '1978-11-08',
+    nome: 'Rafael Oliveira',
+    email: 'rafael.oliveira@email.com',
+    telefone: '(11) 98765-3333',
+    nascimento: '1992-03-15',
     genero: 'masculino',
+    funcao: 'líder de louvor',
     status: 'ativo',
-    observacoes: 'Líder de célula'
+    observacoes: 'Coordenador do ministério de louvor'
   },
   {
     id: 'MBR0004',
-    nome: 'Ana Carolina Ferreira',
-    email: 'ana.ferreira@email.com',
-    telefone: '(11) 99999-4444',
-    nascimento: '1995-12-25',
+    nome: 'Juliana Santos',
+    email: 'juliana.santos@email.com',
+    telefone: '(11) 98765-4444',
+    nascimento: '1990-11-08',
     genero: 'feminino',
+    funcao: 'lider kids',
     status: 'ativo',
-    observacoes: 'Coordenadora do ministério infantil'
+    observacoes: 'Líder do ministério infantil'
   },
   {
     id: 'MBR0005',
-    nome: 'Carlos Eduardo Souza',
-    email: 'carlos.souza@email.com',
-    telefone: '(11) 99999-5555',
-    nascimento: '1965-04-10',
+    nome: 'Bruno Carvalho',
+    email: 'bruno.carvalho@email.com',
+    telefone: '(11) 98765-5555',
+    nascimento: '1995-02-28',
     genero: 'masculino',
+    funcao: 'lider jovens',
     status: 'ativo',
-    observacoes: 'Diácono e tesoureiro'
+    observacoes: 'Líder do ministério de jovens'
   },
   {
     id: 'MBR0006',
-    nome: 'Fernanda Cristina Alves',
-    email: 'fernanda.alves@email.com',
-    telefone: '(11) 99999-6666',
-    nascimento: '2000-09-18',
+    nome: 'Carla Mendes',
+    email: 'carla.mendes@email.com',
+    telefone: '(11) 98765-6666',
+    nascimento: '1985-07-14',
     genero: 'feminino',
+    funcao: 'professor kids',
     status: 'ativo',
-    observacoes: 'Jovem do ministério de dança'
+    observacoes: 'Professora da turma dos pequenos'
   },
   {
     id: 'MBR0007',
-    nome: 'Roberto Silva Neto',
-    email: 'roberto.neto@email.com',
-    telefone: '(11) 99999-7777',
-    nascimento: '1988-01-30',
+    nome: 'Diego Ferreira',
+    email: 'diego.ferreira@email.com',
+    telefone: '(11) 98765-7777',
+    nascimento: '1993-09-22',
     genero: 'masculino',
-    status: 'inativo',
-    observacoes: 'Mudou de cidade'
+    funcao: 'professor kids',
+    status: 'ativo',
+    observacoes: 'Professor da turma dos grandes'
   },
   {
     id: 'MBR0008',
-    nome: 'Juliana Pereira Mendes',
-    email: 'juliana.mendes@email.com',
-    telefone: '(11) 99999-8888',
-    nascimento: '1992-06-12',
-    genero: 'feminino',
+    nome: 'Eduardo Alves',
+    email: 'eduardo.alves@email.com',
+    telefone: '(11) 98765-8888',
+    nascimento: '1987-12-05',
+    genero: 'masculino',
+    funcao: 'ministro',
     status: 'ativo',
-    observacoes: 'Secretária da igreja'
+    observacoes: 'Ministro de evangelismo'
   },
   {
     id: 'MBR0009',
-    nome: 'Daniel Santos Cruz',
-    email: 'daniel.cruz@email.com',
-    telefone: '(11) 99999-9999',
-    nascimento: '2010-05-20',
-    genero: 'masculino',
+    nome: 'Fernanda Lima',
+    email: 'fernanda.lima@email.com',
+    telefone: '(11) 98765-9999',
+    nascimento: '1991-06-18',
+    genero: 'feminino',
+    funcao: 'louvor',
     status: 'ativo',
-    observacoes: 'Criança ativa no ministério infantil'
+    observacoes: 'Vocalista do grupo de louvor'
   },
   {
     id: 'MBR0010',
-    nome: 'Gabriela Rosa Lima',
-    email: 'gabriela.lima@email.com',
-    telefone: '(11) 99999-0000',
-    nascimento: '2005-10-03',
-    genero: 'feminino',
+    nome: 'Gabriel Souza',
+    email: 'gabriel.souza@email.com',
+    telefone: '(11) 98765-0000',
+    nascimento: '1989-04-30',
+    genero: 'masculino',
+    funcao: 'louvor',
     status: 'ativo',
-    observacoes: 'Adolescente do grupo de jovens'
+    observacoes: 'Guitarrista do grupo de louvor'
+  },
+  {
+    id: 'MBR0011',
+    nome: 'Helena Rocha',
+    email: 'helena.rocha@email.com',
+    telefone: '(11) 98765-1122',
+    nascimento: '1994-10-11',
+    genero: 'feminino',
+    funcao: 'diaconia',
+    status: 'ativo',
+    observacoes: 'Membro do ministério de assistência'
+  },
+  {
+    id: 'MBR0012',
+    nome: 'Igor Santos',
+    email: 'igor.santos@email.com',
+    telefone: '(11) 98765-2233',
+    nascimento: '1986-01-25',
+    genero: 'masculino',
+    funcao: 'diaconia',
+    status: 'ativo',
+    observacoes: 'Coordenador de visitas hospitalares'
+  },
+  {
+    id: 'MBR0013',
+    nome: 'Joana Pereira',
+    email: 'joana.pereira@email.com',
+    telefone: '(11) 98765-3344',
+    nascimento: '1998-07-07',
+    genero: 'feminino',
+    funcao: 'membro',
+    status: 'ativo',
+    observacoes: 'Membro ativo da congregação'
+  },
+  {
+    id: 'MBR0014',
+    nome: 'Carlos Roberto',
+    email: 'carlos.roberto@email.com',
+    telefone: '(11) 98765-4455',
+    nascimento: '1960-03-20',
+    genero: 'masculino',
+    funcao: 'membro',
+    status: 'ativo',
+    observacoes: 'Membro fundador da igreja'
+  },
+  {
+    id: 'MBR0015',
+    nome: 'Larissa Campos',
+    email: 'larissa.campos@email.com',
+    telefone: '(11) 98765-5566',
+    nascimento: '2002-12-15',
+    genero: 'feminino',
+    funcao: 'membro',
+    status: 'ativo',
+    observacoes: 'Jovem adulto da igreja'
+  },
+  {
+    id: 'MBR0016',
+    nome: 'Miguel Nunes',
+    email: 'miguel.nunes@email.com',
+    telefone: '(11) 98765-6677',
+    nascimento: '2008-05-03',
+    genero: 'masculino',
+    funcao: 'membro',
+    status: 'ativo',
+    observacoes: 'Adolescente participante do ministério infantil'
+  },
+  {
+    id: 'MBR0017',
+    nome: 'Natália Silva',
+    email: 'natalia.silva@email.com',
+    telefone: '(11) 98765-7788',
+    nascimento: '2015-09-10',
+    genero: 'feminino',
+    funcao: 'membro',
+    status: 'ativo',
+    observacoes: 'Criança da turma dos pequenos'
+  },
+  {
+    id: 'MBR0018',
+    nome: 'Otávio Costa',
+    email: 'otavio.costa@email.com',
+    telefone: '(11) 98765-8899',
+    nascimento: '1970-11-28',
+    genero: 'masculino',
+    funcao: 'ministro',
+    status: 'ativo',
+    observacoes: 'Ministro de música'
+  },
+  {
+    id: 'MBR0019',
+    nome: 'Patrícia Gomes',
+    email: 'patricia.gomes@email.com',
+    telefone: '(11) 98765-9900',
+    nascimento: '1983-08-16',
+    genero: 'feminino',
+    funcao: 'professor kids',
+    status: 'ativo',
+    observacoes: 'Professora auxiliar do ministério infantil'
+  },
+  {
+    id: 'MBR0020',
+    nome: 'Ricardo Dias',
+    email: 'ricardo.dias@email.com',
+    telefone: '(11) 98765-0011',
+    nascimento: '1978-02-09',
+    genero: 'masculino',
+    funcao: 'louvor',
+    status: 'ativo',
+    observacoes: 'Baterista do grupo de louvor'
   }
 ];
 
@@ -401,7 +521,7 @@ function App() {
   const handleAddFamily = (familyData) => {
     const updatedMembers = members.map(member => {
       if (familyData.membrosIds.includes(member.id)) {
-        return { ...member, familia: familyData.nome };
+        return { ...member, familia: familyData.nome, familiaId: familyData.id };
       }
       return member;
     });
@@ -410,13 +530,15 @@ function App() {
     dataManager.saveMembers();
   };
 
-  const handleEditFamily = (oldFamilyName, familyData) => {
+  const handleEditFamily = (oldFamilyId, familyData) => {
     const updatedMembers = members.map(member => {
-      if (member.familia === oldFamilyName && !familyData.membrosIds.includes(member.id)) {
-        return { ...member, familia: '' };
+      // Remove membros que não estão mais na família
+      if (member.familiaId === oldFamilyId && !familyData.membrosIds.includes(member.id)) {
+        return { ...member, familia: '', familiaId: '' };
       }
+      // Adiciona ou atualiza membros na família
       if (familyData.membrosIds.includes(member.id)) {
-        return { ...member, familia: familyData.nome };
+        return { ...member, familia: familyData.nome, familiaId: familyData.id };
       }
       return member;
     });

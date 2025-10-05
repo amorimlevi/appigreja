@@ -30,7 +30,7 @@ const Login = ({ onLogin }) => {
                     <img 
                         src="https://res.cloudinary.com/dxchbdcai/image/upload/v1759592247/Design_sem_nome_10_nwkjse.png" 
                         alt="Logo da Igreja" 
-                        className="w-40 h-40 mx-auto mb-4 object-contain"
+                        className="w-48 h-48 mx-auto mb-4 object-contain"
                     />
                     <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Igreja Zoe</h2>
                     <p className="text-gray-600 dark:text-gray-400">"E perseveravam na doutrina dos apóstolos, e na comunhão, e no partir do pão, e nas orações."</p>

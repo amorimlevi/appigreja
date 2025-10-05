@@ -72,6 +72,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         descricao: '',
         membrosIds: []
     });
+    const [expandedFamilies, setExpandedFamilies] = useState({});
     const [editMemberData, setEditMemberData] = useState({
         nome: '',
         telefone: '',
@@ -115,9 +116,18 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         ];
     });
     const [showEscalaModal, setShowEscalaModal] = useState(false);
+    const [showEscalaOptionsModal, setShowEscalaOptionsModal] = useState(false);
+    const [showEditEscalaModal, setShowEditEscalaModal] = useState(false);
+    const [selectedEscalaDiaconia, setSelectedEscalaDiaconia] = useState(null);
     const [newEscalaData, setNewEscalaData] = useState({
         categoria: 'culto',
         data: format(new Date(), 'yyyy-MM-dd'),
+        horario: '19:00',
+        diaconosSelecionados: []
+    });
+    const [editEscalaData, setEditEscalaData] = useState({
+        categoria: 'culto',
+        data: '',
         horario: '19:00',
         diaconosSelecionados: []
     });
@@ -144,7 +154,10 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
     const [showMusicasCadastradasModal, setShowMusicasCadastradasModal] = useState(false);
     const [showProfessoresModal, setShowProfessoresModal] = useState(false);
     const [showEscalaProfessoresModal, setShowEscalaProfessoresModal] = useState(false);
+    const [showDetalhesEscalaProfessoresModal, setShowDetalhesEscalaProfessoresModal] = useState(false);
+    const [selectedEscalaProfessores, setSelectedEscalaProfessores] = useState(null);
     const [newEscalaProfessoresData, setNewEscalaProfessoresData] = useState({
+        turmas: [],
         data: format(new Date(), 'yyyy-MM-dd'),
         horario: '09:00',
         professoresSelecionados: []
@@ -180,6 +193,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             status: 'ativo',
             familia: ''
         });
+        setMemberView('individual');
         setShowMemberModal(true);
     };
 
@@ -236,7 +250,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
 
     const handleEditFamily = (family) => {
         setSelectedFamily(family);
-        const memberIds = family.membros.map(m => m.id);
+        // Mapear os membros para seus IDs corretos
+        const memberIds = family.membros.map(m => {
+            const index = members.findIndex(member => member.nome === m.nome && member.nascimento === m.nascimento);
+            return index >= 0 ? generateMemberId(m, index) : m.id;
+        });
         setEditFamilyData({
             nome: family.nome || '',
             descricao: family.descricao || '',
@@ -244,6 +262,58 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         });
         setFamilyMemberSearch('');
         setShowEditFamilyModal(true);
+    };
+
+    const handleEditEscalaDiaconia = (escala) => {
+        setEditEscalaData({
+            categoria: escala.categoria,
+            data: escala.data,
+            horario: escala.horario,
+            diaconosSelecionados: escala.diaconos.map(d => d.id)
+        });
+        setShowEscalaOptionsModal(false);
+        setShowEditEscalaModal(true);
+    };
+
+    const handleSaveEditEscala = (e) => {
+        e.preventDefault();
+        const updatedEscalas = escalas.map(escala => {
+            if (escala.id === selectedEscalaDiaconia.id) {
+                const diaconosSelecionados = members
+                    .filter(m => editEscalaData.diaconosSelecionados.includes(m.id))
+                    .map(m => ({ id: m.id, nome: m.nome }));
+                
+                return {
+                    ...escala,
+                    categoria: editEscalaData.categoria,
+                    data: editEscalaData.data,
+                    horario: editEscalaData.horario,
+                    diaconos: diaconosSelecionados
+                };
+            }
+            return escala;
+        });
+        
+        setEscalas(updatedEscalas);
+        localStorage.setItem('escalaDiaconia', JSON.stringify(updatedEscalas));
+        setShowEditEscalaModal(false);
+        setSelectedEscalaDiaconia(null);
+        setEditEscalaData({
+            categoria: 'culto',
+            data: '',
+            horario: '19:00',
+            diaconosSelecionados: []
+        });
+    };
+
+    const handleDeleteEscalaDiaconia = (escalaId) => {
+        if (confirm('Tem certeza que deseja deletar esta escala?')) {
+            const updatedEscalas = escalas.filter(e => e.id !== escalaId);
+            setEscalas(updatedEscalas);
+            localStorage.setItem('escalaDiaconia', JSON.stringify(updatedEscalas));
+            setShowEscalaOptionsModal(false);
+            setSelectedEscalaDiaconia(null);
+        }
     };
 
     const handleCalendarDayClick = (date) => {
@@ -294,9 +364,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         'líder de louvor',
         'lider kids',
         'lider jovens',
+        'ministro',
         'louvor',
         'diaconia',
         'professor kids',
+        
         
     ];
 
@@ -337,7 +409,29 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
     // Função para gerar ID do membro
     const generateMemberId = (member, index) => {
         if (member.id) return member.id;
-        return `MBR${String(index + 1).padStart(4, '0')}`;
+        // Gera um hash único baseado no nome e nascimento
+        const uniqueString = `${member.nome}-${member.nascimento || ''}-${member.telefone || ''}`;
+        let hash = 0;
+        for (let i = 0; i < uniqueString.length; i++) {
+            const char = uniqueString.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32bit integer
+        }
+        return `MBR${Math.abs(hash).toString().padStart(8, '0').substring(0, 8)}`;
+    };
+
+    // Função para gerar ID da família
+    const generateFamilyId = (family) => {
+        if (family.id) return family.id;
+        // Gera um hash único baseado no nome, descricao e timestamp
+        const uniqueString = `${family.nome}-${family.descricao || ''}-${Date.now()}`;
+        let hash = 0;
+        for (let i = 0; i < uniqueString.length; i++) {
+            const char = uniqueString.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32bit integer
+        }
+        return `FAM${Math.abs(hash).toString().padStart(8, '0').substring(0, 8)}`;
     };
 
     // Filtros de membros
@@ -372,6 +466,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             return true;
         });
     }, [members, genderFilter, ageFilter, roleFilter, searchTerm]);
+    
+    // Membros individuais (sem família) para a view individual
+    const individualMembers = useMemo(() => {
+        return filteredMembers.filter(member => !member.familia || member.familia.trim() === '');
+    }, [filteredMembers]);
 
     // Estatísticas dos membros
     const memberStats = useMemo(() => {
@@ -450,21 +549,32 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         
         console.log('Calculando familyGroups com members:', members);
         
-        // Usar members ao invés de filteredMembers para garantir que todos os membros com família sejam considerados
+        // Filtrar apenas membros que TÊM uma família definida
         members.forEach(member => {
-            console.log('Membro:', member.nome, 'Familia:', member.familia);
-            if (!member.familia || member.familia.trim() === '') return;
-            const familyName = member.familia.trim();
-            if (!groups[familyName]) {
-                groups[familyName] = [];
+            console.log('Membro:', member.nome, 'Familia:', member.familia, 'FamiliaId:', member.familiaId);
+            // Pular membros sem família ou com família vazia
+            if (!member.familia || member.familia.trim() === '' || !member.familiaId) {
+                console.log('  -> Pulando (sem família)');
+                return;
             }
-            groups[familyName].push(member);
+            const familyId = member.familiaId;
+            const familyName = member.familia.trim();
+            if (!groups[familyId]) {
+                groups[familyId] = {
+                    id: familyId,
+                    nome: familyName,
+                    membros: []
+                };
+            }
+            groups[familyId].membros.push(member);
+            console.log('  -> Adicionado à família:', familyName, 'ID:', familyId);
         });
 
-        const result = Object.entries(groups).map(([familyName, members]) => ({
-            nome: familyName,
-            membros: members,
-            totalMembros: members.length
+        const result = Object.values(groups).map(family => ({
+            id: family.id,
+            nome: family.nome,
+            membros: family.membros,
+            totalMembros: family.membros.length
         })).sort((a, b) => b.totalMembros - a.totalMembros);
         
         console.log('familyGroups resultado:', result);
@@ -589,7 +699,6 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
         { id: 'members', label: 'Membros', icon: Users },
         { id: 'events', label: 'Eventos', icon: Calendar },
-        { id: 'prayers', label: 'Pedidos de Oração', icon: Heart },
         { id: 'birthdays', label: 'Aniversários', icon: Gift },
         { id: 'diaconia', label: 'Diaconia', icon: Heart },
         { id: 'louvor', label: 'Louvor', icon: Music },
@@ -649,19 +758,6 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                             <p className="text-3xl font-bold">{futureEvents.length}</p>
                         </div>
                         <Calendar className="w-8 h-8 text-gray-400 dark:text-gray-600" />
-                    </div>
-                </div>
-
-                <div
-                    onClick={() => setActiveTab('prayers')}
-                    className="stats-card cursor-pointer hover:scale-105 transition-transform"
-                >
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-gray-300 dark:text-gray-600">Pedidos Ativos</p>
-                            <p className="text-3xl font-bold">{prayerStats.active}</p>
-                        </div>
-                        <Heart className="w-8 h-8 text-gray-400 dark:text-gray-600" />
                     </div>
                 </div>
 
@@ -847,12 +943,6 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                 </button>
             </div>
 
-            {(() => {
-                console.log('memberView:', memberView);
-                console.log('familyGroups:', familyGroups);
-                return null;
-            })()}
-            
             {memberView === 'individual' ? (
                 filteredMembers.length === 0 ? (
                     <div className="card text-center py-12">
@@ -861,6 +951,10 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {(() => {
+                            console.log('RENDERIZANDO MEMBROS INDIVIDUAIS. Total:', filteredMembers.length);
+                            return null;
+                        })()}
                         {filteredMembers.map((member, index) => {
                         const age = calculateAge(member.nascimento);
                         const initials = getInitials(member.nome);
@@ -952,87 +1046,117 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        {familyGroups.map((family, index) => (
-                            <div key={index} className="card hover:shadow-lg transition-shadow">
-                                <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-200 dark:border-gray-700">
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-gray-900 to-gray-700 dark:from-white dark:to-gray-200 flex items-center justify-center">
-                                            <Users className="w-6 h-6 text-white dark:text-gray-900" />
+                        {familyGroups.map((family, index) => {
+                            const isExpanded = expandedFamilies[family.id];
+                            
+                            return (
+                                <div key={family.id} className="card hover:shadow-lg transition-shadow">
+                                    <div 
+                                        className="flex items-center justify-between cursor-pointer"
+                                        onClick={() => {
+                                            setExpandedFamilies(prev => ({
+                                                ...prev,
+                                                [family.id]: !prev[family.id]
+                                            }));
+                                        }}
+                                    >
+                                        <div className="flex items-center gap-3 flex-1">
+                                            <div className="h-12 w-12 rounded-full bg-gradient-to-br from-gray-900 to-gray-700 dark:from-white dark:to-gray-200 flex items-center justify-center">
+                                                <Users className="w-6 h-6 text-white dark:text-gray-900" />
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-gray-900 dark:text-white text-base md:text-lg">
+                                                    {family.nome}
+                                                </h3>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                    {family.totalMembros} {family.totalMembros === 1 ? 'membro' : 'membros'}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h3 className="font-bold text-gray-900 dark:text-white text-base md:text-lg">
-                                                {family.nome}
-                                            </h3>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                {family.totalMembros} {family.totalMembros === 1 ? 'membro' : 'membros'}
-                                            </p>
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleEditFamily(family);
+                                                }}
+                                                className="p-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center"
+                                                title="Editar Família"
+                                            >
+                                                <Edit className="w-5 h-5" />
+                                            </button>
+                                            {isExpanded ? (
+                                                <ChevronRight className="w-6 h-6 text-gray-500 dark:text-gray-400 transform rotate-90 transition-transform" />
+                                            ) : (
+                                                <ChevronRight className="w-6 h-6 text-gray-500 dark:text-gray-400 transition-transform" />
+                                            )}
                                         </div>
                                     </div>
-                                    <button
-                                        onClick={() => handleEditFamily(family)}
-                                        className="p-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                                        title="Editar Família"
-                                    >
-                                        <Edit className="w-4 h-4" />
-                                    </button>
-                                </div>
 
-                                <div className="space-y-3">
-                                    {family.membros.map((member, memberIndex) => {
-                                        const age = calculateAge(member.nascimento);
-                                        const initials = getInitials(member.nome);
-                                        
-                                        return (
-                                            <div key={memberIndex} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="h-10 w-10 rounded-full bg-gray-900 dark:bg-white flex items-center justify-center text-white dark:text-gray-900 font-semibold text-sm">
-                                                        {initials}
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="font-medium text-gray-900 dark:text-white text-sm">
-                                                            {member.nome}
-                                                        </h4>
-                                                        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                                                            <span className="capitalize">{member.genero}</span>
-                                                            {age && <span>• {age} anos</span>}
+                                    {isExpanded && (
+                                        <div className="space-y-3 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                            {family.membros.map((member, memberIndex) => {
+                                                const age = calculateAge(member.nascimento);
+                                                const initials = getInitials(member.nome);
+                                                
+                                                return (
+                                                    <div key={memberIndex} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="h-10 w-10 rounded-full bg-gray-900 dark:bg-white flex items-center justify-center text-white dark:text-gray-900 font-semibold text-sm">
+                                                                {initials}
+                                                            </div>
+                                                            <div>
+                                                                <h4 className="font-medium text-gray-900 dark:text-white text-sm">
+                                                                    {member.nome}
+                                                                </h4>
+                                                                <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                                                    <span className="capitalize">{member.genero}</span>
+                                                                    {age && <span>• {age} anos</span>}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex flex-col items-end gap-1">
+                                                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                                                age !== null && age <= 12 ? 'bg-pink-100 text-pink-800 dark:bg-pink-800 dark:text-pink-200' :
+                                                                (member.funcao || 'membro') === 'pastor' ? 'bg-purple-100 text-purple-800 dark:bg-purple-800 dark:text-purple-200' :
+                                                                    (member.funcao || 'membro') === 'diácono' ? 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-200' :
+                                                                        (member.funcao || 'membro') === 'líder de louvor' ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200' :
+                                                                            (member.funcao || 'membro') === 'músico' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-200' :
+                                                                                'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                                                            }`}>
+                                                                {age !== null && age <= 12 ? 'Criança' : (member.funcao || 'membro').charAt(0).toUpperCase() + (member.funcao || 'membro').slice(1)}
+                                                            </span>
+                                                            <div className="flex gap-1">
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleEditMember(member);
+                                                                    }}
+                                                                    className="p-1.5 bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors flex items-center justify-center"
+                                                                    title="Editar"
+                                                                >
+                                                                    <Edit className="w-4 h-4" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleDeleteMember(member);
+                                                                    }}
+                                                                    className="p-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors flex items-center justify-center"
+                                                                    title="Deletar"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-
-                                                <div className="flex flex-col items-end gap-1">
-                                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                                        age !== null && age <= 12 ? 'bg-pink-100 text-pink-800 dark:bg-pink-800 dark:text-pink-200' :
-                                                        (member.funcao || 'membro') === 'pastor' ? 'bg-purple-100 text-purple-800 dark:bg-purple-800 dark:text-purple-200' :
-                                                            (member.funcao || 'membro') === 'diácono' ? 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-200' :
-                                                                (member.funcao || 'membro') === 'líder de louvor' ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200' :
-                                                                    (member.funcao || 'membro') === 'músico' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-200' :
-                                                                        'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-                                                    }`}>
-                                                        {age !== null && age <= 12 ? 'Criança' : (member.funcao || 'membro').charAt(0).toUpperCase() + (member.funcao || 'membro').slice(1)}
-                                                    </span>
-                                                    <div className="flex gap-1">
-                                                        <button
-                                                            onClick={() => handleEditMember(member)}
-                                                            className="p-1.5 bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors flex items-center justify-center"
-                                                            title="Editar"
-                                                        >
-                                                            <Edit className="w-4 h-4" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDeleteMember(member)}
-                                                            className="p-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors flex items-center justify-center"
-                                                            title="Deletar"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )
             )}
@@ -1191,7 +1315,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                     <div className="card">
                         <h3 className="text-lg font-semibold mb-4 flex items-center">
                             <Clock className="w-5 h-5 mr-2 text-green-600" />
-                            Próximos Eventos (5)
+                            Próximos Eventos ({futureEvents.length})
                         </h3>
                         <div className="space-y-3">
                             {futureEvents.length === 0 ? (
@@ -1202,7 +1326,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         <h4 className="font-semibold text-green-800">{event.nome}</h4>
                                         <p className="text-sm text-green-600 flex items-center mt-1">
                                             <Calendar className="w-3 h-3 mr-1" />
-                                            {format(new Date(event.data), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                                            {format(new Date(event.data), "EEEE, dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                                         </p>
                                         {event.local && (
                                             <p className="text-sm text-green-600 flex items-center">
@@ -1220,7 +1344,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                     <div className="card">
                         <h3 className="text-lg font-semibold mb-4 flex items-center">
                             <Clock className="w-5 h-5 mr-2 text-gray-600" />
-                            Eventos Passados (5)
+                            Eventos Passados ({pastEvents.length})
                         </h3>
                         <div className="space-y-3">
                             {pastEvents.length === 0 ? (
@@ -1231,7 +1355,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         <h4 className="font-semibold text-gray-700 dark:text-gray-300">{event.nome}</h4>
                                         <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center mt-1">
                                             <Calendar className="w-3 h-3 mr-1" />
-                                            {format(new Date(event.data), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                                            {format(new Date(event.data), "EEEE, dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                                         </p>
                                         {event.local && (
                                             <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center">
@@ -1315,129 +1439,6 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                 {format(member.birthdayThisYear, 'dd/MM', { locale: ptBR })}
                                                 {calculateAge(member.nascimento) && ` - ${calculateAge(member.nascimento)} anos`}
                                             </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-
-    const renderPrayerRequests = () => (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Pedidos de Oração</h1>
-                <button
-                    onClick={handleAddPrayer}
-                    className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Novo Pedido
-                </button>
-            </div>
-
-            {/* Estatísticas dos pedidos */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="card bg-gradient-to-r from-red-500 to-red-600 text-white">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-red-100">Total de Pedidos</p>
-                            <p className="text-3xl font-bold">{prayerStats.total}</p>
-                        </div>
-                        <Heart className="w-8 h-8 text-red-200" />
-                    </div>
-                </div>
-
-                <div className="card bg-gradient-to-r from-yellow-500 to-yellow-600 text-white">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-yellow-100">Ativos</p>
-                            <p className="text-3xl font-bold">{prayerStats.active}</p>
-                        </div>
-                        <Clock className="w-8 h-8 text-yellow-200" />
-                    </div>
-                </div>
-
-                <div className="card bg-gradient-to-r from-green-500 to-green-600 text-white">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-green-100">Atendidos</p>
-                            <p className="text-3xl font-bold">{prayerStats.answered}</p>
-                        </div>
-                        <Gift className="w-8 h-8 text-green-200" />
-                    </div>
-                </div>
-
-                <div className="card bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-blue-100">Este Mês</p>
-                            <p className="text-3xl font-bold">{prayerStats.thisMonth}</p>
-                        </div>
-                        <Calendar className="w-8 h-8 text-blue-200" />
-                    </div>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Pedidos Ativos */}
-                <div className="card">
-                    <h3 className="text-lg font-semibold mb-4 flex items-center">
-                        <Heart className="w-5 h-5 mr-2 text-red-600" />
-                        Pedidos Ativos ({prayerRequests.filter(p => p.status === 'ativo').length})
-                    </h3>
-                    <div className="space-y-3 max-h-96 overflow-y-auto">
-                        {prayerRequests.filter(prayer => prayer.status === 'ativo').length === 0 ? (
-                            <p className="text-gray-500 dark:text-gray-400">Nenhum pedido ativo.</p>
-                        ) : (
-                            prayerRequests.filter(prayer => prayer.status === 'ativo').map(prayer => (
-                                <div key={prayer.id} className="p-3 bg-red-50 rounded-lg border-l-4 border-red-500">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <h4 className="font-semibold text-red-800">{prayer.titulo}</h4>
-                                        <span className="text-xs text-red-600 bg-red-100 px-2 py-1 rounded-full">
-                                            {prayer.categoria}
-                                        </span>
-                                    </div>
-                                    <p className="text-sm text-red-700 mb-2">{prayer.descricao}</p>
-                                    <div className="flex justify-between items-center text-xs text-red-600">
-                                        <span>Por: {prayer.solicitante}</span>
-                                        <span>{format(new Date(prayer.dataRequest), 'dd/MM/yyyy', { locale: ptBR })}</span>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-
-                {/* Pedidos Atendidos */}
-                <div className="card">
-                    <h3 className="text-lg font-semibold mb-4 flex items-center">
-                        <Gift className="w-5 h-5 mr-2 text-green-600" />
-                        Pedidos Atendidos ({prayerRequests.filter(p => p.status === 'atendido').length})
-                    </h3>
-                    <div className="space-y-3 max-h-96 overflow-y-auto">
-                        {prayerRequests.filter(prayer => prayer.status === 'atendido').length === 0 ? (
-                            <p className="text-gray-500 dark:text-gray-400">Nenhum pedido atendido.</p>
-                        ) : (
-                            prayerRequests.filter(prayer => prayer.status === 'atendido').map(prayer => (
-                                <div key={prayer.id} className="p-3 bg-green-50 rounded-lg border-l-4 border-green-500">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <h4 className="font-semibold text-green-800">{prayer.titulo}</h4>
-                                        <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full">
-                                            {prayer.categoria}
-                                        </span>
-                                    </div>
-                                    <p className="text-sm text-green-700 mb-2">{prayer.descricao}</p>
-                                    <div className="flex justify-between items-center text-xs text-green-600">
-                                        <span>Por: {prayer.solicitante}</span>
-                                        <div className="flex space-x-2">
-                                            <span>Pedido: {format(new Date(prayer.dataRequest), 'dd/MM/yyyy', { locale: ptBR })}</span>
-                                            {prayer.dataResposta && (
-                                                <span>• Atendido: {format(new Date(prayer.dataResposta), 'dd/MM/yyyy', { locale: ptBR })}</span>
-                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -1644,7 +1645,11 @@ Montar escala        </button>
                                 return (
                                     <div 
                                         key={escala.id} 
-                                        className={`p-4 border-l-4 rounded-lg ${
+                                        onClick={() => {
+                                            setSelectedEscalaDiaconia(escala);
+                                            setShowEscalaOptionsModal(true);
+                                        }}
+                                        className={`p-4 border-l-4 rounded-lg cursor-pointer hover:shadow-lg transition-shadow ${
                                             isProxima 
                                                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
                                                 : 'border-gray-400 bg-gray-50 dark:bg-gray-700/50'
@@ -1925,7 +1930,7 @@ Montar escala        </button>
         return (
             <div className="space-y-6">
                 <div className="flex justify-between items-center">
-                    <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Ministério Infantil</h1>
+                    <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Kids</h1>
                     <button 
                         onClick={() => setShowEscalaProfessoresModal(true)}
                         className="flex items-center px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700"
@@ -2018,16 +2023,57 @@ Montar escala        </button>
                             {escalasProfessores
                                 .sort((a, b) => new Date(a.data) - new Date(b.data))
                                 .slice(0, 5)
-                                .map((escala, idx) => (
-                                    <div key={idx} className="p-4 bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 rounded-lg border border-pink-200 dark:border-pink-800">
+                                .map((escala, idx) => {
+                                    const hasPequenos = escala.turmas?.includes('Pequenos');
+                                    const hasGrandes = escala.turmas?.includes('Grandes');
+                                    
+                                    let cardClasses = "p-4 rounded-lg border ";
+                                    if (hasPequenos && hasGrandes) {
+                                        cardClasses += "bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-blue-300 dark:border-blue-700";
+                                    } else if (hasPequenos) {
+                                        cardClasses += "bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-300 dark:border-blue-700";
+                                    } else if (hasGrandes) {
+                                        cardClasses += "bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-purple-300 dark:border-purple-700";
+                                    } else {
+                                        cardClasses += "bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 border-pink-200 dark:border-pink-800";
+                                    }
+                                    
+                                    return (
+                                    <div 
+                                        key={idx} 
+                                        className={`${cardClasses} cursor-pointer hover:shadow-lg transition-shadow`}
+                                        onClick={() => {
+                                            setSelectedEscalaProfessores(escala);
+                                            setShowDetalhesEscalaProfessoresModal(true);
+                                        }}
+                                    >
                                         <div className="flex items-center justify-between mb-2">
                                             <div className="flex items-center gap-2">
                                                 <Calendar className="w-5 h-5 text-pink-600" />
-                                                <span className="font-medium text-gray-900 dark:text-white">
-                                                    {format(parseISO(escala.data), "dd/MM/yyyy")} - {escala.horario}
-                                                </span>
+                                                <div>
+                                                    <span className="font-medium text-gray-900 dark:text-white">
+                                                        {format(parseISO(escala.data), "dd/MM/yyyy", { locale: ptBR })} - {escala.horario}
+                                                    </span>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                        {format(parseISO(escala.data), "EEEE", { locale: ptBR })}
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
+                                        {escala.turmas && escala.turmas.length > 0 && (
+                                            <div className="mb-2">
+                                                <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Turmas:</p>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {escala.turmas.map((turma, i) => (
+                                                        <span key={i} className={`text-xs px-2 py-0.5 text-white rounded-full ${
+                                                            turma === 'Pequenos' ? 'bg-blue-500' : 'bg-purple-600'
+                                                        }`}>
+                                                            {turma}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                         <div className="mt-3">
                                             <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Professores escalados:</p>
                                             <div className="flex flex-wrap gap-2">
@@ -2042,7 +2088,8 @@ Montar escala        </button>
                                             </div>
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                         </div>
                     )}
                 </div>
@@ -2241,9 +2288,9 @@ Montar escala        </button>
                                             </a>
                                             <button
                                                 onClick={() => handleDeleteMusic(musica.id)}
-                                                className="px-3 py-2 bg-gray-600 text-white rounded-lg text-sm hover:bg-gray-700 flex items-center gap-2"
+                                                className="p-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center justify-center"
                                             >
-                                                <Trash2 className="w-4 h-4" />
+                                                <Trash2 className="w-5 h-5" />
                                             </button>
                                         </div>
                                     </div>
@@ -2317,7 +2364,11 @@ Montar escala        </button>
                                 onClick={() => setActiveTab(item.id)}
                                 className={`sidebar-item ${activeTab === item.id ? 'active' : ''}`}
                             >
-                                <Icon className="w-5 h-5" />
+                                {item.id === 'playlistzoe' ? (
+                                    <span className="w-5 h-5 flex items-center justify-center font-bold text-lg">Z</span>
+                                ) : (
+                                    <Icon className="w-5 h-5" />
+                                )}
                                 {sidebarOpen && <span className="ml-3">{item.label}</span>}
                             </div>
                         );
@@ -2355,7 +2406,11 @@ Montar escala        </button>
                                                     : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:scale-105'
                                                 }`}
                                         >
-                                            <Icon className="w-7 h-7 mb-2" />
+                                            {item.id === 'playlistzoe' ? (
+                                                <span className="w-7 h-7 mb-2 flex items-center justify-center font-bold text-2xl">Z</span>
+                                            ) : (
+                                                <Icon className="w-7 h-7 mb-2" />
+                                            )}
                                             <span className="text-xs font-medium text-center leading-tight">{item.label}</span>
                                         </button>
                                     );
@@ -2380,7 +2435,6 @@ Montar escala        </button>
                     {activeTab === 'dashboard' && renderDashboard()}
                     {activeTab === 'members' && renderMembers()}
                     {activeTab === 'events' && renderEvents()}
-                    {activeTab === 'prayers' && renderPrayerRequests()}
                     {activeTab === 'birthdays' && renderBirthdays()}
                     {activeTab === 'diaconia' && renderDiaconia()}
                     {activeTab === 'louvor' && renderLouvor()}
@@ -2449,7 +2503,14 @@ Montar escala        </button>
                                     <input
                                         type="date"
                                         value={newMemberData.nascimento}
-                                        onChange={(e) => setNewMemberData({ ...newMemberData, nascimento: e.target.value })}
+                                        onChange={(e) => {
+                                            const idade = calculateAge(e.target.value);
+                                            setNewMemberData({ 
+                                                ...newMemberData, 
+                                                nascimento: e.target.value,
+                                                idade: idade !== null ? idade.toString() : ''
+                                            });
+                                        }}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                     />
                                 </div>
@@ -2466,6 +2527,7 @@ Montar escala        </button>
                                         placeholder="Ex: 25"
                                         min="0"
                                         max="120"
+                                        readOnly
                                     />
                                 </div>
 
@@ -2766,7 +2828,14 @@ Montar escala        </button>
                                     <input
                                         type="date"
                                         value={editMemberData.nascimento}
-                                        onChange={(e) => setEditMemberData({ ...editMemberData, nascimento: e.target.value })}
+                                        onChange={(e) => {
+                                            const idade = calculateAge(e.target.value);
+                                            setEditMemberData({ 
+                                                ...editMemberData, 
+                                                nascimento: e.target.value,
+                                                idade: idade !== null ? idade.toString() : ''
+                                            });
+                                        }}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                     />
                                 </div>
@@ -2783,6 +2852,7 @@ Montar escala        </button>
                                         placeholder="Ex: 25"
                                         min="0"
                                         max="120"
+                                        readOnly
                                     />
                                 </div>
 
@@ -2918,7 +2988,11 @@ Montar escala        </button>
                         <form onSubmit={(e) => {
                             e.preventDefault();
                             if (onAddFamily) {
-                                onAddFamily(newFamilyData);
+                                const familyWithId = {
+                                    ...newFamilyData,
+                                    id: generateFamilyId(newFamilyData)
+                                };
+                                onAddFamily(familyWithId);
                             }
                             setNewFamilyData({
                                 nome: '',
@@ -3010,8 +3084,9 @@ Montar escala        </button>
                                                         const isSelected = newFamilyData.membrosIds.includes(memberId);
 
                                                         return (
-                                                            <label
+                                                            <div
                                                                 key={memberId}
+                                                                onClick={() => toggleMemberInFamily(memberId)}
                                                                 className={`flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${
                                                                     isSelected ? 'bg-green-50 dark:bg-green-900/20' : ''
                                                                 }`}
@@ -3019,8 +3094,8 @@ Montar escala        </button>
                                                                 <input
                                                                     type="checkbox"
                                                                     checked={isSelected}
-                                                                    onChange={() => toggleMemberInFamily(memberId)}
-                                                                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                                                                    onChange={(e) => e.stopPropagation()}
+                                                                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500 pointer-events-none"
                                                                 />
                                                                 <div className="ml-3 flex items-center flex-1">
                                                                     <div className="h-10 w-10 rounded-full bg-gray-900 dark:bg-white flex items-center justify-center text-white dark:text-gray-900 font-semibold text-sm mr-3">
@@ -3042,7 +3117,7 @@ Montar escala        </button>
                                                                         </span>
                                                                     )}
                                                                 </div>
-                                                            </label>
+                                                            </div>
                                                         );
                                                     })}
                                                 </div>
@@ -3082,7 +3157,11 @@ Montar escala        </button>
                         <form onSubmit={(e) => {
                             e.preventDefault();
                             if (onEditFamily) {
-                                onEditFamily(selectedFamily.nome, editFamilyData);
+                                const familyWithId = {
+                                    ...editFamilyData,
+                                    id: selectedFamily.id || generateFamilyId(selectedFamily)
+                                };
+                                onEditFamily(selectedFamily.id || selectedFamily.nome, familyWithId);
                             }
                             setEditFamilyData({
                                 nome: '',
@@ -3128,6 +3207,50 @@ Montar escala        </button>
                                     <Users className="w-4 h-4 mr-2" />
                                     Membros da Família ({editFamilyData.membrosIds.length} selecionados)
                                 </h4>
+
+                                {/* Membros já cadastrados */}
+                                {editFamilyData.membrosIds.length > 0 && (
+                                    <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                                        <p className="text-xs font-medium text-green-800 dark:text-green-300 mb-2">
+                                            Membros cadastrados nesta família:
+                                        </p>
+                                        <div className="space-y-2">
+                                            {editFamilyData.membrosIds.map((memberId) => {
+                                                const member = members.find((m, idx) => generateMemberId(m, idx) === memberId);
+                                                if (!member) return null;
+                                                const age = calculateAge(member.nascimento);
+                                                const initials = getInitials(member.nome);
+                                                
+                                                return (
+                                                    <div key={memberId} className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded border border-green-300 dark:border-green-700">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="h-8 w-8 rounded-full bg-gray-900 dark:bg-white flex items-center justify-center text-white dark:text-gray-900 font-semibold text-xs">
+                                                                {initials}
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                                                    {member.nome}
+                                                                </p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                                    {member.genero && <span className="capitalize">{member.genero}</span>}
+                                                                    {age && <span> • {age} anos</span>}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleMemberInEditFamily(memberId)}
+                                                            className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                                            title="Remover da família"
+                                                        >
+                                                            <X className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                                 
                                 {/* Campo de busca */}
                                 <div className="mb-3 relative">
@@ -3175,8 +3298,9 @@ Montar escala        </button>
                                                         const isSelected = editFamilyData.membrosIds.includes(memberId);
 
                                                         return (
-                                                            <label
+                                                            <div
                                                                 key={memberId}
+                                                                onClick={() => toggleMemberInEditFamily(memberId)}
                                                                 className={`flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${
                                                                     isSelected ? 'bg-green-50 dark:bg-green-900/20' : ''
                                                                 }`}
@@ -3184,8 +3308,8 @@ Montar escala        </button>
                                                                 <input
                                                                     type="checkbox"
                                                                     checked={isSelected}
-                                                                    onChange={() => toggleMemberInEditFamily(memberId)}
-                                                                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                                                                    onChange={(e) => e.stopPropagation()}
+                                                                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500 pointer-events-none"
                                                                 />
                                                                 <div className="ml-3 flex items-center flex-1">
                                                                     <div className="h-10 w-10 rounded-full bg-gray-900 dark:bg-white flex items-center justify-center text-white dark:text-gray-900 font-semibold text-sm mr-3">
@@ -3207,7 +3331,7 @@ Montar escala        </button>
                                                                         </span>
                                                                     )}
                                                                 </div>
-                                                            </label>
+                                                            </div>
                                                         );
                                                     })}
                                                 </div>
@@ -3217,24 +3341,53 @@ Montar escala        </button>
                                 </div>
                             </div>
 
-                            <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setShowEditFamilyModal(false);
-                                        setSelectedFamily(null);
-                                    }}
-                                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                                >
-                                    Cancelar
-                                </button>
+                            <div className="flex flex-col sm:flex-row gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
                                 <button
                                     type="submit"
                                     disabled={!editFamilyData.nome.trim() || editFamilyData.membrosIds.length === 0}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="sm:w-auto w-full px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
                                 >
-                                    Salvar Alterações ({editFamilyData.membrosIds.length} {editFamilyData.membrosIds.length === 1 ? 'membro' : 'membros'})
+                                    Salvar Alterações ({editFamilyData.membrosIds.length})
                                 </button>
+                                <div className="flex gap-2 sm:ml-auto w-full sm:w-auto">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowEditFamilyModal(false);
+                                            setSelectedFamily(null);
+                                        }}
+                                        className="flex-1 sm:flex-none px-5 py-2.5 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 font-medium text-sm"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (confirm(`Tem certeza que deseja deletar a família "${selectedFamily.nome}"? Isso não deletará os membros, apenas a família.`)) {
+                                                if (onEditFamily) {
+                                                    // Enviar requisição para deletar a família removendo todos os membros
+                                                    onEditFamily(selectedFamily.id || selectedFamily.nome, {
+                                                        id: selectedFamily.id || generateFamilyId(selectedFamily),
+                                                        nome: selectedFamily.nome,
+                                                        descricao: '',
+                                                        membrosIds: []
+                                                    });
+                                                }
+                                                setShowEditFamilyModal(false);
+                                                setSelectedFamily(null);
+                                                setEditFamilyData({
+                                                    nome: '',
+                                                    descricao: '',
+                                                    membrosIds: []
+                                                });
+                                            }
+                                        }}
+                                        className="flex-1 sm:flex-none px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center gap-2 font-medium text-sm"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                        <span>Deletar Família</span>
+                                    </button>
+                                </div>
                             </div>
                         </form>
                     </div>
@@ -4025,14 +4178,15 @@ Montar escala        </button>
                                     Nova Escala de Professores
                                 </h2>
                                 <button
-                                    onClick={() => {
-                                        setShowEscalaProfessoresModal(false);
-                                        setNewEscalaProfessoresData({
-                                            data: format(new Date(), 'yyyy-MM-dd'),
-                                            horario: '09:00',
-                                            professoresSelecionados: []
-                                        });
-                                    }}
+                                onClick={() => {
+                                setShowEscalaProfessoresModal(false);
+                                setNewEscalaProfessoresData({
+                                turmas: [],
+                                data: format(new Date(), 'yyyy-MM-dd'),
+                                horario: '09:00',
+                                    professoresSelecionados: []
+                                    });
+                                }}
                                     className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                                 >
                                     <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
@@ -4041,6 +4195,10 @@ Montar escala        </button>
 
                             <form onSubmit={(e) => {
                                 e.preventDefault();
+                                if (newEscalaProfessoresData.turmas.length === 0) {
+                                    alert('Selecione pelo menos uma turma!');
+                                    return;
+                                }
                                 if (newEscalaProfessoresData.professoresSelecionados.length === 0) {
                                     alert('Selecione pelo menos um professor!');
                                     return;
@@ -4054,12 +4212,58 @@ Montar escala        </button>
                                 localStorage.setItem('escalaProfessores', JSON.stringify(novasEscalas));
                                 setShowEscalaProfessoresModal(false);
                                 setNewEscalaProfessoresData({
+                                    turmas: [],
                                     data: format(new Date(), 'yyyy-MM-dd'),
                                     horario: '09:00',
                                     professoresSelecionados: []
                                 });
                             }}>
                                 <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Selecione as Turmas
+                                        </label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {['Pequenos', 'Grandes'].map((turma) => {
+                                                const isSelected = newEscalaProfessoresData.turmas.includes(turma);
+                                                return (
+                                                    <div 
+                                                        key={turma}
+                                                        onClick={() => {
+                                                            if (isSelected) {
+                                                                setNewEscalaProfessoresData({
+                                                                    ...newEscalaProfessoresData,
+                                                                    turmas: newEscalaProfessoresData.turmas.filter(t => t !== turma)
+                                                                });
+                                                            } else {
+                                                                setNewEscalaProfessoresData({
+                                                                    ...newEscalaProfessoresData,
+                                                                    turmas: [...newEscalaProfessoresData.turmas, turma]
+                                                                });
+                                                            }
+                                                        }}
+                                                        className={`p-4 rounded-lg border-2 cursor-pointer transition-all text-center ${
+                                                            isSelected 
+                                                                ? 'border-pink-600 bg-pink-50 dark:bg-pink-900/30' 
+                                                                : 'border-gray-200 dark:border-gray-700 hover:border-pink-300 dark:hover:border-pink-700'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <span className="font-medium text-gray-900 dark:text-white">{turma}</span>
+                                                            {isSelected && (
+                                                                <div className="h-5 w-5 rounded-full bg-pink-600 flex items-center justify-center">
+                                                                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                                    </svg>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -4172,6 +4376,7 @@ Montar escala        </button>
                                         onClick={() => {
                                             setShowEscalaProfessoresModal(false);
                                             setNewEscalaProfessoresData({
+                                                turmas: [],
                                                 data: format(new Date(), 'yyyy-MM-dd'),
                                                 horario: '09:00',
                                                 professoresSelecionados: []
@@ -4188,6 +4393,377 @@ Montar escala        </button>
                                     >
                                         <Calendar className="w-4 h-4" />
                                         Criar Escala ({newEscalaProfessoresData.professoresSelecionados.length} {newEscalaProfessoresData.professoresSelecionados.length === 1 ? 'professor' : 'professores'})
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Detalhes da Escala de Professores */}
+            {showDetalhesEscalaProfessoresModal && selectedEscalaProfessores && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <Calendar className="w-7 h-7 text-pink-600" />
+                                    Detalhes da Escala
+                                </h2>
+                                <button
+                                    onClick={() => {
+                                        setShowDetalhesEscalaProfessoresModal(false);
+                                        setSelectedEscalaProfessores(null);
+                                    }}
+                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                >
+                                    <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                                </button>
+                            </div>
+
+                            <div className="space-y-6">
+                                {/* Data e Horário */}
+                                <div className="bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 p-6 rounded-lg border border-pink-200 dark:border-pink-800">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <Calendar className="w-8 h-8 text-pink-600" />
+                                        <div>
+                                            <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                                                {format(parseISO(selectedEscalaProfessores.data), "dd/MM/yyyy", { locale: ptBR })}
+                                            </h3>
+                                            <p className="text-lg text-gray-600 dark:text-gray-400 capitalize">
+                                                {format(parseISO(selectedEscalaProfessores.data), "EEEE", { locale: ptBR })}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Clock className="w-5 h-5 text-pink-600" />
+                                        <span className="text-lg font-medium text-gray-900 dark:text-white">
+                                            {selectedEscalaProfessores.horario}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Turmas */}
+                                {selectedEscalaProfessores.turmas && selectedEscalaProfessores.turmas.length > 0 && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                                            <Baby className="w-5 h-5 text-pink-600" />
+                                            Turmas
+                                        </h3>
+                                        <div className="flex flex-wrap gap-3">
+                                            {selectedEscalaProfessores.turmas.map((turma, i) => (
+                                                <div 
+                                                    key={i} 
+                                                    className={`px-6 py-3 rounded-lg text-white font-medium text-lg ${
+                                                        turma === 'Pequenos' ? 'bg-blue-500' : 'bg-purple-600'
+                                                    }`}
+                                                >
+                                                    {turma}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Professores */}
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                                        <Users className="w-5 h-5 text-pink-600" />
+                                        Professores Escalados ({selectedEscalaProfessores.professoresSelecionados.length})
+                                    </h3>
+                                    <div className="space-y-3">
+                                        {selectedEscalaProfessores.professoresSelecionados.map((profId, i) => {
+                                            const prof = members.find(m => m.id === profId);
+                                            if (!prof) return null;
+                                            const age = calculateAge(prof.nascimento);
+                                            
+                                            return (
+                                                <div 
+                                                    key={i} 
+                                                    className="p-4 rounded-lg border-2 border-pink-200 dark:border-pink-800 bg-white dark:bg-gray-700"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="h-12 w-12 rounded-full bg-pink-600 flex items-center justify-center text-white font-semibold text-lg">
+                                                            {getInitials(prof.nome)}
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <h4 className="font-semibold text-gray-900 dark:text-white text-lg">
+                                                                    {prof.nome}
+                                                                </h4>
+                                                                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                                                    prof.funcao === 'lider kids' 
+                                                                        ? 'bg-pink-600 text-white' 
+                                                                        : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
+                                                                }`}>
+                                                                    {prof.funcao === 'lider kids' ? 'Líder' : 'Professor'}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-gray-600 dark:text-gray-400">
+                                                                {prof.telefone && (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <Phone className="w-4 h-4" />
+                                                                        <span>{prof.telefone}</span>
+                                                                    </div>
+                                                                )}
+                                                                {age && <span>• {age} anos</span>}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end pt-6 border-t border-gray-200 dark:border-gray-700 mt-6">
+                                <button
+                                    onClick={() => {
+                                        setShowDetalhesEscalaProfessoresModal(false);
+                                        setSelectedEscalaProfessores(null);
+                                    }}
+                                    className="px-6 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                                >
+                                    Fechar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Opções da Escala de Diaconia */}
+            {showEscalaOptionsModal && selectedEscalaDiaconia && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg max-w-md w-full">
+                        <div className="p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <Calendar className="w-6 h-6 text-blue-600" />
+                                    Opções da Escala
+                                </h2>
+                                <button
+                                    onClick={() => {
+                                        setShowEscalaOptionsModal(false);
+                                        setSelectedEscalaDiaconia(null);
+                                    }}
+                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                >
+                                    <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                                </button>
+                            </div>
+
+                            <div className="mb-6">
+                                <p className="text-gray-700 dark:text-gray-300 font-medium capitalize">
+                                    {format(parseISO(selectedEscalaDiaconia.data), "EEEE - dd/MM/yyyy", { locale: ptBR })}
+                                </p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                    {selectedEscalaDiaconia.horario} • {selectedEscalaDiaconia.diaconos.length} diáconos escalados
+                                </p>
+                            </div>
+
+                            <div className="space-y-3">
+                                <button
+                                    onClick={() => handleEditEscalaDiaconia(selectedEscalaDiaconia)}
+                                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                >
+                                    <Edit className="w-5 h-5" />
+                                    Editar Escala
+                                </button>
+                                <button
+                                    onClick={() => handleDeleteEscalaDiaconia(selectedEscalaDiaconia.id)}
+                                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                                >
+                                    <Trash2 className="w-5 h-5" />
+                                    Deletar Escala
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setShowEscalaOptionsModal(false);
+                                        setSelectedEscalaDiaconia(null);
+                                    }}
+                                    className="w-full px-4 py-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Edição de Escala de Diaconia */}
+            {showEditEscalaModal && selectedEscalaDiaconia && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <Calendar className="w-7 h-7 text-blue-600" />
+                                    Editar Escala de Diaconia
+                                </h2>
+                                <button
+                                    onClick={() => {
+                                        setShowEditEscalaModal(false);
+                                        setSelectedEscalaDiaconia(null);
+                                        setEditEscalaData({
+                                            categoria: 'culto',
+                                            data: '',
+                                            horario: '19:00',
+                                            diaconosSelecionados: []
+                                        });
+                                    }}
+                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                >
+                                    <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleSaveEditEscala}>
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Categoria
+                                            </label>
+                                            <select
+                                                value={editEscalaData.categoria}
+                                                onChange={(e) => setEditEscalaData({ ...editEscalaData, categoria: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                                required
+                                            >
+                                                <option value="culto">Culto</option>
+                                                <option value="evento">Evento</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Data
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={editEscalaData.data}
+                                                onChange={(e) => setEditEscalaData({ ...editEscalaData, data: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                                required
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Horário
+                                            </label>
+                                            <input
+                                                type="time"
+                                                value={editEscalaData.horario}
+                                                onChange={(e) => setEditEscalaData({ ...editEscalaData, horario: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                                        <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
+                                            Selecione os Diáconos ({editEscalaData.diaconosSelecionados.length} selecionados)
+                                        </h3>
+                                        
+                                        {members.filter(m => m.funcao === 'diaconia' || m.funcao === 'lider da diaconia').length === 0 ? (
+                                            <div className="text-center py-8 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                                <Users className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                                                <p className="text-gray-500 dark:text-gray-400">Nenhum diácono cadastrado.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2 max-h-96 overflow-y-auto">
+                                                {members.filter(m => m.funcao === 'diaconia' || m.funcao === 'lider da diaconia').map((diacono) => {
+                                                    const isSelected = editEscalaData.diaconosSelecionados.includes(diacono.id);
+                                                    const age = calculateAge(diacono.nascimento);
+                                                    
+                                                    return (
+                                                        <div 
+                                                            key={diacono.id}
+                                                            onClick={() => {
+                                                                if (isSelected) {
+                                                                    setEditEscalaData({
+                                                                        ...editEscalaData,
+                                                                        diaconosSelecionados: editEscalaData.diaconosSelecionados.filter(id => id !== diacono.id)
+                                                                    });
+                                                                } else {
+                                                                    setEditEscalaData({
+                                                                        ...editEscalaData,
+                                                                        diaconosSelecionados: [...editEscalaData.diaconosSelecionados, diacono.id]
+                                                                    });
+                                                                }
+                                                            }}
+                                                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                                                                isSelected 
+                                                                    ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30' 
+                                                                    : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="h-10 w-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-semibold">
+                                                                    {getInitials(diacono.nome)}
+                                                                </div>
+                                                                <div className="flex-1">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <h4 className="font-medium text-gray-900 dark:text-white">
+                                                                            {diacono.nome}
+                                                                        </h4>
+                                                                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                                                            diacono.funcao === 'lider da diaconia' 
+                                                                                ? 'bg-purple-600 text-white' 
+                                                                                : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
+                                                                        }`}>
+                                                                            {diacono.funcao === 'lider da diaconia' ? 'Líder' : 'Diácono'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                                        {diacono.telefone && <span>{diacono.telefone}</span>}
+                                                                        {age && <span>• {age} anos</span>}
+                                                                    </div>
+                                                                </div>
+                                                                {isSelected && (
+                                                                    <div className="h-6 w-6 rounded-full bg-blue-600 flex items-center justify-center">
+                                                                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                                        </svg>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700 mt-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowEditEscalaModal(false);
+                                            setSelectedEscalaDiaconia(null);
+                                            setEditEscalaData({
+                                                categoria: 'culto',
+                                                data: '',
+                                                horario: '19:00',
+                                                diaconosSelecionados: []
+                                            });
+                                        }}
+                                        className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={editEscalaData.diaconosSelecionados.length === 0}
+                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                    >
+                                        <Calendar className="w-4 h-4" />
+                                        Salvar Alterações
                                     </button>
                                 </div>
                             </form>
