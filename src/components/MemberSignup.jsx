@@ -24,7 +24,7 @@ const MemberSignup = ({ onSignup, onBack }) => {
         setError('');
 
         // Validações
-        if (!formData.nome || !formData.email || !formData.telefone || !formData.nascimento) {
+        if (!formData.nome || !formData.telefone || !formData.nascimento) {
             setError('Por favor, preencha todos os campos obrigatórios');
             return;
         }
@@ -100,14 +100,13 @@ const MemberSignup = ({ onSignup, onBack }) => {
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Email *
+                                Email
                             </label>
                             <input
                                 type="email"
                                 value={formData.email}
                                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                 className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                                required
                             />
                         </div>
 
