@@ -14,7 +14,15 @@ import {
     Circle,
     Moon,
     Sun,
-    Home
+    Home,
+    BarChart3,
+    Users,
+    Gift,
+    Heart,
+    Music,
+    Baby,
+    Sparkles,
+    Settings
 } from 'lucide-react';
 import { format, parseISO, isAfter, isBefore, startOfMonth, endOfMonth, isSameMonth, isToday, addDays, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -23,10 +31,17 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onLogout }) => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     
     const menuItems = [
-        { id: 'home', label: 'Início', icon: Home },
+        { id: 'home', label: 'Dashboard', icon: BarChart3 },
+        { id: 'perfil', label: 'Membros', icon: Users },
         { id: 'eventos', label: 'Eventos', icon: Calendar },
+        { id: 'aniversarios', label: 'Aniversários', icon: Gift },
         { id: 'avisos', label: 'Avisos', icon: Bell },
-        { id: 'perfil', label: 'Perfil', icon: User }
+        { id: 'diaconia', label: 'Diaconia', icon: Heart },
+        { id: 'louvor', label: 'Louvor', icon: Music },
+        { id: 'playlistzoe', label: 'Playlist Zoe', icon: null },
+        { id: 'kids', label: 'Kids', icon: Baby },
+        { id: 'jovens', label: 'Jovens', icon: Sparkles },
+        { id: 'configuracoes', label: 'Configurações', icon: Settings }
     ];
     const [activeTab, setActiveTab] = useState('home');
     const [calendarDate, setCalendarDate] = useState(new Date());
@@ -366,7 +381,11 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onLogout }) => {
                                                         : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:scale-105'
                                                 }`}
                                             >
-                                                <Icon className="w-7 h-7 mb-2" />
+                                                {item.id === 'playlistzoe' ? (
+                                                    <span className="w-7 h-7 mb-2 flex items-center justify-center font-bold text-2xl">Z</span>
+                                                ) : (
+                                                    <Icon className="w-7 h-7 mb-2" />
+                                                )}
                                                 <span className="text-xs font-medium text-center leading-tight">{item.label}</span>
                                             </button>
                                         );
@@ -554,7 +573,63 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onLogout }) => {
                         </div>
                     )}
 
-                    {/* Perfil */}
+                    {/* Aniversários */}
+                    {activeTab === 'aniversarios' && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Aniversários</h2>
+                            <p className="text-gray-500 dark:text-gray-400">Funcionalidade em desenvolvimento</p>
+                        </div>
+                    )}
+
+                    {/* Diaconia */}
+                    {activeTab === 'diaconia' && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Diaconia</h2>
+                            <p className="text-gray-500 dark:text-gray-400">Funcionalidade em desenvolvimento</p>
+                        </div>
+                    )}
+
+                    {/* Louvor */}
+                    {activeTab === 'louvor' && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Louvor</h2>
+                            <p className="text-gray-500 dark:text-gray-400">Funcionalidade em desenvolvimento</p>
+                        </div>
+                    )}
+
+                    {/* Playlist Zoe */}
+                    {activeTab === 'playlistzoe' && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Playlist Zoe</h2>
+                            <p className="text-gray-500 dark:text-gray-400">Funcionalidade em desenvolvimento</p>
+                        </div>
+                    )}
+
+                    {/* Kids */}
+                    {activeTab === 'kids' && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Kids</h2>
+                            <p className="text-gray-500 dark:text-gray-400">Funcionalidade em desenvolvimento</p>
+                        </div>
+                    )}
+
+                    {/* Jovens */}
+                    {activeTab === 'jovens' && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Jovens</h2>
+                            <p className="text-gray-500 dark:text-gray-400">Funcionalidade em desenvolvimento</p>
+                        </div>
+                    )}
+
+                    {/* Configurações */}
+                    {activeTab === 'configuracoes' && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Configurações</h2>
+                            <p className="text-gray-500 dark:text-gray-400">Funcionalidade em desenvolvimento</p>
+                        </div>
+                    )}
+
+                    {/* Perfil/Membros */}
                     {activeTab === 'perfil' && (
                         <div className="space-y-4">
                             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
