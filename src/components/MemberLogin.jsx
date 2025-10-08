@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { LogIn, User, Lock, Moon, Sun } from 'lucide-react';
+import { LogIn, User, Lock, Moon, Sun, UserPlus } from 'lucide-react';
 
-const MemberLogin = ({ members, onLogin }) => {
+const MemberLogin = ({ members, onLogin, onShowSignup }) => {
     const [selectedMember, setSelectedMember] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -114,7 +114,14 @@ const MemberLogin = ({ members, onLogin }) => {
 
                     <div className="mt-6 text-center">
                         <p className="text-sm text-gray-600 dark:text-gray-400">
-                            Primeira vez aqui? Entre em contato com a administração da igreja.
+                            Primeira vez aqui?{' '}
+                            <button 
+                                onClick={onShowSignup}
+                                className="text-blue-600 dark:text-blue-400 hover:underline font-medium inline-flex items-center"
+                            >
+                                <UserPlus className="h-4 w-4 mr-1" />
+                                Cadastre-se
+                            </button>
                         </p>
                     </div>
                 </div>

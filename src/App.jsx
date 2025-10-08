@@ -4,6 +4,7 @@ import ChurchAdminDashboard from './components/ChurchAdminDashboard'
 import Login from './components/Login'
 import MemberApp from './components/MemberApp'
 import MemberLogin from './components/MemberLogin'
+import MemberSignup from './components/MemberSignup'
 
 console.log('App.jsx carregado!')
 document.addEventListener('DOMContentLoaded', () => {
@@ -476,6 +477,7 @@ function AppContent() {
     const saved = localStorage.getItem('current_member');
     return saved ? JSON.parse(saved) : null;
   });
+  const [showSignup, setShowSignup] = useState(false);
 
   useEffect(() => {
     // Carregar dados iniciais
@@ -586,6 +588,23 @@ function AppContent() {
     localStorage.removeItem('current_member');
   };
 
+  const handleMemberSignup = (memberData) => {
+    const newMember = {
+      id: `MBR${String(members.length + 1).padStart(4, '0')}`,
+      dataCadastro: new Date().toISOString(),
+      ...memberData
+    };
+    const updatedMembers = [...members, newMember];
+    setMembers(updatedMembers);
+    dataManager.members = updatedMembers;
+    dataManager.saveMembers();
+    
+    // Fazer login automático após cadastro
+    setCurrentMember(newMember);
+    localStorage.setItem('current_member', JSON.stringify(newMember));
+    setShowSignup(false);
+  };
+
   console.log('Renderizando App - members:', members.length)
 
   return (
@@ -601,8 +620,17 @@ function AppContent() {
               avisos={avisos}
               onLogout={handleMemberLogout}
             />
+          ) : showSignup ? (
+            <MemberSignup 
+              onSignup={handleMemberSignup} 
+              onBack={() => setShowSignup(false)} 
+            />
           ) : (
-            <MemberLogin members={members} onLogin={handleMemberLogin} />
+            <MemberLogin 
+              members={members} 
+              onLogin={handleMemberLogin}
+              onShowSignup={() => setShowSignup(true)}
+            />
           )
         } 
       />
