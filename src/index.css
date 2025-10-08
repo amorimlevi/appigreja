@@ -4,140 +4,178 @@
 
 /* Safe Area Support para iOS e Android */
 :root {
-  --safe-area-inset-top: env(safe-area-inset-top);
-  --safe-area-inset-bottom: env(safe-area-inset-bottom);
-  --safe-area-inset-left: env(safe-area-inset-left);
-  --safe-area-inset-right: env(safe-area-inset-right);
-  
-  /* Status bar height padrão */
-  --status-bar-height: 44px;
+    --safe-area-inset-top: env(safe-area-inset-top);
+    --safe-area-inset-bottom: env(safe-area-inset-bottom);
+    --safe-area-inset-left: env(safe-area-inset-left);
+    --safe-area-inset-right: env(safe-area-inset-right);
+
+    /* Status bar height padrão */
+    --status-bar-height: 44px;
 }
 
 /* Reset para permitir conteúdo sob status bar */
-html, body {
-  margin: 0;
-  padding: 0;
-  height: 100%;
+html,
+body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    background-color: white;
 }
 
 #root {
-  margin: 0;
-  padding: 0;
-  height: 100%;
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    overflow-x: hidden;
+    background-color: white;
 }
 
 @layer components {
-  .sidebar-item {
-    @apply flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors duration-200 cursor-pointer;
-    @apply dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white;
-    @apply active:bg-gray-200 active:scale-95 touch-manipulation;
-  }
-  
-  .sidebar-item.active {
-    @apply bg-gray-200 text-gray-900 border-r-4 border-gray-900;
-    @apply dark:bg-gray-700 dark:text-white dark:border-white;
-  }
-  
-  .card {
-    @apply bg-white rounded-lg shadow-md p-6 border border-gray-100 hover:shadow-lg transition-shadow duration-200;
-    @apply dark:bg-gray-800 dark:border-gray-700 dark:hover:shadow-gray-900/20;
-  }
-  
-  .stats-card {
-    @apply bg-gradient-to-br from-black to-gray-950 text-white rounded-lg shadow-md p-6;
-    @apply dark:from-white dark:to-gray-100 dark:text-gray-900;
-  }
+    .sidebar-item {
+        @apply flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors duration-200 cursor-pointer;
+        @apply dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white;
+        @apply active:bg-gray-200 active:scale-95 touch-manipulation;
+    }
+
+    .sidebar-item.active {
+        @apply bg-gray-200 text-gray-900 border-r-4 border-gray-900;
+        @apply dark:bg-gray-700 dark:text-white dark:border-white;
+    }
+
+    .card {
+        @apply bg-white rounded-lg shadow-sm p-6 border-0 hover:shadow-md transition-shadow duration-200;
+        @apply dark:bg-gray-800 dark:border-0 dark:hover:shadow-gray-900/20;
+    }
+
+    .stats-card {
+        @apply bg-gradient-to-br from-black to-gray-950 text-white rounded-lg shadow-md p-6;
+        @apply dark:from-white dark:to-gray-100 dark:text-gray-900;
+    }
 }
 
 /* Melhorias de touch para mobile */
-button, a, .sidebar-item {
-  @apply touch-manipulation;
+button,
+a,
+.sidebar-item {
+    @apply touch-manipulation;
 }
 
 button {
-  @apply active:scale-95 transition-transform duration-100;
+    @apply active:scale-95 transition-transform duration-100;
+}
+
+/* Garantir que inputs e selects não tenham fundo cinza no iOS */
+input,
+select,
+textarea {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-color: white;
+}
+
+.dark input,
+.dark select,
+.dark textarea {
+    background-color: rgb(55, 65, 81);
+    /* gray-700 */
 }
 
 /* Scrollbar customization */
 ::-webkit-scrollbar {
-  width: 6px;
+    width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+    background: #f1f5f9;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
+    background: #cbd5e1;
+    border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+    background: #94a3b8;
 }
 
 /* Calendar styles */
 .calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 1px;
-  background-color: #e5e7eb;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+    background-color: #e5e7eb;
 }
 
 .calendar-day {
-  @apply bg-white p-2 min-h-[80px] text-sm;
+    @apply bg-white p-2 min-h-[80px] text-sm;
 }
 
 .calendar-day.other-month {
-  @apply bg-gray-50 text-gray-400;
+    @apply bg-gray-50 text-gray-400;
 }
 
 .calendar-day.today {
-  @apply bg-gray-100 border-2 border-gray-900;
-  @apply dark:bg-gray-800 dark:border-white;
+    @apply bg-gray-100 border-2 border-gray-900;
+    @apply dark:bg-gray-800 dark:border-white;
 }
 
 .calendar-event {
-  @apply bg-gray-900 text-white text-xs px-1 py-0.5 rounded mb-1 truncate;
-  @apply dark:bg-white dark:text-gray-900;
+    @apply bg-gray-900 text-white text-xs px-1 py-0.5 rounded mb-1 truncate;
+    @apply dark:bg-white dark:text-gray-900;
 }
 
 /* Mobile Optimizations */
 @media (max-width: 768px) {
-  .calendar-day {
-    @apply min-h-[60px] p-1 text-xs;
-  }
-  
-  .card {
-    @apply p-4;
-  }
-  
-  .stats-card {
-    @apply p-4;
-  }
-  
-  /* Área de toque maior para botões */
-  button {
-    @apply min-h-[44px] min-w-[44px];
-  }
-  
-  /* Espaçamento adequado para touch */
-  .sidebar-item {
-    @apply py-4;
-  }
+    .calendar-day {
+        @apply min-h-[60px] p-1 text-xs;
+    }
+
+    .card {
+        @apply p-4;
+    }
+
+    .stats-card {
+        @apply p-4;
+    }
+
+    /* Área de toque maior para botões */
+    button {
+        @apply min-h-[44px] min-w-[44px];
+    }
+
+    /* Espaçamento adequado para touch */
+    .sidebar-item {
+        @apply py-4;
+    }
+
+    /* Garantir que modais funcionem bem no mobile */
+    .fixed.inset-0 {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100vw;
+        height: 100vh;
+    }
 }
 
 @media (max-width: 640px) {
-  .calendar-grid {
-    font-size: 0.75rem;
-  }
-  
-  .calendar-day {
-    @apply min-h-[50px];
-  }
-  
-  /* Ajuste de fonte base para mobile pequeno */
-  html {
-    font-size: 14px;
-  }
+    .calendar-grid {
+        font-size: 0.75rem;
+    }
+
+    .calendar-day {
+        @apply min-h-[50px];
+    }
+
+    /* Ajuste de fonte base para mobile pequeno */
+    html {
+        font-size: 14px;
+    }
 }

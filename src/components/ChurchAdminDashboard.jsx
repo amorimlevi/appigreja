@@ -29,7 +29,9 @@ import {
     Music,
     Baby,
     Sparkles,
-    LogOut
+    LogOut,
+    Bell,
+    Send
 } from 'lucide-react';
 import { format, isAfter, isBefore, startOfWeek, endOfWeek, addDays, subDays, differenceInYears, startOfMonth, endOfMonth, isSameMonth, isToday, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -97,8 +99,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         nome: '',
         data: '',
         local: '',
-        descricao: ''
+        descricao: '',
+        alimentacao: false,
+        comidas: []
     });
+    const [novaComida, setNovaComida] = useState('');
     const [showMusicModal, setShowMusicModal] = useState(false);
     const [newMusicData, setNewMusicData] = useState({
         nome: '',
@@ -153,6 +158,8 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
     });
     const [showMusicasCadastradasModal, setShowMusicasCadastradasModal] = useState(false);
     const [showProfessoresModal, setShowProfessoresModal] = useState(false);
+    const [showCriancasModal, setShowCriancasModal] = useState(false);
+    const [showJovensModal, setShowJovensModal] = useState(false);
     const [showEscalaProfessoresModal, setShowEscalaProfessoresModal] = useState(false);
     const [showDetalhesEscalaProfessoresModal, setShowDetalhesEscalaProfessoresModal] = useState(false);
     const [selectedEscalaProfessores, setSelectedEscalaProfessores] = useState(null);
@@ -166,6 +173,34 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         const saved = localStorage.getItem('escalaProfessores');
         return saved ? JSON.parse(saved) : [];
     });
+    const [showAvisoModal, setShowAvisoModal] = useState(false);
+    const [newAvisoData, setNewAvisoData] = useState({
+        titulo: '',
+        mensagem: '',
+        destinatarios: ['todos']
+    });
+    const [avisos, setAvisos] = useState(() => {
+        const saved = localStorage.getItem('avisos');
+        return saved ? JSON.parse(saved) : [];
+    });
+    const [showOficinaModal, setShowOficinaModal] = useState(false);
+    const [newOficinaData, setNewOficinaData] = useState({
+        nome: '',
+        descricao: '',
+        data: format(new Date(), 'yyyy-MM-dd'),
+        horario: '19:00',
+        local: '',
+        vagas: '',
+        permissaoInscricao: ['todos']
+    });
+    const [oficinas, setOficinas] = useState(() => {
+        const saved = localStorage.getItem('oficinas');
+        return saved ? JSON.parse(saved) : [];
+    });
+    const [showEventDetailsModal, setShowEventDetailsModal] = useState(false);
+    const [selectedEvent, setSelectedEvent] = useState(null);
+    const [selectedFoods, setSelectedFoods] = useState([]);
+    const [selectedMemberForFood, setSelectedMemberForFood] = useState(null);
 
     // Aplicar tema escuro ao DOM
     React.useEffect(() => {
@@ -364,6 +399,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         'líder de louvor',
         'lider kids',
         'lider jovens',
+        'jovem',
         'ministro',
         'louvor',
         'diaconia',
@@ -700,6 +736,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         { id: 'members', label: 'Membros', icon: Users },
         { id: 'events', label: 'Eventos', icon: Calendar },
         { id: 'birthdays', label: 'Aniversários', icon: Gift },
+        { id: 'avisos', label: 'Avisos', icon: Bell },
         { id: 'diaconia', label: 'Diaconia', icon: Heart },
         { id: 'louvor', label: 'Louvor', icon: Music },
         { id: 'playlistzoe', label: 'Playlist Zoe', icon: Music },
@@ -717,11 +754,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             <div className="flex flex-col md:flex-row gap-2 mb-4">
                 <div className="flex flex-col gap-2 w-full md:w-auto">
                     <button
-                        onClick={handleAddMember}
-                        className="flex items-center justify-center px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100"
+                        onClick={() => setShowAvisoModal(true)}
+                        className="flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                     >
-                        <UserPlus className="w-4 h-4 mr-2" />
-                        <span className="text-sm md:text-base">Novo Membro</span>
+                        <Bell className="w-4 h-4 mr-2" />
+                        <span className="text-sm md:text-base">Novo Aviso</span>
                     </button>
                     <button
                         onClick={() => handleAddEvent()}
@@ -1322,7 +1359,15 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 <p className="text-gray-500 dark:text-gray-400">Nenhum evento futuro agendado.</p>
                             ) : (
                                 futureEvents.map(event => (
-                                    <div key={event.id} className="p-3 bg-green-50 rounded-lg border-l-4 border-green-500">
+                                    <div 
+                                        key={event.id} 
+                                        className="p-3 bg-green-50 rounded-lg border-l-4 border-green-500 cursor-pointer hover:bg-green-100 transition-colors"
+                                        onClick={() => {
+                                            setSelectedEvent(event);
+                                            setSelectedFoods([]);
+                                            setShowEventDetailsModal(true);
+                                        }}
+                                    >
                                         <h4 className="font-semibold text-green-800">{event.nome}</h4>
                                         <p className="text-sm text-green-600 flex items-center mt-1">
                                             <Calendar className="w-3 h-3 mr-1" />
@@ -1941,7 +1986,10 @@ Montar escala        </button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="card">
+                    <div 
+                        className="card cursor-pointer hover:shadow-lg transition-shadow"
+                        onClick={() => setShowCriancasModal(true)}
+                    >
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">Total de Crianças</p>
@@ -2100,21 +2148,27 @@ Montar escala        </button>
     const renderJovens = () => {
         const jovens = members.filter(m => {
             const age = calculateAge(m.nascimento);
-            return age !== null && age >= 13 && age <= 30;
+            return (age !== null && age >= 13 && age <= 30) || (m.funcao === 'jovem');
         });
         
         return (
             <div className="space-y-6">
                 <div className="flex justify-between items-center">
-                    <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Ministério de Jovens</h1>
-                    <button className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+                    <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Jovens</h1>
+                    <button 
+                        onClick={() => setShowOficinaModal(true)}
+                        className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                    >
                         <Plus className="w-4 h-4 mr-2" />
-                        Novo Evento
+                        Nova Oficina
                     </button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="card">
+                    <div 
+                        className="card cursor-pointer hover:shadow-lg transition-shadow"
+                        onClick={() => setShowJovensModal(true)}
+                    >
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">Total de Jovens</p>
@@ -2123,36 +2177,9 @@ Montar escala        </button>
                             <Sparkles className="w-8 h-8 text-indigo-500" />
                         </div>
                     </div>
-                    
-                    <div className="card">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Líderes</p>
-                                <p className="text-2xl font-bold text-gray-900 dark:text-white">8</p>
-                            </div>
-                            <Users className="w-8 h-8 text-blue-500" />
-                        </div>
-                    </div>
-                    
-                    <div className="card">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Encontros (Mês)</p>
-                                <p className="text-2xl font-bold text-gray-900 dark:text-white">4</p>
-                            </div>
-                            <Calendar className="w-8 h-8 text-green-500" />
-                        </div>
-                    </div>
                 </div>
 
-                <div className="card">
-                    <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Próximo Encontro</h3>
-                    <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 p-4 rounded-lg">
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Sexta-feira, 19:30</p>
-                        <p className="text-lg font-semibold text-gray-900 dark:text-white mt-1">Tema: Propósito e Identidade</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">Palestrante: Pastor João Silva</p>
-                    </div>
-                </div>
+                
 
                 <div className="card">
                     <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Jovens por Faixa Etária</h3>
@@ -2172,24 +2199,24 @@ Montar escala        </button>
                         <div className="flex items-center justify-between p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
                             <div className="flex items-center gap-3">
                                 <Sparkles className="w-5 h-5 text-indigo-600" />
-                                <span className="text-gray-900 dark:text-white">19-25 anos (Jovens)</span>
+                                <span className="text-gray-900 dark:text-white">19-24 anos (Jovens)</span>
                             </div>
                             <span className="font-semibold text-gray-900 dark:text-white">
                                 {jovens.filter(j => {
                                     const age = calculateAge(j.nascimento);
-                                    return age >= 19 && age <= 25;
+                                    return age >= 19 && age <= 24;
                                 }).length}
                             </span>
                         </div>
                         <div className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
                             <div className="flex items-center gap-3">
                                 <Sparkles className="w-5 h-5 text-purple-600" />
-                                <span className="text-gray-900 dark:text-white">26-30 anos (Jovens Adultos)</span>
+                                <span className="text-gray-900 dark:text-white">25+ anos (Jovens Adultos)</span>
                             </div>
                             <span className="font-semibold text-gray-900 dark:text-white">
                                 {jovens.filter(j => {
                                     const age = calculateAge(j.nascimento);
-                                    return age >= 26 && age <= 30;
+                                    return age >= 25;
                                 }).length}
                             </span>
                         </div>
@@ -2197,21 +2224,173 @@ Montar escala        </button>
                 </div>
 
                 <div className="card">
-                    <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Próximos Eventos</h3>
-                    <div className="space-y-3">
-                        <div className="p-3 border-l-4 border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 rounded">
-                            <p className="font-medium text-indigo-900 dark:text-indigo-300">Acampamento de Jovens</p>
-                            <p className="text-sm text-indigo-700 dark:text-indigo-400">15-17 de Março - Chácara Bethel</p>
+                    <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Oficinas</h3>
+                    {oficinas.length === 0 ? (
+                        <div className="text-center py-12">
+                            <Plus className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
+                            <p className="text-gray-500 dark:text-gray-400">Nenhuma oficina cadastrada ainda.</p>
                         </div>
-                        <div className="p-3 border-l-4 border-purple-500 bg-purple-50 dark:bg-purple-900/20 rounded">
-                            <p className="font-medium text-purple-900 dark:text-purple-300">Conferência de Jovens 2024</p>
-                            <p className="text-sm text-purple-700 dark:text-purple-400">10-12 de Maio - Centro de Convenções</p>
+                    ) : (
+                        <div className="space-y-3">
+                            {oficinas.map((oficina) => (
+                                <div 
+                                    key={oficina.id} 
+                                    className="p-4 border-l-4 border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg"
+                                >
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                            <h4 className="font-semibold text-gray-900 dark:text-white mb-1">{oficina.nome}</h4>
+                                            <p className="text-gray-600 dark:text-gray-400 text-sm mb-2">{oficina.descricao}</p>
+                                            <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-gray-500">
+                                                <span className="flex items-center gap-1">
+                                                    <Clock className="w-3 h-3" />
+                                                    {format(new Date(oficina.data), "dd/MM/yyyy", { locale: ptBR })} às {oficina.horario}
+                                                </span>
+                                                <span className="flex items-center gap-1">
+                                                    <MapPin className="w-3 h-3" />
+                                                    {oficina.local}
+                                                </span>
+                                                <span className="flex items-center gap-1">
+                                                    <Users className="w-3 h-3" />
+                                                    {oficina.inscritos}/{oficina.vagas} vagas
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                if (confirm('Deseja excluir esta oficina?')) {
+                                                    const updatedOficinas = oficinas.filter(o => o.id !== oficina.id);
+                                                    setOficinas(updatedOficinas);
+                                                    localStorage.setItem('oficinas', JSON.stringify(updatedOficinas));
+                                                    
+                                                    // Também remover o evento correspondente
+                                                    const updatedEvents = events.filter(e => e.oficinaId !== oficina.id);
+                                                    setEvents(updatedEvents);
+                                                    localStorage.setItem('events', JSON.stringify(updatedEvents));
+                                                }
+                                            }}
+                                            className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                        <div className="p-3 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20 rounded">
-                            <p className="font-medium text-blue-900 dark:text-blue-300">Ação Social - Dia dos Jovens</p>
-                            <p className="text-sm text-blue-700 dark:text-blue-400">Sábado, 08:00 - Comunidade São José</p>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    const renderAvisos = () => {
+        const getDestinatariosCount = (destinatarios) => {
+            // Se destinatarios é uma string (avisos antigos), converter para array
+            const tipos = Array.isArray(destinatarios) ? destinatarios : [destinatarios];
+            
+            if (tipos.includes('todos')) return members.length;
+            
+            // Criar um Set para evitar contar o mesmo membro várias vezes
+            const membrosUnicos = new Set();
+            
+            tipos.forEach(tipo => {
+                if (tipo === 'criancas') {
+                    members.filter(m => {
+                        const age = calculateAge(m.nascimento);
+                        return age !== null && age <= 12;
+                    }).forEach(m => membrosUnicos.add(m.id));
+                } else if (tipo === 'jovens') {
+                    members.filter(m => {
+                        const age = calculateAge(m.nascimento);
+                        return (age !== null && age >= 13 && age <= 30) || (m.funcao === 'jovem');
+                    }).forEach(m => membrosUnicos.add(m.id));
+                } else if (tipo === 'adultos') {
+                    members.filter(m => {
+                        const age = calculateAge(m.nascimento);
+                        return age !== null && age > 30;
+                    }).forEach(m => membrosUnicos.add(m.id));
+                } else if (availableRoles.includes(tipo)) {
+                    members.filter(m => (m.funcao || 'membro') === tipo).forEach(m => membrosUnicos.add(m.id));
+                }
+            });
+            
+            return membrosUnicos.size;
+        };
+
+        return (
+            <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                    <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Avisos</h1>
+                    <button 
+                        onClick={() => setShowAvisoModal(true)}
+                        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Novo Aviso
+                    </button>
+                </div>
+
+                <div className="card">
+                    <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Avisos Recentes</h3>
+                    {avisos.length === 0 ? (
+                        <div className="text-center py-12">
+                            <Bell className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
+                            <p className="text-gray-500 dark:text-gray-400">Nenhum aviso enviado ainda.</p>
                         </div>
-                    </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {avisos.slice().reverse().map((aviso) => (
+                                <div 
+                                    key={aviso.id} 
+                                    className="p-4 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20 rounded-lg"
+                                >
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <h4 className="font-semibold text-gray-900 dark:text-white">{aviso.titulo}</h4>
+                                                <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200 rounded-full">
+                                                    {(() => {
+                                                        const dest = Array.isArray(aviso.destinatarios) ? aviso.destinatarios : [aviso.destinatarios];
+                                                        if (dest.includes('todos')) return 'Todos';
+                                                        const labels = dest.map(d => {
+                                                            if (d === 'criancas') return 'Crianças';
+                                                            if (d === 'jovens') return 'Jovens';
+                                                            if (d === 'adultos') return 'Adultos';
+                                                            return d.charAt(0).toUpperCase() + d.slice(1);
+                                                        });
+                                                        return labels.join(', ');
+                                                    })()}
+                                                </span>
+                                            </div>
+                                            <p className="text-gray-600 dark:text-gray-400 text-sm mb-2">{aviso.mensagem}</p>
+                                            <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-500">
+                                                <span className="flex items-center gap-1">
+                                                    <Clock className="w-3 h-3" />
+                                                    {format(new Date(aviso.data), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                                </span>
+                                                <span className="flex items-center gap-1">
+                                                    <Users className="w-3 h-3" />
+                                                    {getDestinatariosCount(aviso.destinatarios)} destinatários
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                if (confirm('Deseja excluir este aviso?')) {
+                                                    const updatedAvisos = avisos.filter(a => a.id !== aviso.id);
+                                                    setAvisos(updatedAvisos);
+                                                    localStorage.setItem('avisos', JSON.stringify(updatedAvisos));
+                                                }
+                                            }}
+                                            className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
         );
@@ -2332,7 +2511,9 @@ Montar escala        </button>
     };
 
     return (
-        <div className="flex flex-col md:flex-row h-screen bg-white dark:bg-gray-900 transition-colors" style={{ paddingTop: 'var(--safe-area-inset-top)' }}>
+        <div className="flex flex-col md:flex-row h-screen bg-white dark:bg-gray-900 transition-colors" style={{ 
+            paddingTop: 'env(safe-area-inset-top, 0px)'
+        }}>
             {/* Sidebar Desktop */}
             <div className={`hidden md:block bg-white dark:bg-gray-800 shadow-lg transition-all duration-300 ${sidebarOpen ? 'md:w-64' : 'md:w-16'
                 }`}>
@@ -2383,8 +2564,12 @@ Montar escala        </button>
                         className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-[60] transition-opacity"
                         onClick={() => setSidebarOpen(false)}
                     />
-                    <div className={`md:hidden fixed bottom-0 left-4 right-4 bg-white dark:bg-gray-800 rounded-3xl shadow-2xl z-[70] transform transition-all duration-300 mb-24 ${sidebarOpen ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'
-                        }`}>
+                    <div 
+                        className={`md:hidden fixed left-4 right-4 bg-white dark:bg-gray-800 rounded-3xl shadow-2xl z-[70] transform transition-all duration-300 ${sidebarOpen ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'
+                        }`}
+                        style={{
+                            bottom: `calc(6rem + env(safe-area-inset-bottom, 0px))`
+                        }}>
                         <div className="p-6">
                             <div className="flex items-center justify-center mb-2">
                                 <div className="w-12 h-1 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
@@ -2424,22 +2609,28 @@ Montar escala        </button>
             {/* Botão menu mobile */}
             <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="md:hidden fixed bottom-6 right-6 z-[80] p-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-full shadow-2xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all active:scale-95"
+                className="md:hidden fixed z-40 p-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-full shadow-2xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all active:scale-95"
+                style={{
+                    bottom: `calc(1.5rem + env(safe-area-inset-bottom, 0px))`,
+                    right: '1.5rem'
+                }}
             >
                 {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
 
             {/* Main Content */}
-            <div className="flex-1 overflow-auto pb-20 md:pb-0" style={{ 
+            <div className="flex-1 overflow-auto" style={{ 
                 height: '100%',
                 overflowY: 'scroll',
-                WebkitOverflowScrolling: 'touch'
+                WebkitOverflowScrolling: 'touch',
+                paddingBottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))'
             }}>
                 <div className="p-4 md:p-6">
                     {activeTab === 'dashboard' && renderDashboard()}
                     {activeTab === 'members' && renderMembers()}
                     {activeTab === 'events' && renderEvents()}
                     {activeTab === 'birthdays' && renderBirthdays()}
+                    {activeTab === 'avisos' && renderAvisos()}
                     {activeTab === 'diaconia' && renderDiaconia()}
                     {activeTab === 'louvor' && renderLouvor()}
                     {activeTab === 'playlistzoe' && renderPlaylistZoe()}
@@ -2621,8 +2812,11 @@ Montar escala        </button>
                                 nome: '',
                                 data: '',
                                 local: '',
-                                descricao: ''
+                                descricao: '',
+                                alimentacao: false,
+                                comidas: []
                             });
+                            setNovaComida('');
                             setShowEventModal(false);
                             setSelectedDate(null);
                         }} className="space-y-4">
@@ -2641,17 +2835,37 @@ Montar escala        </button>
                                     />
                                 </div>
 
-                                <div>
-                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                                        Data e Hora *
-                                    </label>
-                                    <input
-                                        type="datetime-local"
-                                        required
-                                        value={newEventData.data}
-                                        onChange={(e) => setNewEventData({ ...newEventData, data: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                    />
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                            Data *
+                                        </label>
+                                        <input
+                                            type="date"
+                                            required
+                                            value={newEventData.data?.split('T')[0] || ''}
+                                            onChange={(e) => {
+                                                const time = newEventData.data?.split('T')[1] || '19:00';
+                                                setNewEventData({ ...newEventData, data: `${e.target.value}T${time}` });
+                                            }}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                            Hora *
+                                        </label>
+                                        <input
+                                            type="time"
+                                            required
+                                            value={newEventData.data?.split('T')[1] || '19:00'}
+                                            onChange={(e) => {
+                                                const date = newEventData.data?.split('T')[0] || format(new Date(), 'yyyy-MM-dd');
+                                                setNewEventData({ ...newEventData, data: `${date}T${e.target.value}` });
+                                            }}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        />
+                                    </div>
                                 </div>
 
                                 <div>
@@ -2679,6 +2893,84 @@ Montar escala        </button>
                                         placeholder="Descrição do evento..."
                                     />
                                 </div>
+
+                                <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
+                                    <label className="flex items-center space-x-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={newEventData.alimentacao || false}
+                                            onChange={(e) => setNewEventData({ ...newEventData, alimentacao: e.target.checked, comidas: e.target.checked ? (newEventData.comidas || []) : [] })}
+                                            className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                                        />
+                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Alimentação</span>
+                                    </label>
+                                </div>
+
+                                {newEventData.alimentacao && (
+                                    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg space-y-3">
+                                        <div className="flex space-x-2">
+                                            <input
+                                                type="text"
+                                                value={novaComida}
+                                                onChange={(e) => setNovaComida(e.target.value)}
+                                                onKeyPress={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        if (novaComida.trim()) {
+                                                            setNewEventData({
+                                                                ...newEventData,
+                                                                comidas: [...(newEventData.comidas || []), { nome: novaComida.trim(), responsavel: null }]
+                                                            });
+                                                            setNovaComida('');
+                                                        }
+                                                    }
+                                                }}
+                                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                placeholder="Digite uma comida (ex: Refrigerante, Salgados...)"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (novaComida.trim()) {
+                                                        setNewEventData({
+                                                            ...newEventData,
+                                                            comidas: [...(newEventData.comidas || []), { nome: novaComida.trim(), responsavel: null }]
+                                                        });
+                                                        setNovaComida('');
+                                                    }
+                                                }}
+                                                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center"
+                                            >
+                                                <Plus className="w-4 h-4" />
+                                            </button>
+                                        </div>
+
+                                        {newEventData.comidas && newEventData.comidas.length > 0 && (
+                                            <div className="space-y-2">
+                                                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Comidas do evento:</p>
+                                                <div className="space-y-2">
+                                                    {newEventData.comidas.map((comida, index) => (
+                                                        <div key={index} className="flex items-center justify-between bg-white dark:bg-gray-700 p-2 rounded border border-gray-200 dark:border-gray-600">
+                                                            <span className="text-sm text-gray-700 dark:text-gray-300">{comida.nome}</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setNewEventData({
+                                                                        ...newEventData,
+                                                                        comidas: (newEventData.comidas || []).filter((_, i) => i !== index)
+                                                                    });
+                                                                }}
+                                                                className="text-red-600 hover:text-red-700"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex justify-end space-x-2 pt-4">
@@ -2700,6 +2992,228 @@ Montar escala        </button>
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {showEventDetailsModal && selectedEvent && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-start mb-4">
+                            <h3 className="text-base md:text-lg font-semibold text-gray-900 dark:text-white">{selectedEvent.nome}</h3>
+                            <button
+                                onClick={() => {
+                                    setShowEventDetailsModal(false);
+                                    setSelectedEvent(null);
+                                }}
+                                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="flex items-center text-gray-700 dark:text-gray-300">
+                                <Calendar className="w-4 h-4 mr-2" />
+                                <span>{format(new Date(selectedEvent.data), "EEEE, dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</span>
+                            </div>
+
+                            {selectedEvent.local && (
+                                <div className="flex items-center text-gray-700 dark:text-gray-300">
+                                    <MapPin className="w-4 h-4 mr-2" />
+                                    <span>{selectedEvent.local}</span>
+                                </div>
+                            )}
+
+                            {selectedEvent.descricao && (
+                                <div className="text-gray-700 dark:text-gray-300">
+                                    <p className="font-medium mb-1">Descrição:</p>
+                                    <p className="text-sm">{selectedEvent.descricao}</p>
+                                </div>
+                            )}
+
+                            {selectedEvent.alimentacao && selectedEvent.comidas && selectedEvent.comidas.length > 0 && (
+                                <div className="border-t border-gray-200 dark:border-gray-600 pt-4 space-y-4">
+                                    <div>
+                                        <h4 className="font-semibold mb-3 text-gray-900 dark:text-white flex items-center">
+                                            <Users className="w-4 h-4 mr-2" />
+                                            Controle de Alimentação (Admin)
+                                        </h4>
+                                        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                                            <p className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-3">
+                                                Distribuição de alimentos:
+                                            </p>
+                                            <div className="space-y-2">
+                                                {selectedEvent.comidas.map((comida, index) => (
+                                                    <div key={index} className="flex items-center justify-between text-sm">
+                                                        <span className="text-gray-700 dark:text-gray-300 font-medium">{comida.nome}:</span>
+                                                        <span className={`px-2 py-1 rounded ${
+                                                            comida.responsavel 
+                                                                ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' 
+                                                                : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+                                                        }`}>
+                                                            {comida.responsavel || 'Aguardando'}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
+                                                <div className="flex justify-between text-sm">
+                                                    <span className="text-blue-700 dark:text-blue-400">Total de itens:</span>
+                                                    <span className="font-semibold text-blue-800 dark:text-blue-300">{selectedEvent.comidas.length}</span>
+                                                </div>
+                                                <div className="flex justify-between text-sm mt-1">
+                                                    <span className="text-blue-700 dark:text-blue-400">Confirmados:</span>
+                                                    <span className="font-semibold text-green-600 dark:text-green-400">
+                                                        {selectedEvent.comidas.filter(c => c.responsavel).length}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between text-sm mt-1">
+                                                    <span className="text-blue-700 dark:text-blue-400">Pendentes:</span>
+                                                    <span className="font-semibold text-yellow-600 dark:text-yellow-400">
+                                                        {selectedEvent.comidas.filter(c => !c.responsavel).length}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <h4 className="font-semibold mb-3 text-gray-900 dark:text-white flex items-center">
+                                            <Gift className="w-4 h-4 mr-2" />
+                                            Selecionar Alimento (Membro)
+                                        </h4>
+                                        
+                                        <div className="mb-4">
+                                            <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+                                                Simular como membro:
+                                            </label>
+                                            <select
+                                                value={selectedMemberForFood?.id || ''}
+                                                onChange={(e) => {
+                                                    const member = members.find(m => m.id === e.target.value);
+                                                    setSelectedMemberForFood(member);
+                                                    setSelectedFoods([]);
+                                                }}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                            >
+                                                <option value="">Selecione um membro</option>
+                                                {members.map(member => (
+                                                    <option key={member.id} value={member.id}>
+                                                        {member.nome}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                No aplicativo do membro, ele já estará identificado automaticamente
+                                            </p>
+                                        </div>
+
+                                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                                            {selectedMemberForFood ? `Selecionando como: ${selectedMemberForFood.nome}` : 'Selecione um membro acima para continuar'}
+                                        </p>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {selectedEvent.comidas.map((comida, index) => {
+                                            const isSelected = selectedFoods.includes(index);
+                                            const jaEscolhido = comida.responsavel && comida.responsavel !== selectedMemberForFood?.nome;
+                                            const euEscolhi = comida.responsavel === selectedMemberForFood?.nome;
+                                            
+                                            return (
+                                                <div 
+                                                    key={index} 
+                                                    className={`p-3 rounded-lg transition-all ${
+                                                        isSelected || euEscolhi
+                                                            ? 'bg-green-100 dark:bg-green-900 border-2 border-green-500' 
+                                                            : jaEscolhido
+                                                            ? 'bg-gray-100 dark:bg-gray-800 border-2 border-gray-300 opacity-60'
+                                                            : 'bg-gray-50 dark:bg-gray-700 border-2 border-transparent'
+                                                    }`}
+                                                >
+                                                    <label className={`flex items-center justify-between ${jaEscolhido ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                                                        <div className="flex items-center space-x-3">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isSelected || euEscolhi}
+                                                                disabled={jaEscolhido || !selectedMemberForFood}
+                                                                onChange={(e) => {
+                                                                    if (e.target.checked) {
+                                                                        setSelectedFoods([...selectedFoods, index]);
+                                                                    } else {
+                                                                        setSelectedFoods(selectedFoods.filter(i => i !== index));
+                                                                    }
+                                                                }}
+                                                                className={`w-5 h-5 text-green-600 rounded focus:ring-green-500 ${(jaEscolhido || !selectedMemberForFood) ? 'cursor-not-allowed' : ''}`}
+                                                            />
+                                                            <span className={`text-sm font-medium ${
+                                                                isSelected || euEscolhi
+                                                                    ? 'text-green-800 dark:text-green-200' 
+                                                                    : jaEscolhido
+                                                                    ? 'text-gray-500 dark:text-gray-500'
+                                                                    : 'text-gray-700 dark:text-gray-300'
+                                                            }`}>
+                                                                {comida.nome}
+                                                            </span>
+                                                        </div>
+                                                        {comida.responsavel && (
+                                                            <span className={`text-xs px-2 py-1 rounded ${
+                                                                comida.responsavel === selectedMemberForFood?.nome
+                                                                    ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                                                                    : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                                                            }`}>
+                                                                {comida.responsavel}
+                                                            </span>
+                                                        )}
+                                                    </label>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex justify-end space-x-2 mt-6">
+                            <button
+                                onClick={() => {
+                                    setShowEventDetailsModal(false);
+                                    setSelectedEvent(null);
+                                    setSelectedFoods([]);
+                                }}
+                                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                            >
+                                Fechar
+                            </button>
+                            {selectedFoods.length > 0 && selectedMemberForFood && (
+                                <button
+                                    onClick={() => {
+                                        // Atualiza as comidas com os responsáveis
+                                        const updatedComidas = selectedEvent.comidas.map((comida, index) => {
+                                            if (selectedFoods.includes(index) && !comida.responsavel) {
+                                                return {
+                                                    ...comida,
+                                                    responsavel: selectedMemberForFood.nome
+                                                };
+                                            }
+                                            return comida;
+                                        });
+                                        
+                                        setSelectedEvent({
+                                            ...selectedEvent,
+                                            comidas: updatedComidas
+                                        });
+                                        
+                                        console.log('Comidas selecionadas:', updatedComidas);
+                                        // Aqui você pode chamar uma função para salvar no backend ou localStorage
+                                        
+                                        setSelectedFoods([]);
+                                    }}
+                                    className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2"
+                                >
+                                    <span>Confirmar Seleção</span>
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
@@ -4171,6 +4685,195 @@ Montar escala        </button>
                 </div>
             )}
 
+            {/* Modal Crianças */}
+            {showCriancasModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <Baby className="w-7 h-7 text-pink-600" />
+                                    Crianças Cadastradas ({members.filter(m => {
+                                        const age = calculateAge(m.nascimento);
+                                        return age !== null && age <= 12;
+                                    }).length})
+                                </h2>
+                                <button
+                                    onClick={() => setShowCriancasModal(false)}
+                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                >
+                                    <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                                </button>
+                            </div>
+
+                            {members.filter(m => {
+                                const age = calculateAge(m.nascimento);
+                                return age !== null && age <= 12;
+                            }).length === 0 ? (
+                                <div className="text-center py-12">
+                                    <Baby className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
+                                    <p className="text-gray-500 dark:text-gray-400">Nenhuma criança cadastrada ainda.</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {members.filter(m => {
+                                        const age = calculateAge(m.nascimento);
+                                        return age !== null && age <= 12;
+                                    }).map((crianca, index) => {
+                                        const age = calculateAge(crianca.nascimento);
+                                        
+                                        return (
+                                            <div 
+                                                key={crianca.id || index} 
+                                                className="p-4 bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 rounded-lg border border-pink-200 dark:border-pink-800 hover:shadow-md transition-shadow"
+                                            >
+                                                <div className="flex items-start gap-3 mb-3">
+                                                    <div className="h-12 w-12 rounded-full bg-pink-600 flex items-center justify-center text-white text-lg font-semibold flex-shrink-0">
+                                                        {getInitials(crianca.nome)}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <h4 className="font-semibold text-gray-900 dark:text-white">{crianca.nome}</h4>
+                                                        {crianca.familia && (
+                                                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                                                {crianca.familia}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                    <span className="px-2 py-1 text-xs font-semibold rounded-full bg-pink-100 dark:bg-pink-800 text-pink-800 dark:text-pink-200">
+                                                        {age} {age === 1 ? 'ano' : 'anos'}
+                                                    </span>
+                                                </div>
+                                                <div className="space-y-1 text-sm">
+                                                    {crianca.telefone && (
+                                                        <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                                                            <Phone className="w-4 h-4" />
+                                                            <span>{crianca.telefone}</span>
+                                                        </div>
+                                                    )}
+                                                    {crianca.nascimento && (
+                                                        <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                                                            <Calendar className="w-4 h-4" />
+                                                            <span>{format(parseISO(crianca.nascimento), "dd/MM/yyyy", { locale: ptBR })}</span>
+                                                        </div>
+                                                    )}
+                                                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                                                        <Users className="w-4 h-4" />
+                                                        <span className="capitalize">{crianca.genero}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Jovens */}
+            {showJovensModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <Sparkles className="w-7 h-7 text-indigo-600" />
+                                    Jovens Cadastrados ({members.filter(m => {
+                                        const age = calculateAge(m.nascimento);
+                                        return (age !== null && age >= 13 && age <= 30) || (m.funcao === 'jovem');
+                                    }).length})
+                                </h2>
+                                <button
+                                    onClick={() => setShowJovensModal(false)}
+                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                >
+                                    <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                                </button>
+                            </div>
+
+                            {members.filter(m => {
+                                const age = calculateAge(m.nascimento);
+                                return (age !== null && age >= 13 && age <= 30) || (m.funcao === 'jovem');
+                            }).length === 0 ? (
+                                <div className="text-center py-12">
+                                    <Sparkles className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
+                                    <p className="text-gray-500 dark:text-gray-400">Nenhum jovem cadastrado ainda.</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {members.filter(m => {
+                                        const age = calculateAge(m.nascimento);
+                                        return (age !== null && age >= 13 && age <= 30) || (m.funcao === 'jovem');
+                                    }).map((jovem, index) => {
+                                        const age = calculateAge(jovem.nascimento);
+                                        let categoria = '';
+                                        let corCategoria = '';
+                                        
+                                        if (age >= 13 && age <= 18) {
+                                            categoria = 'Adolescente';
+                                            corCategoria = 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200';
+                                        } else if (age >= 19 && age <= 24) {
+                                            categoria = 'Jovem';
+                                            corCategoria = 'bg-indigo-100 dark:bg-indigo-800 text-indigo-800 dark:text-indigo-200';
+                                        } else {
+                                            categoria = 'Jovem Adulto';
+                                            corCategoria = 'bg-purple-100 dark:bg-purple-800 text-purple-800 dark:text-purple-200';
+                                        }
+                                        
+                                        return (
+                                            <div 
+                                                key={jovem.id || index} 
+                                                className="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800 hover:shadow-md transition-shadow"
+                                            >
+                                                <div className="flex items-start gap-3 mb-3">
+                                                    <div className="h-12 w-12 rounded-full bg-indigo-600 flex items-center justify-center text-white text-lg font-semibold flex-shrink-0">
+                                                        {getInitials(jovem.nome)}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <h4 className="font-semibold text-gray-900 dark:text-white">{jovem.nome}</h4>
+                                                        {jovem.familia && (
+                                                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                                                {jovem.familia}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${corCategoria}`}>
+                                                        {categoria}
+                                                    </span>
+                                                </div>
+                                                <div className="space-y-1 text-sm">
+                                                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                                                        <Users className="w-4 h-4" />
+                                                        <span>{age} anos</span>
+                                                    </div>
+                                                    {jovem.telefone && (
+                                                        <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                                                            <Phone className="w-4 h-4" />
+                                                            <span>{jovem.telefone}</span>
+                                                        </div>
+                                                    )}
+                                                    {jovem.nascimento && (
+                                                        <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                                                            <Calendar className="w-4 h-4" />
+                                                            <span>{format(parseISO(jovem.nascimento), "dd/MM/yyyy", { locale: ptBR })}</span>
+                                                        </div>
+                                                    )}
+                                                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                                                        <Users className="w-4 h-4" />
+                                                        <span className="capitalize">{jovem.genero}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Modal Nova Escala de Professores */}
             {showEscalaProfessoresModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -4768,6 +5471,444 @@ Montar escala        </button>
                                     >
                                         <Calendar className="w-4 h-4" />
                                         Salvar Alterações
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Novo Aviso */}
+            {showAvisoModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <Bell className="w-7 h-7 text-blue-600" />
+                                    Novo Aviso
+                                </h2>
+                                <button
+                                    onClick={() => {
+                                        setShowAvisoModal(false);
+                                        setNewAvisoData({ titulo: '', mensagem: '', destinatarios: ['todos'] });
+                                    }}
+                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                >
+                                    <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                                </button>
+                            </div>
+
+                            <form onSubmit={(e) => {
+                                e.preventDefault();
+                                const novoAviso = {
+                                    id: Date.now(),
+                                    titulo: newAvisoData.titulo,
+                                    mensagem: newAvisoData.mensagem,
+                                    destinatarios: newAvisoData.destinatarios,
+                                    data: new Date().toISOString()
+                                };
+                                const updatedAvisos = [...avisos, novoAviso];
+                                setAvisos(updatedAvisos);
+                                localStorage.setItem('avisos', JSON.stringify(updatedAvisos));
+                                setShowAvisoModal(false);
+                                setNewAvisoData({ titulo: '', mensagem: '', destinatarios: ['todos'] });
+                            }}>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Título do Aviso
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={newAvisoData.titulo}
+                                            onChange={(e) => setNewAvisoData({ ...newAvisoData, titulo: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                            placeholder="Ex: Culto Especial de Jovens"
+                                            required
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Mensagem
+                                        </label>
+                                        <textarea
+                                            value={newAvisoData.mensagem}
+                                            onChange={(e) => setNewAvisoData({ ...newAvisoData, mensagem: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                            placeholder="Digite a mensagem do aviso..."
+                                            rows="4"
+                                            required
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Destinatários
+                                        </label>
+                                        <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-3 max-h-48 overflow-y-auto bg-white dark:bg-gray-700 space-y-2">
+                                            <div 
+                                                onClick={() => {
+                                                    if (newAvisoData.destinatarios.includes('todos')) {
+                                                        setNewAvisoData({ ...newAvisoData, destinatarios: [] });
+                                                    } else {
+                                                        setNewAvisoData({ ...newAvisoData, destinatarios: ['todos'] });
+                                                    }
+                                                }}
+                                                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                                                    newAvisoData.destinatarios.includes('todos') 
+                                                        ? 'bg-blue-100 dark:bg-blue-900 border-2 border-blue-500' 
+                                                        : 'bg-gray-50 dark:bg-gray-600 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-500'
+                                                }`}
+                                            >
+                                                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                                    newAvisoData.destinatarios.includes('todos')
+                                                        ? 'bg-blue-600 border-blue-600'
+                                                        : 'border-gray-400 dark:border-gray-500'
+                                                }`}>
+                                                    {newAvisoData.destinatarios.includes('todos') && (
+                                                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                    )}
+                                                </div>
+                                                <span className="text-gray-900 dark:text-white font-semibold">Todos os Membros</span>
+                                            </div>
+                                            
+                                            <div className="border-t border-gray-200 dark:border-gray-600 my-2"></div>
+                                            
+                                            {availableRoles.map(role => (
+                                                <div 
+                                                    key={role}
+                                                    onClick={() => {
+                                                        if (newAvisoData.destinatarios.includes('todos')) return;
+                                                        
+                                                        let newDest = [...newAvisoData.destinatarios];
+                                                        if (newDest.includes(role)) {
+                                                            newDest = newDest.filter(d => d !== role);
+                                                            if (newDest.length === 0) newDest = ['todos'];
+                                                        } else {
+                                                            newDest = newDest.filter(d => d !== 'todos');
+                                                            newDest.push(role);
+                                                        }
+                                                        setNewAvisoData({ ...newAvisoData, destinatarios: newDest });
+                                                    }}
+                                                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                                                        newAvisoData.destinatarios.includes('todos')
+                                                            ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-700'
+                                                            : newAvisoData.destinatarios.includes(role)
+                                                                ? 'bg-blue-100 dark:bg-blue-900 border-2 border-blue-500'
+                                                                : 'bg-gray-50 dark:bg-gray-600 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-500'
+                                                    }`}
+                                                >
+                                                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                                        newAvisoData.destinatarios.includes(role) && !newAvisoData.destinatarios.includes('todos')
+                                                            ? 'bg-blue-600 border-blue-600'
+                                                            : 'border-gray-400 dark:border-gray-500'
+                                                    }`}>
+                                                        {newAvisoData.destinatarios.includes(role) && !newAvisoData.destinatarios.includes('todos') && (
+                                                            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                            </svg>
+                                                        )}
+                                                    </div>
+                                                    <span className="text-gray-900 dark:text-white">{role.charAt(0).toUpperCase() + role.slice(1)}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700 mt-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowAvisoModal(false);
+                                            setNewAvisoData({ titulo: '', mensagem: '', destinatarios: ['todos'] });
+                                        }}
+                                        className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                                    >
+                                        <Send className="w-4 h-4" />
+                                        Enviar Aviso
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Nova Oficina */}
+            {showOficinaModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <Plus className="w-7 h-7 text-indigo-600" />
+                                    Nova Oficina
+                                </h2>
+                                <button
+                                    onClick={() => {
+                                        setShowOficinaModal(false);
+                                        setNewOficinaData({
+                                            nome: '',
+                                            descricao: '',
+                                            data: format(new Date(), 'yyyy-MM-dd'),
+                                            horario: '19:00',
+                                            local: '',
+                                            vagas: '',
+                                            permissaoInscricao: ['todos']
+                                        });
+                                    }}
+                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                >
+                                    <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                                </button>
+                            </div>
+
+                            <form onSubmit={(e) => {
+                                e.preventDefault();
+                                const oficinaId = Date.now();
+                                const novaOficina = {
+                                    id: oficinaId,
+                                    nome: newOficinaData.nome,
+                                    descricao: newOficinaData.descricao,
+                                    data: newOficinaData.data,
+                                    horario: newOficinaData.horario,
+                                    local: newOficinaData.local,
+                                    vagas: parseInt(newOficinaData.vagas) || 0,
+                                    inscritos: 0,
+                                    permissaoInscricao: newOficinaData.permissaoInscricao,
+                                    dataCriacao: new Date().toISOString()
+                                };
+                                const updatedOficinas = [...oficinas, novaOficina];
+                                setOficinas(updatedOficinas);
+                                localStorage.setItem('oficinas', JSON.stringify(updatedOficinas));
+                                
+                                // Criar evento correspondente para o calendário
+                                if (onAddEvent) {
+                                    onAddEvent({
+                                        id: Date.now() + 1,
+                                        oficinaId: oficinaId,
+                                        title: `Oficina: ${newOficinaData.nome}`,
+                                        date: newOficinaData.data,
+                                        time: newOficinaData.horario,
+                                        location: newOficinaData.local,
+                                        description: newOficinaData.descricao,
+                                        type: 'oficina'
+                                    });
+                                }
+                                
+                                setShowOficinaModal(false);
+                                setNewOficinaData({
+                                    nome: '',
+                                    descricao: '',
+                                    data: format(new Date(), 'yyyy-MM-dd'),
+                                    horario: '19:00',
+                                    local: '',
+                                    vagas: '',
+                                    permissaoInscricao: ['todos']
+                                });
+                            }}>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Nome da Oficina
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={newOficinaData.nome}
+                                            onChange={(e) => setNewOficinaData({ ...newOficinaData, nome: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+                                            placeholder="Ex: Violão para Iniciantes"
+                                            required
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Descrição
+                                        </label>
+                                        <textarea
+                                            value={newOficinaData.descricao}
+                                            onChange={(e) => setNewOficinaData({ ...newOficinaData, descricao: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+                                            placeholder="Descreva a oficina..."
+                                            rows="3"
+                                            required
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Data
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={newOficinaData.data}
+                                                onChange={(e) => setNewOficinaData({ ...newOficinaData, data: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Horário
+                                            </label>
+                                            <input
+                                                type="time"
+                                                value={newOficinaData.horario}
+                                                onChange={(e) => setNewOficinaData({ ...newOficinaData, horario: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Local
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={newOficinaData.local}
+                                                onChange={(e) => setNewOficinaData({ ...newOficinaData, local: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+                                                placeholder="Ex: Sala 2"
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Vagas
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={newOficinaData.vagas}
+                                                onChange={(e) => setNewOficinaData({ ...newOficinaData, vagas: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+                                                placeholder="Ex: 20"
+                                                min="1"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Quem pode se inscrever?
+                                        </label>
+                                        <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-3 max-h-48 overflow-y-auto bg-white dark:bg-gray-700 space-y-2">
+                                            <div 
+                                                onClick={() => {
+                                                    if (newOficinaData.permissaoInscricao.includes('todos')) {
+                                                        setNewOficinaData({ ...newOficinaData, permissaoInscricao: [] });
+                                                    } else {
+                                                        setNewOficinaData({ ...newOficinaData, permissaoInscricao: ['todos'] });
+                                                    }
+                                                }}
+                                                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                                                    newOficinaData.permissaoInscricao.includes('todos') 
+                                                        ? 'bg-indigo-100 dark:bg-indigo-900 border-2 border-indigo-500' 
+                                                        : 'bg-gray-50 dark:bg-gray-600 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-500'
+                                                }`}
+                                            >
+                                                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                                    newOficinaData.permissaoInscricao.includes('todos')
+                                                        ? 'bg-indigo-600 border-indigo-600'
+                                                        : 'border-gray-400 dark:border-gray-500'
+                                                }`}>
+                                                    {newOficinaData.permissaoInscricao.includes('todos') && (
+                                                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                    )}
+                                                </div>
+                                                <span className="text-gray-900 dark:text-white font-semibold">Todos os Membros</span>
+                                            </div>
+                                            
+                                            <div className="border-t border-gray-200 dark:border-gray-600 my-2"></div>
+                                            
+                                            {availableRoles.map(role => (
+                                                <div 
+                                                    key={role}
+                                                    onClick={() => {
+                                                        if (newOficinaData.permissaoInscricao.includes('todos')) return;
+                                                        
+                                                        let newPerm = [...newOficinaData.permissaoInscricao];
+                                                        if (newPerm.includes(role)) {
+                                                            newPerm = newPerm.filter(d => d !== role);
+                                                            if (newPerm.length === 0) newPerm = ['todos'];
+                                                        } else {
+                                                            newPerm = newPerm.filter(d => d !== 'todos');
+                                                            newPerm.push(role);
+                                                        }
+                                                        setNewOficinaData({ ...newOficinaData, permissaoInscricao: newPerm });
+                                                    }}
+                                                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                                                        newOficinaData.permissaoInscricao.includes('todos')
+                                                            ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-700'
+                                                            : newOficinaData.permissaoInscricao.includes(role)
+                                                                ? 'bg-indigo-100 dark:bg-indigo-900 border-2 border-indigo-500'
+                                                                : 'bg-gray-50 dark:bg-gray-600 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-500'
+                                                    }`}
+                                                >
+                                                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                                        newOficinaData.permissaoInscricao.includes(role) && !newOficinaData.permissaoInscricao.includes('todos')
+                                                            ? 'bg-indigo-600 border-indigo-600'
+                                                            : 'border-gray-400 dark:border-gray-500'
+                                                    }`}>
+                                                        {newOficinaData.permissaoInscricao.includes(role) && !newOficinaData.permissaoInscricao.includes('todos') && (
+                                                            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                            </svg>
+                                                        )}
+                                                    </div>
+                                                    <span className="text-gray-900 dark:text-white">{role.charAt(0).toUpperCase() + role.slice(1)}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700 mt-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowOficinaModal(false);
+                                            setNewOficinaData({
+                                                nome: '',
+                                                descricao: '',
+                                                data: format(new Date(), 'yyyy-MM-dd'),
+                                                horario: '19:00',
+                                                local: '',
+                                                vagas: '',
+                                                permissaoInscricao: ['todos']
+                                            });
+                                        }}
+                                        className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2"
+                                    >
+                                        <Plus className="w-4 h-4" />
+                                        Criar Oficina
                                     </button>
                                 </div>
                             </form>
