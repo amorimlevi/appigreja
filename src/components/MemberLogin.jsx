@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { LogIn, User, Lock, Moon, Sun, UserPlus } from 'lucide-react';
 
 const MemberLogin = ({ members, onLogin, onShowSignup }) => {
-    const [selectedMember, setSelectedMember] = useState('');
+    const [emailOrName, setEmailOrName] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [darkMode, setDarkMode] = useState(() => {
@@ -13,20 +13,30 @@ const MemberLogin = ({ members, onLogin, onShowSignup }) => {
         e.preventDefault();
         setError('');
 
-        if (!selectedMember) {
-            setError('Por favor, selecione um membro');
+        if (!emailOrName || !password) {
+            setError('Por favor, preencha todos os campos');
             return;
         }
 
-        // Encontrar o membro selecionado
-        const member = members.find(m => m.id === selectedMember);
+        // Encontrar o membro por nome ou email
+        const member = members.find(m => 
+            m.nome?.toLowerCase() === emailOrName.toLowerCase() || 
+            m.email?.toLowerCase() === emailOrName.toLowerCase()
+        );
         
-        if (member) {
-            // Por enquanto, qualquer senha é aceita (você pode adicionar validação real depois)
-            onLogin(member);
-        } else {
-            setError('Membro não encontrado');
+        if (!member) {
+            setError('Usuário não encontrado');
+            return;
         }
+
+        // Verificar senha (se o membro tiver senha cadastrada)
+        if (member.senha && member.senha !== password) {
+            setError('Senha incorreta');
+            return;
+        }
+
+        // Login bem-sucedido
+        onLogin(member);
     };
 
     return (
@@ -56,31 +66,24 @@ const MemberLogin = ({ members, onLogin, onShowSignup }) => {
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Selecione seu nome
+                                Nome ou Email
                             </label>
                             <div className="relative">
                                 <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                                <select
-                                    value={selectedMember}
-                                    onChange={(e) => setSelectedMember(e.target.value)}
+                                <input
+                                    type="text"
+                                    value={emailOrName}
+                                    onChange={(e) => setEmailOrName(e.target.value)}
+                                    placeholder="Digite seu nome ou email"
                                     className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                                     required
-                                >
-                                    <option value="">Escolha seu nome...</option>
-                                    {members
-                                        .sort((a, b) => a.nome.localeCompare(b.nome))
-                                        .map(member => (
-                                            <option key={member.id} value={member.id}>
-                                                {member.nome}
-                                            </option>
-                                        ))}
-                                </select>
+                                />
                             </div>
                         </div>
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Senha (opcional por enquanto)
+                                Senha
                             </label>
                             <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -90,11 +93,9 @@ const MemberLogin = ({ members, onLogin, onShowSignup }) => {
                                     onChange={(e) => setPassword(e.target.value)}
                                     placeholder="Digite sua senha"
                                     className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                    required
                                 />
                             </div>
-                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                Sistema em desenvolvimento - qualquer senha é aceita
-                            </p>
                         </div>
 
                         {error && (
