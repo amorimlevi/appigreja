@@ -21,6 +21,13 @@ import { ptBR } from 'date-fns/locale';
 
 const MemberApp = ({ currentMember, events = [], avisos = [], onLogout }) => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    
+    const menuItems = [
+        { id: 'home', label: 'Início', icon: Home },
+        { id: 'eventos', label: 'Eventos', icon: Calendar },
+        { id: 'avisos', label: 'Avisos', icon: Bell },
+        { id: 'perfil', label: 'Perfil', icon: User }
+    ];
     const [activeTab, setActiveTab] = useState('home');
     const [calendarDate, setCalendarDate] = useState(new Date());
     const [selectedEvent, setSelectedEvent] = useState(null);
@@ -321,15 +328,17 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onLogout }) => {
                     </div>
                 </div>
 
-                {/* Sidebar */}
+                {/* Menu Modal em Grade */}
                 {sidebarOpen && (
-                    <div className="fixed inset-0 bg-black/50 z-30" onClick={() => setSidebarOpen(false)}>
-                        <div
-                            className="absolute left-0 top-0 h-full w-64 bg-white dark:bg-gray-800 shadow-xl"
-                            style={{ paddingTop: 'env(safe-area-inset-top)' }}
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <div className="p-4">
+                    <>
+                        <div className="fixed inset-0 bg-black/50 z-30" onClick={() => setSidebarOpen(false)} />
+                        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-gray-800 rounded-t-3xl shadow-2xl max-h-[70vh] overflow-hidden"
+                             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+                            <div className="p-6">
+                                <div className="flex items-center justify-center mb-4">
+                                    <div className="w-12 h-1 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
+                                </div>
+
                                 <div className="flex items-center space-x-3 mb-6 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                                     <div className="h-12 w-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">
                                         {currentMember?.nome?.charAt(0) || 'M'}
@@ -340,78 +349,40 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onLogout }) => {
                                     </div>
                                 </div>
 
-                                <nav className="space-y-1">
-                                    <button
-                                        onClick={() => {
-                                            setActiveTab('home');
-                                            setSidebarOpen(false);
-                                        }}
-                                        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
-                                            activeTab === 'home'
-                                                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                                                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                        }`}
-                                    >
-                                        <Home className="h-5 w-5" />
-                                        <span>Início</span>
-                                    </button>
+                                <div className="grid grid-cols-3 gap-4 mb-4">
+                                    {menuItems.map(item => {
+                                        const Icon = item.icon;
+                                        const isActive = activeTab === item.id;
+                                        return (
+                                            <button
+                                                key={item.id}
+                                                onClick={() => {
+                                                    setActiveTab(item.id);
+                                                    setSidebarOpen(false);
+                                                }}
+                                                className={`flex flex-col items-center justify-center p-4 rounded-2xl transition-all ${
+                                                    isActive
+                                                        ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-lg scale-105'
+                                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:scale-105'
+                                                }`}
+                                            >
+                                                <Icon className="w-7 h-7 mb-2" />
+                                                <span className="text-xs font-medium text-center leading-tight">{item.label}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
 
-                                    <button
-                                        onClick={() => {
-                                            setActiveTab('eventos');
-                                            setSidebarOpen(false);
-                                        }}
-                                        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
-                                            activeTab === 'eventos'
-                                                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                                                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                        }`}
-                                    >
-                                        <Calendar className="h-5 w-5" />
-                                        <span>Eventos</span>
-                                    </button>
-
-                                    <button
-                                        onClick={() => {
-                                            setActiveTab('avisos');
-                                            setSidebarOpen(false);
-                                        }}
-                                        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
-                                            activeTab === 'avisos'
-                                                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                                                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                        }`}
-                                    >
-                                        <Bell className="h-5 w-5" />
-                                        <span>Avisos</span>
-                                    </button>
-
-                                    <button
-                                        onClick={() => {
-                                            setActiveTab('perfil');
-                                            setSidebarOpen(false);
-                                        }}
-                                        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
-                                            activeTab === 'perfil'
-                                                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                                                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                        }`}
-                                    >
-                                        <User className="h-5 w-5" />
-                                        <span>Meu Perfil</span>
-                                    </button>
-
-                                    <button
-                                        onClick={onLogout}
-                                        className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                                    >
-                                        <LogOut className="h-5 w-5" />
-                                        <span>Sair</span>
-                                    </button>
-                                </nav>
+                                <button
+                                    onClick={onLogout}
+                                    className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                                >
+                                    <LogOut className="h-5 w-5" />
+                                    <span>Sair</span>
+                                </button>
                             </div>
                         </div>
-                    </div>
+                    </>
                 )}
 
                 {/* Main Content */}
