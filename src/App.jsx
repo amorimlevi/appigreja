@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import ChurchAdminDashboard from './components/ChurchAdminDashboard'
 import Login from './components/Login'
+import MemberApp from './components/MemberApp'
+import MemberLogin from './components/MemberLogin'
 
 console.log('App.jsx carregado!')
 document.addEventListener('DOMContentLoaded', () => {
@@ -459,13 +462,19 @@ class DataManager {
   }
 }
 
-function App() {
+function AppContent() {
+  const location = useLocation();
   const [dataManager] = useState(new DataManager());
   const [members, setMembers] = useState([]);
   const [events, setEvents] = useState([]);
   const [prayerRequests, setPrayerRequests] = useState([]);
+  const [avisos, setAvisos] = useState([]);
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return localStorage.getItem('church_authenticated') === 'true';
+  });
+  const [currentMember, setCurrentMember] = useState(() => {
+    const saved = localStorage.getItem('current_member');
+    return saved ? JSON.parse(saved) : null;
   });
 
   useEffect(() => {
@@ -473,6 +482,10 @@ function App() {
     setMembers(dataManager.getMembers());
     setEvents(dataManager.getEvents());
     setPrayerRequests(dataManager.getPrayerRequests());
+    
+    // Carregar avisos do localStorage
+    const savedAvisos = JSON.parse(localStorage.getItem('church_avisos')) || [];
+    setAvisos(savedAvisos);
 
     // Salvar dados de exemplo no localStorage se não existirem
     if (!localStorage.getItem('church_members')) {
@@ -563,27 +576,71 @@ function App() {
     setIsAuthenticated(false);
   };
 
+  const handleMemberLogin = (member) => {
+    setCurrentMember(member);
+    localStorage.setItem('current_member', JSON.stringify(member));
+  };
+
+  const handleMemberLogout = () => {
+    setCurrentMember(null);
+    localStorage.removeItem('current_member');
+  };
+
   console.log('Renderizando App - members:', members.length)
 
-  if (!isAuthenticated) {
-    return <Login onLogin={handleLogin} />;
-  }
-  
   return (
-    <div className="App">
-      <ChurchAdminDashboard 
-        members={members} 
-        events={events}
-        prayerRequests={prayerRequests}
-        onAddEvent={handleAddEvent}
-        onAddMember={handleAddMember}
-        onEditMember={handleEditMember}
-        onDeleteMember={handleDeleteMember}
-        onAddFamily={handleAddFamily}
-        onEditFamily={handleEditFamily}
-        onLogout={handleLogout}
+    <Routes>
+      {/* Rota para membros */}
+      <Route 
+        path="/membro" 
+        element={
+          currentMember ? (
+            <MemberApp 
+              currentMember={currentMember}
+              events={events}
+              avisos={avisos}
+              onLogout={handleMemberLogout}
+            />
+          ) : (
+            <MemberLogin members={members} onLogin={handleMemberLogin} />
+          )
+        } 
       />
-    </div>
+
+      {/* Rota para admin */}
+      <Route 
+        path="/" 
+        element={
+          isAuthenticated ? (
+            <ChurchAdminDashboard 
+              members={members} 
+              events={events}
+              prayerRequests={prayerRequests}
+              onAddEvent={handleAddEvent}
+              onAddMember={handleAddMember}
+              onEditMember={handleEditMember}
+              onDeleteMember={handleDeleteMember}
+              onAddFamily={handleAddFamily}
+              onEditFamily={handleEditFamily}
+              onLogout={handleLogout}
+            />
+          ) : (
+            <Login onLogin={handleLogin} />
+          )
+        } 
+      />
+
+      {/* Redirecionar qualquer outra rota para / */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
+    </Router>
   );
 }
 

@@ -1256,7 +1256,12 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         {format(day, 'd')}
                                     </div>
                                     {dayEvents.map((event, idx) => (
-                                        <div key={`${event.id}-${idx}`} className="calendar-event text-xs" title={event.nome}>
+                                        <div 
+                                            key={`${event.id}-${idx}`} 
+                                            className={`calendar-event text-xs ${event.tipo === 'oficina' ? 'bg-purple-500' : ''}`} 
+                                            title={event.nome}
+                                        >
+                                            {event.tipo === 'oficina' && '🎓 '}
                                             {event.nome}
                                         </div>
                                     ))}
@@ -1361,14 +1366,21 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 futureEvents.map(event => (
                                     <div 
                                         key={event.id} 
-                                        className="p-3 bg-green-50 rounded-lg border-l-4 border-green-500 cursor-pointer hover:bg-green-100 transition-colors"
+                                        className={`p-3 rounded-lg border-l-4 cursor-pointer transition-colors ${
+                                            event.tipo === 'oficina' 
+                                                ? 'bg-purple-50 border-purple-500 hover:bg-purple-100' 
+                                                : 'bg-green-50 border-green-500 hover:bg-green-100'
+                                        }`}
                                         onClick={() => {
                                             setSelectedEvent(event);
                                             setSelectedFoods([]);
                                             setShowEventDetailsModal(true);
                                         }}
                                     >
-                                        <h4 className="font-semibold text-green-800">{event.nome}</h4>
+                                        <h4 className={`font-semibold ${event.tipo === 'oficina' ? 'text-purple-800' : 'text-green-800'}`}>
+                                            {event.tipo === 'oficina' && '🎓 '}
+                                            {event.nome}
+                                        </h4>
                                         <p className="text-sm text-green-600 flex items-center mt-1">
                                             <Calendar className="w-3 h-3 mr-1" />
                                             {format(new Date(event.data), "EEEE, dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
@@ -2706,6 +2718,7 @@ Montar escala        </button>
                                                 idade: idade !== null ? idade.toString() : ''
                                             });
                                         }}
+                                        style={{ minHeight: '42px', WebkitAppearance: 'none' }}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                     />
                                 </div>
@@ -3354,6 +3367,7 @@ Montar escala        </button>
                                                 idade: idade !== null ? idade.toString() : ''
                                             });
                                         }}
+                                        style={{ minHeight: '42px', WebkitAppearance: 'none' }}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                     />
                                 </div>
@@ -5699,12 +5713,11 @@ Montar escala        </button>
                                     onAddEvent({
                                         id: Date.now() + 1,
                                         oficinaId: oficinaId,
-                                        title: `Oficina: ${newOficinaData.nome}`,
-                                        date: newOficinaData.data,
-                                        time: newOficinaData.horario,
-                                        location: newOficinaData.local,
-                                        description: newOficinaData.descricao,
-                                        type: 'oficina'
+                                        nome: `Oficina: ${newOficinaData.nome}`,
+                                        data: `${newOficinaData.data}T${newOficinaData.horario}`,
+                                        local: newOficinaData.local,
+                                        descricao: newOficinaData.descricao,
+                                        tipo: 'oficina'
                                     });
                                 }
                                 
