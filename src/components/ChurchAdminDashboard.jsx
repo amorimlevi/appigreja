@@ -2332,7 +2332,7 @@ Montar escala        </button>
     };
 
     return (
-        <div className="flex flex-col md:flex-row h-screen bg-white dark:bg-gray-900 transition-colors">
+        <div className="flex flex-col md:flex-row h-screen bg-white dark:bg-gray-900 transition-colors" style={{ paddingTop: 'var(--safe-area-inset-top)' }}>
             {/* Sidebar Desktop */}
             <div className={`hidden md:block bg-white dark:bg-gray-800 shadow-lg transition-all duration-300 ${sidebarOpen ? 'md:w-64' : 'md:w-16'
                 }`}>
@@ -2430,7 +2430,11 @@ Montar escala        </button>
             </button>
 
             {/* Main Content */}
-            <div className="flex-1 overflow-auto pb-20 md:pb-0">
+            <div className="flex-1 overflow-auto pb-20 md:pb-0" style={{ 
+                height: '100%',
+                overflowY: 'scroll',
+                WebkitOverflowScrolling: 'touch'
+            }}>
                 <div className="p-4 md:p-6">
                     {activeTab === 'dashboard' && renderDashboard()}
                     {activeTab === 'members' && renderMembers()}

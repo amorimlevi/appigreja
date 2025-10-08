@@ -2,6 +2,12 @@ import React, { useState, useEffect } from 'react'
 import ChurchAdminDashboard from './components/ChurchAdminDashboard'
 import Login from './components/Login'
 
+console.log('App.jsx carregado!')
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('DOM carregado!')
+  document.body.style.backgroundColor = 'red' // Debug: fundo vermelho temporário
+})
+
 // Dados de exemplo para demonstração
 const sampleMembers = [
   {
