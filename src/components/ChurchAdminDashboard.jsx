@@ -3,6 +3,7 @@ import {
     Menu,
     X,
     Users,
+    User,
     Calendar,
     Settings,
     BarChart3,
@@ -40,7 +41,7 @@ import { format, isAfter, isBefore, startOfWeek, endOfWeek, addDays, subDays, di
 import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { formatId } from '../utils/formatters';
-import { getEventFoods, getEventParticipants, deleteEventFood, createMinistrySchedule, getMinistrySchedules, updateMinistrySchedule, deleteMinistrySchedule, createAviso, getAvisos, deleteAviso, getPlaylistMusicas, createPlaylistMusica, updatePlaylistMusica, deletePlaylistMusica } from '../lib/supabaseService';
+import { getEventFoods, getEventParticipants, deleteEventFood, createMinistrySchedule, getMinistrySchedules, updateMinistrySchedule, deleteMinistrySchedule, createAviso, getAvisos, deleteAviso, getPlaylistMusicas, createPlaylistMusica, updatePlaylistMusica, deletePlaylistMusica, createWorkshop, getWorkshops, updateWorkshop, deleteWorkshop, registerWorkshopParticipant, unregisterWorkshopParticipant, checkWorkshopRegistration, getWorkshopRegistrations } from '../lib/supabaseService';
 
 const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], families = [], onAddEvent, onEditEvent, onDeleteEvent, onAddMember, onEditMember, onDeleteMember, onAddFamily, onEditFamily, onLogout }) => {
     console.log('ChurchAdminDashboard renderizando - members:', members.length, 'events:', events.length, 'families:', families.length)
@@ -164,16 +165,22 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
     const [showEscalaProfessoresModal, setShowEscalaProfessoresModal] = useState(false);
     const [showDetalhesEscalaProfessoresModal, setShowDetalhesEscalaProfessoresModal] = useState(false);
     const [selectedEscalaProfessores, setSelectedEscalaProfessores] = useState(null);
+    const [showEditarEscalaProfessoresModal, setShowEditarEscalaProfessoresModal] = useState(false);
     const [newEscalaProfessoresData, setNewEscalaProfessoresData] = useState({
         turmas: [],
         data: format(new Date(), 'yyyy-MM-dd'),
         horario: '09:00',
         professoresSelecionados: []
     });
-    const [escalasProfessores, setEscalasProfessores] = useState(() => {
-        const saved = localStorage.getItem('escalaProfessores');
-        return saved ? JSON.parse(saved) : [];
+    const [editEscalaProfessoresData, setEditEscalaProfessoresData] = useState({
+        id: null,
+        turmas: [],
+        data: format(new Date(), 'yyyy-MM-dd'),
+        horario: '09:00',
+        professoresSelecionados: [],
+        observacoes: ''
     });
+    const [escalasProfessores, setEscalasProfessores] = useState([]);
     const [showAvisoModal, setShowAvisoModal] = useState(false);
     const [newAvisoData, setNewAvisoData] = useState({
         titulo: '',
@@ -182,6 +189,8 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
     });
     const [avisos, setAvisos] = useState([]);
     const [showOficinaModal, setShowOficinaModal] = useState(false);
+    const [showEditOficinaModal, setShowEditOficinaModal] = useState(false);
+    const [selectedOficina, setSelectedOficina] = useState(null);
     const [newOficinaData, setNewOficinaData] = useState({
         nome: '',
         descricao: '',
@@ -191,10 +200,17 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         vagas: '',
         permissaoInscricao: ['todos']
     });
-    const [oficinas, setOficinas] = useState(() => {
-        const saved = localStorage.getItem('oficinas');
-        return saved ? JSON.parse(saved) : [];
+    const [editOficinaData, setEditOficinaData] = useState({
+        nome: '',
+        descricao: '',
+        data: '',
+        horario: '',
+        local: '',
+        vagas: '',
+        permissaoInscricao: []
     });
+    const [oficinas, setOficinas] = useState([]);
+    const [oficinscritos, setOficinaInscritos] = useState([]);
     const [showEventDetailsModal, setShowEventDetailsModal] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [selectedFoods, setSelectedFoods] = useState([]);
@@ -284,6 +300,54 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
 
         loadDiaconiaSchedules();
     }, [activeTab, members]);
+
+    React.useEffect(() => {
+        const loadLouvorSchedules = async () => {
+            if (activeTab === 'louvor') {
+                try {
+                    const escalas = await getMinistrySchedules('louvor');
+                    setEscalasLouvor(escalas);
+                } catch (error) {
+                    console.error('Erro ao carregar escalas de louvor:', error);
+                }
+            }
+        };
+
+        loadLouvorSchedules();
+    }, [activeTab]);
+
+    React.useEffect(() => {
+        const loadKidsSchedules = async () => {
+            if (activeTab === 'kids') {
+                try {
+                    const escalas = await getMinistrySchedules('kids');
+                    setEscalasProfessores(escalas || []);
+                } catch (error) {
+                    console.error('Erro ao carregar escalas de Kids:', error);
+                    setEscalasProfessores([]);
+                }
+            }
+        };
+
+        loadKidsSchedules();
+    }, [activeTab]);
+
+    // Carregar oficinas do Supabase
+    const loadOficinas = async () => {
+        try {
+            console.log('Carregando oficinas do Supabase...');
+            const workshopsData = await getWorkshops();
+            console.log('Oficinas carregadas:', workshopsData);
+            setOficinas(workshopsData || []);
+        } catch (error) {
+            console.error('Erro ao carregar oficinas:', error);
+            setOficinas([]);
+        }
+    };
+
+    useEffect(() => {
+        loadOficinas();
+    }, []);
 
     const toggleDarkMode = () => {
         setDarkMode(!darkMode);
@@ -421,7 +485,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         if (confirm('Tem certeza que deseja deletar esta escala?')) {
             try {
                 // Deletar do Supabase
-                await deleteMinistrySchedule(escalaId);
+                await deleteMinistrySchedule(escalaId, 'diaconia');
                 
                 // Atualizar estado local
                 const updatedEscalas = escalas.filter(e => e.id !== escalaId);
@@ -2198,7 +2262,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                         <Calendar className="w-5 h-5 mr-2 text-pink-600" />
                         Próximas Escalas
                     </h3>
-                    {escalasProfessores.length === 0 ? (
+                    {!escalasProfessores || escalasProfessores.length === 0 ? (
                         <div className="text-center py-8">
                             <Calendar className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
                             <p className="text-gray-500 dark:text-gray-400">Nenhuma escala criada ainda.</p>
@@ -2209,8 +2273,9 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 .sort((a, b) => new Date(a.data) - new Date(b.data))
                                 .slice(0, 5)
                                 .map((escala, idx) => {
-                                    const hasPequenos = escala.turmas?.includes('Pequenos');
-                                    const hasGrandes = escala.turmas?.includes('Grandes');
+                                    const turmasText = escala.descricao?.replace('Turmas: ', '') || '';
+                                    const hasPequenos = turmasText.includes('Pequenos');
+                                    const hasGrandes = turmasText.includes('Grandes');
 
                                     let cardClasses = "p-4 rounded-lg border ";
                                     if (hasPequenos && hasGrandes) {
@@ -2245,11 +2310,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                     </div>
                                                 </div>
                                             </div>
-                                            {escala.turmas && escala.turmas.length > 0 && (
+                                            {escala.descricao && escala.descricao.includes('Turmas:') && (
                                                 <div className="mb-2">
                                                     <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Turmas:</p>
                                                     <div className="flex flex-wrap gap-1">
-                                                        {escala.turmas.map((turma, i) => (
+                                                        {escala.descricao.replace('Turmas: ', '').split(', ').map((turma, i) => (
                                                             <span key={i} className={`text-xs px-2 py-0.5 text-white rounded-full ${turma === 'Pequenos' ? 'bg-blue-500' : 'bg-purple-600'
                                                                 }`}>
                                                                 {turma}
@@ -2261,7 +2326,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             <div className="mt-3">
                                                 <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Professores escalados:</p>
                                                 <div className="flex flex-wrap gap-2">
-                                                    {escala.professoresSelecionados.map((profId, i) => {
+                                                    {(escala.membros_ids || escala.professoresSelecionados || []).map((profId, i) => {
                                                         const prof = members.find(m => m.id === profId);
                                                         return prof ? (
                                                             <span key={i} className="text-xs px-2 py-1 bg-pink-600 text-white rounded-full">
@@ -2372,7 +2437,52 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                             {oficinas.map((oficina) => (
                                 <div
                                     key={oficina.id}
-                                    className="p-4 border-l-4 border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg"
+                                    className="p-4 border-l-4 border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
+                                    onClick={async () => {
+                                        setSelectedOficina(oficina);
+                                        
+                                        // Extrair data e horário do timestamp
+                                        let dataFormatada = oficina.data;
+                                        let horarioFormatado = oficina.horario || '19:00';
+                                        
+                                        if (oficina.data && oficina.data.includes('T')) {
+                                            const [dataPart, horaPart] = oficina.data.split('T');
+                                            dataFormatada = dataPart;
+                                            if (horaPart) {
+                                                horarioFormatado = horaPart.substring(0, 5);
+                                            }
+                                        }
+                                        
+                                        setEditOficinaData({
+                                            nome: oficina.nome,
+                                            descricao: oficina.descricao,
+                                            data: dataFormatada,
+                                            horario: horarioFormatado,
+                                            local: oficina.local,
+                                            vagas: oficina.vagas.toString(),
+                                            permissaoInscricao: oficina.permissao_inscricao || oficina.permissaoInscricao || ['todos']
+                                        });
+                                        
+                                        // Carregar inscritos da oficina
+                                        try {
+                                            const registrations = await getWorkshopRegistrations(oficina.id);
+                                            const inscritosComDados = await Promise.all(
+                                                registrations.map(async (reg) => {
+                                                    const membro = members.find(m => m.id === reg.membro_id);
+                                                    return {
+                                                        ...reg,
+                                                        membro
+                                                    };
+                                                })
+                                            );
+                                            setOficinaInscritos(inscritosComDados);
+                                        } catch (error) {
+                                            console.error('Erro ao carregar inscritos:', error);
+                                            setOficinaInscritos([]);
+                                        }
+                                        
+                                        setShowEditOficinaModal(true);
+                                    }}
                                 >
                                     <div className="flex items-start justify-between">
                                         <div className="flex-1">
@@ -2394,7 +2504,8 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             </div>
                                         </div>
                                         <button
-                                            onClick={() => {
+                                            onClick={(e) => {
+                                                e.stopPropagation();
                                                 if (confirm('Deseja excluir esta oficina?')) {
                                                     const updatedOficinas = oficinas.filter(o => o.id !== oficina.id);
                                                     setOficinas(updatedOficinas);
@@ -4704,37 +4815,65 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                         <div className="p-6">
-                            <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Nova Escala de Louvor</h2>
-                            <form onSubmit={(e) => {
+                            <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">
+                                {selectedEscala ? 'Editar Escala de Louvor' : 'Nova Escala de Louvor'}
+                            </h2>
+                            <form onSubmit={async (e) => {
                                 e.preventDefault();
-                                const musicos = Object.entries(newEscalaLouvorData.instrumentos)
-                                    .filter(([_, musicoId]) => musicoId)
-                                    .map(([instrumento, musicoId]) => {
-                                        const musico = members.find(m => (m.id || `musico-${members.indexOf(m)}`) === musicoId);
-                                        return { ...musico, instrumento };
-                                    });
+                                try {
+                                    const musicos = Object.entries(newEscalaLouvorData.instrumentos)
+                                        .filter(([_, musicoId]) => musicoId)
+                                        .map(([instrumento, musicoId]) => {
+                                            const musico = members.find(m => String(m.id) === String(musicoId));
+                                            if (!musico) {
+                                                console.error('Músico não encontrado para ID:', musicoId);
+                                                return null;
+                                            }
+                                            return { 
+                                                id: musico.id,
+                                                nome: musico.nome,
+                                                instrumento 
+                                            };
+                                        })
+                                        .filter(m => m !== null);
 
-                                const novaEscala = {
-                                    id: Date.now(),
-                                    tipo: newEscalaLouvorData.tipo,
-                                    data: newEscalaLouvorData.data,
-                                    horario: newEscalaLouvorData.horario,
-                                    musicas: newEscalaLouvorData.musicas,
-                                    musicos: musicos
-                                };
-                                const novasEscalas = [...escalasLouvor, novaEscala].sort((a, b) =>
-                                    new Date(`${a.data}T${a.horario}`) - new Date(`${b.data}T${b.horario}`)
-                                );
-                                setEscalasLouvor(novasEscalas);
-                                localStorage.setItem('escalaLouvor', JSON.stringify(novasEscalas));
-                                setNewEscalaLouvorData({
-                                    tipo: 'culto',
-                                    data: format(new Date(), 'yyyy-MM-dd'),
-                                    horario: '19:00',
-                                    musicas: [],
-                                    instrumentos: {}
-                                });
-                                setShowEscalaLouvorModal(false);
+                                    if (selectedEscala) {
+                                        await updateMinistrySchedule(selectedEscala.id, {
+                                            tipo: newEscalaLouvorData.tipo,
+                                            data: newEscalaLouvorData.data,
+                                            horario: newEscalaLouvorData.horario,
+                                            musicas: newEscalaLouvorData.musicas,
+                                            musicos: musicos,
+                                            ministerio: 'louvor'
+                                        });
+                                    } else {
+                                        await createMinistrySchedule({
+                                            tipo: newEscalaLouvorData.tipo,
+                                            data: newEscalaLouvorData.data,
+                                            horario: newEscalaLouvorData.horario,
+                                            musicas: newEscalaLouvorData.musicas,
+                                            musicos: musicos,
+                                            ministerio: 'louvor'
+                                        });
+                                    }
+
+                                    const escalas = await getMinistrySchedules('louvor');
+                                    setEscalasLouvor(escalas);
+
+                                    setNewEscalaLouvorData({
+                                        tipo: 'culto',
+                                        data: format(new Date(), 'yyyy-MM-dd'),
+                                        horario: '19:00',
+                                        musicas: [],
+                                        instrumentos: {}
+                                    });
+                                    setSelectedEscala(null);
+                                    setShowEscalaLouvorModal(false);
+                                    alert(selectedEscala ? 'Escala atualizada com sucesso!' : 'Escala criada com sucesso!');
+                                } catch (error) {
+                                    console.error('Erro ao salvar escala:', error);
+                                    alert('Erro ao salvar escala: ' + error.message);
+                                }
                             }}>
                                 <div className="space-y-4">
                                     <div>
@@ -4908,6 +5047,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                             >
                                                                 <option value="">Selecione um músico</option>
                                                                 {members.filter(m => {
+                                                                    if (!m || !m.nome) return false;
                                                                     const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
                                                                     return funcoes.some(f => f === 'músico' || f === 'líder de louvor' || f === 'louvor' || f === 'lider de louvor');
                                                                 }).map((musico, index) => {
@@ -4930,20 +5070,26 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 <div className="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700 mt-6">
                                     <button
                                         type="button"
-                                        onClick={() => {
+                                        onClick={async () => {
                                             if (selectedEscala && confirm('Deseja realmente excluir esta escala?')) {
-                                                const novasEscalas = escalasLouvor.filter(e => e.id !== selectedEscala.id);
-                                                setEscalasLouvor(novasEscalas);
-                                                localStorage.setItem('escalaLouvor', JSON.stringify(novasEscalas));
-                                                setNewEscalaLouvorData({
-                                                    tipo: 'culto',
-                                                    data: format(new Date(), 'yyyy-MM-dd'),
-                                                    horario: '19:00',
-                                                    musicas: [],
-                                                    instrumentos: {}
-                                                });
-                                                setSelectedEscala(null);
-                                                setShowEscalaLouvorModal(false);
+                                                try {
+                                                    await deleteMinistrySchedule(selectedEscala.id, 'louvor');
+                                                    const escalas = await getMinistrySchedules('louvor');
+                                                    setEscalasLouvor(escalas);
+                                                    setNewEscalaLouvorData({
+                                                        tipo: 'culto',
+                                                        data: format(new Date(), 'yyyy-MM-dd'),
+                                                        horario: '19:00',
+                                                        musicas: [],
+                                                        instrumentos: {}
+                                                    });
+                                                    setSelectedEscala(null);
+                                                    setShowEscalaLouvorModal(false);
+                                                    alert('Escala excluída com sucesso!');
+                                                } catch (error) {
+                                                    console.error('Erro ao excluir escala:', error);
+                                                    alert('Erro ao excluir escala: ' + error.message);
+                                                }
                                             }
                                         }}
                                         className={`px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2 ${!selectedEscala ? 'opacity-0 pointer-events-none' : ''}`}
@@ -4962,6 +5108,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                     musicas: [],
                                                     instrumentos: {}
                                                 });
+                                                setSelectedEscala(null);
                                                 setShowEscalaLouvorModal(false);
                                             }}
                                             className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
@@ -4973,7 +5120,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             disabled={Object.values(newEscalaLouvorData.instrumentos).filter(Boolean).length === 0}
                                             className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
-                                            Criar Escala ({Object.values(newEscalaLouvorData.instrumentos).filter(Boolean).length} {Object.values(newEscalaLouvorData.instrumentos).filter(Boolean).length === 1 ? 'músico' : 'músicos'})
+                                            {selectedEscala ? 'Salvar Alterações' : 'Criar Escala'} ({Object.values(newEscalaLouvorData.instrumentos).filter(Boolean).length} {Object.values(newEscalaLouvorData.instrumentos).filter(Boolean).length === 1 ? 'músico' : 'músicos'})
                                         </button>
                                     </div>
                                 </div>
@@ -5063,7 +5210,9 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                 horario: selectedEscala.horario,
                                                 musicas: selectedEscala.musicas || [],
                                                 instrumentos: selectedEscala.musicos.reduce((acc, musico) => {
-                                                    acc[musico.instrumento] = musico.id || `musico-${members.indexOf(musico)}`;
+                                                    if (musico && musico.instrumento && musico.id) {
+                                                        acc[musico.instrumento] = musico.id;
+                                                    }
                                                     return acc;
                                                 }, {})
                                             });
@@ -5194,7 +5343,10 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                             <div className="flex items-center justify-between mb-6">
                                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                     <Users className="w-7 h-7 text-blue-600" />
-                                    Professores Kids ({members.filter(m => m.funcao === 'professor kids' || m.funcao === 'lider kids').length})
+                                    Professores Kids ({members.filter(m => {
+                                        const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+                                        return funcoes.includes('professor kids') || funcoes.includes('lider kids');
+                                    }).length})
                                 </h2>
                                 <button
                                     onClick={() => setShowProfessoresModal(false)}
@@ -5204,14 +5356,20 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 </button>
                             </div>
 
-                            {members.filter(m => m.funcao === 'professor kids' || m.funcao === 'lider kids').length === 0 ? (
+                            {members.filter(m => {
+                                const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+                                return funcoes.includes('professor kids') || funcoes.includes('lider kids');
+                            }).length === 0 ? (
                                 <div className="text-center py-12">
                                     <Users className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
                                     <p className="text-gray-500 dark:text-gray-400">Nenhum professor cadastrado ainda.</p>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {members.filter(m => m.funcao === 'professor kids' || m.funcao === 'lider kids').map((professor, index) => {
+                                    {members.filter(m => {
+                                        const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+                                        return funcoes.includes('professor kids') || funcoes.includes('lider kids');
+                                    }).map((professor, index) => {
                                         const age = calculateAge(professor.nascimento);
 
                                         return (
@@ -5226,15 +5384,24 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                     <div className="flex-1">
                                                         <h4 className="font-semibold text-gray-900 dark:text-white">{professor.nome}</h4>
                                                         <p className="text-sm text-gray-600 dark:text-gray-400 capitalize">
-                                                            {professor.funcao}
+                                                            {(() => {
+                                                                const funcoes = professor.funcoes || (professor.funcao ? [professor.funcao] : []);
+                                                                return funcoes.join(', ');
+                                                            })()}
                                                         </p>
                                                     </div>
-                                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${professor.funcao === 'lider kids'
-                                                            ? 'bg-pink-600 text-white'
-                                                            : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
-                                                        }`}>
-                                                        {professor.funcao === 'lider kids' ? 'Líder' : 'Professor'}
-                                                    </span>
+                                                    {(() => {
+                                                        const funcoes = professor.funcoes || (professor.funcao ? [professor.funcao] : []);
+                                                        const isLider = funcoes.includes('lider kids');
+                                                        return (
+                                                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${isLider
+                                                                    ? 'bg-pink-600 text-white'
+                                                                    : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
+                                                                }`}>
+                                                                {isLider ? 'Líder' : 'Professor'}
+                                                            </span>
+                                                        );
+                                                    })()}
                                                 </div>
                                                 <div className="space-y-1 text-sm">
                                                     {professor.telefone && (
@@ -5475,7 +5642,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 </button>
                             </div>
 
-                            <form onSubmit={(e) => {
+                            <form onSubmit={async (e) => {
                                 e.preventDefault();
                                 if (newEscalaProfessoresData.turmas.length === 0) {
                                     alert('Selecione pelo menos uma turma!');
@@ -5485,20 +5652,36 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                     alert('Selecione pelo menos um professor!');
                                     return;
                                 }
-                                const novaEscala = {
-                                    id: Date.now(),
-                                    ...newEscalaProfessoresData
-                                };
-                                const novasEscalas = [...escalasProfessores, novaEscala];
-                                setEscalasProfessores(novasEscalas);
-                                localStorage.setItem('escalaProfessores', JSON.stringify(novasEscalas));
-                                setShowEscalaProfessoresModal(false);
-                                setNewEscalaProfessoresData({
-                                    turmas: [],
-                                    data: format(new Date(), 'yyyy-MM-dd'),
-                                    horario: '09:00',
-                                    professoresSelecionados: []
-                                });
+                                try {
+                                    // Formatar dados para o formato correto da tabela ministry_schedules
+                                    const scheduleData = {
+                                        ministerio: 'kids',
+                                        data: newEscalaProfessoresData.data,
+                                        horario: newEscalaProfessoresData.horario,
+                                        descricao: `Turmas: ${newEscalaProfessoresData.turmas.join(', ')}`,
+                                        membros_ids: newEscalaProfessoresData.professoresSelecionados,
+                                        observacoes: null
+                                    };
+
+                                    await createMinistrySchedule(scheduleData);
+                                    
+                                    // Recarregar escalas
+                                    const escalas = await getMinistrySchedules('kids');
+                                    setEscalasProfessores(escalas);
+                                    
+                                    setShowEscalaProfessoresModal(false);
+                                    setNewEscalaProfessoresData({
+                                        turmas: [],
+                                        data: format(new Date(), 'yyyy-MM-dd'),
+                                        horario: '09:00',
+                                        professoresSelecionados: []
+                                    });
+                                    
+                                    alert('Escala criada com sucesso!');
+                                } catch (error) {
+                                    console.error('Erro ao criar escala:', error);
+                                    alert('Erro ao criar escala. Tente novamente.');
+                                }
                             }}>
                                 <div className="space-y-4">
                                     <div>
@@ -5577,7 +5760,10 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             Selecione os Professores ({newEscalaProfessoresData.professoresSelecionados.length} selecionados)
                                         </h3>
 
-                                        {members.filter(m => m.funcao === 'professor kids' || m.funcao === 'lider kids').length === 0 ? (
+                                        {members.filter(m => {
+                                            const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+                                            return funcoes.includes('professor kids') || funcoes.includes('lider kids');
+                                        }).length === 0 ? (
                                             <div className="text-center py-8 bg-gray-50 dark:bg-gray-700 rounded-lg">
                                                 <Users className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
                                                 <p className="text-gray-500 dark:text-gray-400">Nenhum professor cadastrado.</p>
@@ -5587,7 +5773,10 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             </div>
                                         ) : (
                                             <div className="space-y-2 max-h-96 overflow-y-auto">
-                                                {members.filter(m => m.funcao === 'professor kids' || m.funcao === 'lider kids').map((professor) => {
+                                                {members.filter(m => {
+                                                    const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+                                                    return funcoes.includes('professor kids') || funcoes.includes('lider kids');
+                                                }).map((professor) => {
                                                     const isSelected = newEscalaProfessoresData.professoresSelecionados.includes(professor.id);
                                                     const age = calculateAge(professor.nascimento);
 
@@ -5621,12 +5810,18 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                                         <h4 className="font-medium text-gray-900 dark:text-white">
                                                                             {professor.nome}
                                                                         </h4>
-                                                                        <span className={`text-xs px-2 py-0.5 rounded-full ${professor.funcao === 'lider kids'
-                                                                                ? 'bg-pink-600 text-white'
-                                                                                : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
-                                                                            }`}>
-                                                                            {professor.funcao === 'lider kids' ? 'Líder' : 'Professor'}
-                                                                        </span>
+                                                                        {(() => {
+                                                                            const funcoes = professor.funcoes || (professor.funcao ? [professor.funcao] : []);
+                                                                            const isLider = funcoes.includes('lider kids');
+                                                                            return (
+                                                                                <span className={`text-xs px-2 py-0.5 rounded-full ${isLider
+                                                                                        ? 'bg-pink-600 text-white'
+                                                                                        : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
+                                                                                    }`}>
+                                                                                    {isLider ? 'Líder' : 'Professor'}
+                                                                                </span>
+                                                                            );
+                                                                        })()}
                                                                     </div>
                                                                     <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 dark:text-gray-400">
                                                                         {professor.telefone && <span>{professor.telefone}</span>}
@@ -5724,14 +5919,14 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 </div>
 
                                 {/* Turmas */}
-                                {selectedEscalaProfessores.turmas && selectedEscalaProfessores.turmas.length > 0 && (
+                                {selectedEscalaProfessores.descricao && selectedEscalaProfessores.descricao.includes('Turmas:') && (
                                     <div>
                                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
                                             <Baby className="w-5 h-5 text-pink-600" />
                                             Turmas
                                         </h3>
                                         <div className="flex flex-wrap gap-3">
-                                            {selectedEscalaProfessores.turmas.map((turma, i) => (
+                                            {selectedEscalaProfessores.descricao.replace('Turmas: ', '').split(', ').map((turma, i) => (
                                                 <div
                                                     key={i}
                                                     className={`px-6 py-3 rounded-lg text-white font-medium text-lg ${turma === 'Pequenos' ? 'bg-blue-500' : 'bg-purple-600'
@@ -5748,10 +5943,10 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 <div>
                                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
                                         <Users className="w-5 h-5 text-pink-600" />
-                                        Professores Escalados ({selectedEscalaProfessores.professoresSelecionados.length})
+                                        Professores Escalados ({(selectedEscalaProfessores.membros_ids || selectedEscalaProfessores.professoresSelecionados || []).length})
                                     </h3>
                                     <div className="space-y-3">
-                                        {selectedEscalaProfessores.professoresSelecionados.map((profId, i) => {
+                                        {(selectedEscalaProfessores.membros_ids || selectedEscalaProfessores.professoresSelecionados || []).map((profId, i) => {
                                             const prof = members.find(m => m.id === profId);
                                             if (!prof) return null;
                                             const age = calculateAge(prof.nascimento);
@@ -5795,7 +5990,30 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 </div>
                             </div>
 
-                            <div className="flex justify-end pt-6 border-t border-gray-200 dark:border-gray-700 mt-6">
+                            <div className="flex justify-between pt-6 border-t border-gray-200 dark:border-gray-700 mt-6">
+                                <button
+                                    onClick={() => {
+                                        // Extrair turmas da descrição
+                                        const turmas = selectedEscalaProfessores.descricao?.includes('Turmas:') 
+                                            ? selectedEscalaProfessores.descricao.replace('Turmas: ', '').split(', ')
+                                            : [];
+                                        
+                                        setEditEscalaProfessoresData({
+                                            id: selectedEscalaProfessores.id,
+                                            data: selectedEscalaProfessores.data,
+                                            horario: selectedEscalaProfessores.horario,
+                                            turmas: turmas,
+                                            professoresSelecionados: selectedEscalaProfessores.membros_ids || [],
+                                            observacoes: selectedEscalaProfessores.observacoes || ''
+                                        });
+                                        setShowDetalhesEscalaProfessoresModal(false);
+                                        setShowEditarEscalaProfessoresModal(true);
+                                    }}
+                                    className="px-6 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 flex items-center gap-2"
+                                >
+                                    <Edit className="w-4 h-4" />
+                                    Editar Escala
+                                </button>
                                 <button
                                     onClick={() => {
                                         setShowDetalhesEscalaProfessoresModal(false);
@@ -5806,6 +6024,285 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                     Fechar
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Editar Escala de Professores Kids */}
+            {showEditarEscalaProfessoresModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <Calendar className="w-7 h-7 text-pink-600" />
+                                    Editar Escala de Professores
+                                </h2>
+                                <button
+                                    onClick={() => {
+                                        setShowEditarEscalaProfessoresModal(false);
+                                        setEditEscalaProfessoresData({
+                                            id: null,
+                                            turmas: [],
+                                            data: format(new Date(), 'yyyy-MM-dd'),
+                                            horario: '09:00',
+                                            professoresSelecionados: [],
+                                            observacoes: ''
+                                        });
+                                    }}
+                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                >
+                                    <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                                </button>
+                            </div>
+
+                            <form onSubmit={async (e) => {
+                                e.preventDefault();
+                                if (editEscalaProfessoresData.turmas.length === 0) {
+                                    alert('Selecione pelo menos uma turma!');
+                                    return;
+                                }
+                                if (editEscalaProfessoresData.professoresSelecionados.length === 0) {
+                                    alert('Selecione pelo menos um professor!');
+                                    return;
+                                }
+                                try {
+                                    const scheduleData = {
+                                        ministerio: 'kids',
+                                        data: editEscalaProfessoresData.data,
+                                        horario: editEscalaProfessoresData.horario,
+                                        descricao: `Turmas: ${editEscalaProfessoresData.turmas.join(', ')}`,
+                                        membros_ids: editEscalaProfessoresData.professoresSelecionados,
+                                        observacoes: editEscalaProfessoresData.observacoes || null
+                                    };
+
+                                    await updateMinistrySchedule(editEscalaProfessoresData.id, scheduleData);
+                                    
+                                    const schedules = await getMinistrySchedules('kids');
+                                    setEscalasProfessores(schedules);
+                                    
+                                    setShowEditarEscalaProfessoresModal(false);
+                                    setEditEscalaProfessoresData({
+                                        id: null,
+                                        turmas: [],
+                                        data: format(new Date(), 'yyyy-MM-dd'),
+                                        horario: '09:00',
+                                        professoresSelecionados: [],
+                                        observacoes: ''
+                                    });
+                                    
+                                    alert('Escala atualizada com sucesso!');
+                                } catch (error) {
+                                    console.error('Erro ao atualizar escala:', error);
+                                    alert('Erro ao atualizar escala. Tente novamente.');
+                                }
+                            }}>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Selecione as Turmas
+                                        </label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {['Pequenos', 'Grandes'].map(turma => (
+                                                <button
+                                                    key={turma}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (editEscalaProfessoresData.turmas.includes(turma)) {
+                                                            setEditEscalaProfessoresData({
+                                                                ...editEscalaProfessoresData,
+                                                                turmas: editEscalaProfessoresData.turmas.filter(t => t !== turma)
+                                                            });
+                                                        } else {
+                                                            setEditEscalaProfessoresData({
+                                                                ...editEscalaProfessoresData,
+                                                                turmas: [...editEscalaProfessoresData.turmas, turma]
+                                                            });
+                                                        }
+                                                    }}
+                                                    className={`p-4 rounded-lg border-2 font-medium transition-all ${
+                                                        editEscalaProfessoresData.turmas.includes(turma)
+                                                            ? 'border-pink-600 bg-pink-50 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300'
+                                                            : 'border-gray-300 dark:border-gray-600 hover:border-pink-300 dark:hover:border-pink-700 text-gray-700 dark:text-gray-300'
+                                                    }`}
+                                                >
+                                                    {turma}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Data
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={editEscalaProfessoresData.data}
+                                                onChange={(e) => setEditEscalaProfessoresData({ ...editEscalaProfessoresData, data: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 dark:bg-gray-700 dark:text-white"
+                                                required
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Horário
+                                            </label>
+                                            <input
+                                                type="time"
+                                                value={editEscalaProfessoresData.horario}
+                                                onChange={(e) => setEditEscalaProfessoresData({ ...editEscalaProfessoresData, horario: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 dark:bg-gray-700 dark:text-white"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                                        <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
+                                            Selecione os Professores ({editEscalaProfessoresData.professoresSelecionados.length} selecionados)
+                                        </h3>
+
+                                        {members.filter(m => {
+                                            const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+                                            return funcoes.includes('professor kids') || funcoes.includes('lider kids');
+                                        }).length === 0 ? (
+                                            <div className="text-center py-8 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                                <Users className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                                                <p className="text-gray-500 dark:text-gray-400">Nenhum professor cadastrado.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2 max-h-96 overflow-y-auto">
+                                                {members.filter(m => {
+                                                    const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+                                                    return funcoes.includes('professor kids') || funcoes.includes('lider kids');
+                                                }).map((professor) => {
+                                                    const isSelected = editEscalaProfessoresData.professoresSelecionados.includes(professor.id);
+                                                    const age = calculateAge(professor.nascimento);
+                                                    const funcoes = professor.funcoes || (professor.funcao ? [professor.funcao] : []);
+                                                    const isLider = funcoes.includes('lider kids');
+
+                                                    return (
+                                                        <div
+                                                            key={professor.id}
+                                                            onClick={() => {
+                                                                if (isSelected) {
+                                                                    setEditEscalaProfessoresData({
+                                                                        ...editEscalaProfessoresData,
+                                                                        professoresSelecionados: editEscalaProfessoresData.professoresSelecionados.filter(id => id !== professor.id)
+                                                                    });
+                                                                } else {
+                                                                    setEditEscalaProfessoresData({
+                                                                        ...editEscalaProfessoresData,
+                                                                        professoresSelecionados: [...editEscalaProfessoresData.professoresSelecionados, professor.id]
+                                                                    });
+                                                                }
+                                                            }}
+                                                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                                                                isSelected
+                                                                    ? 'border-pink-600 bg-pink-50 dark:bg-pink-900/30'
+                                                                    : 'border-gray-200 dark:border-gray-700 hover:border-pink-300 dark:hover:border-pink-700'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="h-10 w-10 rounded-full bg-pink-600 flex items-center justify-center text-white font-semibold">
+                                                                    {getInitials(professor.nome)}
+                                                                </div>
+                                                                <div className="flex-1">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <h4 className="font-medium text-gray-900 dark:text-white">
+                                                                            {professor.nome}
+                                                                        </h4>
+                                                                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                                                            isLider
+                                                                                ? 'bg-pink-600 text-white'
+                                                                                : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
+                                                                        }`}>
+                                                                            {isLider ? 'Líder' : 'Professor'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                                        {professor.telefone && <span>{professor.telefone}</span>}
+                                                                        {age && <span>• {age} anos</span>}
+                                                                    </div>
+                                                                </div>
+                                                                {isSelected && (
+                                                                    <div className="h-6 w-6 rounded-full bg-pink-600 flex items-center justify-center">
+                                                                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                                        </svg>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-between pt-4 border-t border-gray-200 dark:border-gray-700 mt-6">
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            if (confirm('Tem certeza que deseja deletar esta escala?')) {
+                                                try {
+                                                    await deleteMinistrySchedule(editEscalaProfessoresData.id);
+                                                    const schedules = await getMinistrySchedules('kids');
+                                                    setEscalasProfessores(schedules);
+                                                    setShowEditarEscalaProfessoresModal(false);
+                                                    setEditEscalaProfessoresData({
+                                                        id: null,
+                                                        turmas: [],
+                                                        data: format(new Date(), 'yyyy-MM-dd'),
+                                                        horario: '09:00',
+                                                        professoresSelecionados: [],
+                                                        observacoes: ''
+                                                    });
+                                                    alert('Escala deletada com sucesso!');
+                                                } catch (error) {
+                                                    console.error('Erro ao deletar escala:', error);
+                                                    alert('Erro ao deletar escala. Tente novamente.');
+                                                }
+                                            }
+                                        }}
+                                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                        Deletar
+                                    </button>
+                                    <div className="flex space-x-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowEditarEscalaProfessoresModal(false);
+                                                setEditEscalaProfessoresData({
+                                                    id: null,
+                                                    turmas: [],
+                                                    data: format(new Date(), 'yyyy-MM-dd'),
+                                                    horario: '09:00',
+                                                    professoresSelecionados: [],
+                                                    observacoes: ''
+                                                });
+                                            }}
+                                            className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={editEscalaProfessoresData.professoresSelecionados.length === 0}
+                                            className="px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                        >
+                                            <Calendar className="w-4 h-4" />
+                                            Atualizar Escala ({editEscalaProfessoresData.professoresSelecionados.length} {editEscalaProfessoresData.professoresSelecionados.length === 1 ? 'professor' : 'professores'})
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 </div>
@@ -6291,48 +6788,45 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 </button>
                             </div>
 
-                            <form onSubmit={(e) => {
+                            <form onSubmit={async (e) => {
                                 e.preventDefault();
-                                const oficinaId = Date.now();
-                                const novaOficina = {
-                                    id: oficinaId,
-                                    nome: newOficinaData.nome,
-                                    descricao: newOficinaData.descricao,
-                                    data: newOficinaData.data,
-                                    horario: newOficinaData.horario,
-                                    local: newOficinaData.local,
-                                    vagas: parseInt(newOficinaData.vagas) || 0,
-                                    inscritos: 0,
-                                    permissaoInscricao: newOficinaData.permissaoInscricao,
-                                    dataCriacao: new Date().toISOString()
-                                };
-                                const updatedOficinas = [...oficinas, novaOficina];
-                                setOficinas(updatedOficinas);
-                                localStorage.setItem('oficinas', JSON.stringify(updatedOficinas));
-
-                                // Criar evento correspondente para o calendário
-                                if (onAddEvent) {
-                                    onAddEvent({
-                                        id: Date.now() + 1,
-                                        oficinaId: oficinaId,
-                                        nome: `Oficina: ${newOficinaData.nome}`,
-                                        data: `${newOficinaData.data}T${newOficinaData.horario}`,
-                                        local: newOficinaData.local,
+                                try {
+                                    // Combinar data e horário em timestamp
+                                    const dataHoraCompleta = `${newOficinaData.data}T${newOficinaData.horario}:00`;
+                                    
+                                    const novaOficina = {
+                                        nome: newOficinaData.nome,
                                         descricao: newOficinaData.descricao,
-                                        tipo: 'oficina'
-                                    });
-                                }
+                                        data: dataHoraCompleta,
+                                        horario: newOficinaData.horario,
+                                        local: newOficinaData.local,
+                                        vagas: parseInt(newOficinaData.vagas) || 0,
+                                        inscritos: 0,
+                                        permissao_inscricao: newOficinaData.permissaoInscricao,
+                                        data_criacao: new Date().toISOString()
+                                    };
 
-                                setShowOficinaModal(false);
-                                setNewOficinaData({
-                                    nome: '',
-                                    descricao: '',
-                                    data: format(new Date(), 'yyyy-MM-dd'),
-                                    horario: '19:00',
-                                    local: '',
-                                    vagas: '',
-                                    permissaoInscricao: ['todos']
-                                });
+                                    console.log('Criando oficina:', novaOficina);
+                                    const createdWorkshop = await createWorkshop(novaOficina);
+                                    console.log('Oficina criada:', createdWorkshop);
+                                    
+                                    await loadOficinas();
+
+                                    setShowOficinaModal(false);
+                                    alert('Oficina criada com sucesso!');
+                                    setNewOficinaData({
+                                        nome: '',
+                                        descricao: '',
+                                        data: format(new Date(), 'yyyy-MM-dd'),
+                                        horario: '19:00',
+                                        local: '',
+                                        vagas: '',
+                                        permissaoInscricao: ['todos']
+                                    });
+                                } catch (error) {
+                                    console.error('Erro ao criar oficina:', error);
+                                    alert('Erro ao criar oficina. Verifique o console.');
+                                }
                             }}>
                                 <div className="space-y-4">
                                     <div>
@@ -6521,6 +7015,219 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         <Plus className="w-4 h-4" />
                                         Criar Oficina
                                     </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Editar Oficina */}
+            {showEditOficinaModal && selectedOficina && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <Edit className="w-7 h-7 text-indigo-600" />
+                                    Editar Oficina
+                                </h2>
+                                <button
+                                    onClick={() => {
+                                        setShowEditOficinaModal(false);
+                                        setSelectedOficina(null);
+                                    }}
+                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                >
+                                    <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                                </button>
+                            </div>
+
+                            <form onSubmit={async (e) => {
+                                e.preventDefault();
+                                try {
+                                    // Combinar data e horário em timestamp
+                                    const dataHoraCompleta = editOficinaData.data.includes('T') 
+                                        ? editOficinaData.data 
+                                        : `${editOficinaData.data}T${editOficinaData.horario}:00`;
+                                    
+                                    const oficinaAtualizada = {
+                                        nome: editOficinaData.nome,
+                                        descricao: editOficinaData.descricao,
+                                        data: dataHoraCompleta,
+                                        horario: editOficinaData.horario,
+                                        local: editOficinaData.local,
+                                        vagas: parseInt(editOficinaData.vagas) || 0,
+                                        permissao_inscricao: editOficinaData.permissaoInscricao
+                                    };
+
+                                    await updateWorkshop(selectedOficina.id, oficinaAtualizada);
+                                    await loadOficinas();
+
+                                    setShowEditOficinaModal(false);
+                                    setSelectedOficina(null);
+                                    alert('Oficina atualizada com sucesso!');
+                                } catch (error) {
+                                    console.error('Erro ao atualizar oficina:', error);
+                                    alert('Erro ao atualizar oficina. Verifique o console.');
+                                }
+                            }}>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Nome da Oficina
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={editOficinaData.nome}
+                                            onChange={(e) => setEditOficinaData({ ...editOficinaData, nome: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+                                            required
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Descrição
+                                        </label>
+                                        <textarea
+                                            value={editOficinaData.descricao}
+                                            onChange={(e) => setEditOficinaData({ ...editOficinaData, descricao: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+                                            rows="3"
+                                            required
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Data
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={editOficinaData.data}
+                                                onChange={(e) => setEditOficinaData({ ...editOficinaData, data: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Horário
+                                            </label>
+                                            <input
+                                                type="time"
+                                                value={editOficinaData.horario}
+                                                onChange={(e) => setEditOficinaData({ ...editOficinaData, horario: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Local
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={editOficinaData.local}
+                                                onChange={(e) => setEditOficinaData({ ...editOficinaData, local: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Vagas
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={editOficinaData.vagas}
+                                                onChange={(e) => setEditOficinaData({ ...editOficinaData, vagas: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+                                                min="1"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Lista de Inscritos */}
+                                    {oficinscritos.length > 0 && (
+                                        <div className="mt-6">
+                                            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                                                Inscritos ({oficinscritos.length})
+                                            </h3>
+                                            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 max-h-40 overflow-y-auto">
+                                                <div className="space-y-2">
+                                                    {oficinscritos.map((inscrito) => (
+                                                        <div
+                                                            key={inscrito.id}
+                                                            className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600"
+                                                        >
+                                                            <div className="flex items-center gap-2">
+                                                                <User className="w-4 h-4 text-gray-500" />
+                                                                <span className="text-sm text-gray-900 dark:text-white">
+                                                                    {inscrito.membro?.nome || 'Membro não encontrado'}
+                                                                </span>
+                                                            </div>
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                                {inscrito.data_inscricao && format(parseISO(inscrito.data_inscricao), "dd/MM/yyyy", { locale: ptBR })}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex justify-between pt-4 border-t border-gray-200 dark:border-gray-700 mt-6">
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            if (confirm('Tem certeza que deseja deletar esta oficina? Todas as inscrições serão removidas.')) {
+                                                try {
+                                                    await deleteWorkshop(selectedOficina.id);
+                                                    await loadOficinas();
+                                                    
+                                                    setShowEditOficinaModal(false);
+                                                    setSelectedOficina(null);
+                                                    alert('Oficina deletada com sucesso!');
+                                                } catch (error) {
+                                                    console.error('Erro ao deletar oficina:', error);
+                                                    alert('Erro ao deletar oficina. Verifique o console.');
+                                                }
+                                            }
+                                        }}
+                                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                        Deletar Oficina
+                                    </button>
+                                    <div className="flex space-x-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowEditOficinaModal(false);
+                                                setSelectedOficina(null);
+                                            }}
+                                            className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2"
+                                        >
+                                            <Edit className="w-4 h-4" />
+                                            Salvar Alterações
+                                        </button>
+                                    </div>
                                 </div>
                             </form>
                         </div>

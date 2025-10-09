@@ -5,7 +5,8 @@ import {
     getFamilies, 
     getAvisos, 
     getPrayerRequests,
-    cleanupPastEventFoods
+    cleanupPastEventFoods,
+    getWorkshops
 } from '../lib/supabaseService'
 
 export const useSupabaseData = () => {
@@ -36,17 +37,45 @@ export const useSupabaseData = () => {
                 eventsData, 
                 familiesData, 
                 avisosData, 
-                prayerData
+                prayerData,
+                workshopsData
             ] = await Promise.all([
                 getMembers(),
                 getEvents(),
                 getFamilies(),
                 getAvisos(),
-                getPrayerRequests()
+                getPrayerRequests(),
+                getWorkshops()
             ])
 
+            // Converter workshops para formato de eventos para exibição no calendário
+            const workshopEvents = (workshopsData || []).map(workshop => {
+                // Se data já é timestamp, usar direto; senão combinar com horário
+                let dataEvento;
+                if (workshop.data.includes('T')) {
+                    dataEvento = workshop.data;
+                } else {
+                    dataEvento = `${workshop.data}T${workshop.horario || '00:00'}`;
+                }
+                
+                return {
+                    id: `workshop-${workshop.id}`,
+                    nome: `Oficina: ${workshop.nome}`,
+                    data: dataEvento,
+                    local: workshop.local,
+                    descricao: workshop.descricao,
+                    tipo: 'oficina',
+                    vagas: workshop.vagas,
+                    inscritos: workshop.inscritos,
+                    workshopId: workshop.id
+                };
+            })
+
+            // Combinar eventos regulares com workshops
+            const allEvents = [...(eventsData || []), ...workshopEvents]
+
             setMembers(membersData || [])
-            setEvents(eventsData || [])
+            setEvents(allEvents)
             setFamilies(familiesData || [])
             setAvisos(avisosData || [])
             setPrayerRequests(prayerData || [])

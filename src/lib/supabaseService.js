@@ -95,6 +95,40 @@ export const searchMembers = async (searchTerm) => {
 // ========== ESCALAS DE MINISTÉRIOS ==========
 
 export const getMinistrySchedules = async (ministerio, dataInicio = null, dataFim = null) => {
+    if (ministerio === 'louvor') {
+        let query = supabase
+            .from('escalas_louvor')
+            .select(`
+                *,
+                musicos:escalas_louvor_musicos(
+                    id,
+                    instrumento,
+                    membro:members(*)
+                )
+            `)
+            .order('data', { ascending: true })
+        
+        if (dataInicio) {
+            query = query.gte('data', dataInicio)
+        }
+        
+        if (dataFim) {
+            query = query.lte('data', dataFim)
+        }
+        
+        const { data, error } = await query
+        
+        if (error) throw error
+        
+        return data.map(escala => ({
+            ...escala,
+            musicos: escala.musicos.map(m => ({
+                ...m.membro,
+                instrumento: m.instrumento
+            }))
+        }))
+    }
+    
     let query = supabase
         .from('ministry_schedules')
         .select('*')
@@ -127,6 +161,34 @@ export const getScheduleById = async (id) => {
 }
 
 export const createMinistrySchedule = async (scheduleData) => {
+    if (scheduleData.ministerio === 'louvor') {
+        const { musicos, ...escalaData } = scheduleData
+        
+        const { data: escala, error: escalaError } = await supabase
+            .from('escalas_louvor')
+            .insert([escalaData])
+            .select()
+            .single()
+        
+        if (escalaError) throw escalaError
+        
+        if (musicos && musicos.length > 0) {
+            const musicosData = musicos.map(m => ({
+                escala_id: escala.id,
+                membro_id: m.id,
+                instrumento: m.instrumento
+            }))
+            
+            const { error: musicosError } = await supabase
+                .from('escalas_louvor_musicos')
+                .insert(musicosData)
+            
+            if (musicosError) throw musicosError
+        }
+        
+        return escala
+    }
+    
     const { data, error } = await supabase
         .from('ministry_schedules')
         .insert([scheduleData])
@@ -138,6 +200,42 @@ export const createMinistrySchedule = async (scheduleData) => {
 }
 
 export const updateMinistrySchedule = async (id, scheduleData) => {
+    if (scheduleData.ministerio === 'louvor') {
+        const { id: _, created_at, updated_at, musicos, ...cleanData } = scheduleData
+        
+        const { data: escala, error: escalaError } = await supabase
+            .from('escalas_louvor')
+            .update(cleanData)
+            .eq('id', id)
+            .select()
+            .single()
+        
+        if (escalaError) throw escalaError
+        
+        const { error: deleteError } = await supabase
+            .from('escalas_louvor_musicos')
+            .delete()
+            .eq('escala_id', id)
+        
+        if (deleteError) throw deleteError
+        
+        if (musicos && musicos.length > 0) {
+            const musicosData = musicos.map(m => ({
+                escala_id: id,
+                membro_id: m.id,
+                instrumento: m.instrumento
+            }))
+            
+            const { error: musicosError } = await supabase
+                .from('escalas_louvor_musicos')
+                .insert(musicosData)
+            
+            if (musicosError) throw musicosError
+        }
+        
+        return escala
+    }
+    
     const { id: _, created_at, updated_at, ...cleanData } = scheduleData
     
     const { data, error } = await supabase
@@ -151,7 +249,17 @@ export const updateMinistrySchedule = async (id, scheduleData) => {
     return data
 }
 
-export const deleteMinistrySchedule = async (id) => {
+export const deleteMinistrySchedule = async (id, ministerio = null) => {
+    if (ministerio === 'louvor') {
+        const { error } = await supabase
+            .from('escalas_louvor')
+            .delete()
+            .eq('id', id)
+        
+        if (error) throw error
+        return
+    }
+    
     const { error } = await supabase
         .from('ministry_schedules')
         .delete()
@@ -414,6 +522,73 @@ export const createWorkshop = async (workshopData) => {
         .insert([workshopData])
         .select()
         .single()
+    
+    if (error) throw error
+    return data
+}
+
+export const updateWorkshop = async (id, workshopData) => {
+    const { data, error } = await supabase
+        .from('workshops')
+        .update(workshopData)
+        .eq('id', id)
+        .select()
+        .single()
+    
+    if (error) throw error
+    return data
+}
+
+export const deleteWorkshop = async (id) => {
+    const { error } = await supabase
+        .from('workshops')
+        .delete()
+        .eq('id', id)
+    
+    if (error) throw error
+}
+
+export const registerWorkshopParticipant = async (workshopId, membroId) => {
+    const { data, error } = await supabase
+        .from('workshops_inscricoes')
+        .insert([{ workshop_id: workshopId, membro_id: Number(membroId) }])
+        .select()
+        .single()
+    
+    if (error) throw error
+    return data
+}
+
+export const unregisterWorkshopParticipant = async (workshopId, membroId) => {
+    const { error } = await supabase
+        .from('workshops_inscricoes')
+        .delete()
+        .eq('workshop_id', workshopId)
+        .eq('membro_id', Number(membroId))
+    
+    if (error) throw error
+}
+
+export const checkWorkshopRegistration = async (workshopId, membroId) => {
+    const { data, error } = await supabase
+        .from('workshops_inscricoes')
+        .select('*')
+        .eq('workshop_id', workshopId)
+        .eq('membro_id', Number(membroId))
+        .maybeSingle()
+    
+    if (error) throw error
+    return data !== null
+}
+
+export const getWorkshopRegistrations = async (workshopId) => {
+    const { data, error } = await supabase
+        .from('workshops_inscricoes')
+        .select(`
+            *,
+            member:members!workshops_inscricoes_membro_id_fkey(id, nome)
+        `)
+        .eq('workshop_id', workshopId)
     
     if (error) throw error
     return data

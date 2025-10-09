@@ -26,12 +26,13 @@ import {
     Search,
     Plus,
     Edit,
-    List
+    List,
+    Trash2
 } from 'lucide-react';
 import { format, parseISO, isAfter, isBefore, startOfMonth, endOfMonth, isSameMonth, isToday, addDays, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatId } from '../utils/formatters';
-import { searchMembers, getEventFoods, updateEventFood, registerEventParticipant, unregisterEventParticipant, checkEventRegistration, updateMember, getMinistrySchedules, getMembers, getFamilyByMemberId, getUnreadAvisosCount, markAvisoAsRead, getAvisosWithReadStatus, getPlaylistMusicas, getMemberById, createMinistrySchedule, updateMinistrySchedule, deleteMinistrySchedule, createPlaylistMusica, deletePlaylistMusica } from '../lib/supabaseService';
+import { searchMembers, getEventFoods, updateEventFood, registerEventParticipant, unregisterEventParticipant, checkEventRegistration, updateMember, getMinistrySchedules, getMembers, getFamilyByMemberId, getUnreadAvisosCount, markAvisoAsRead, getAvisosWithReadStatus, getPlaylistMusicas, getMemberById, createMinistrySchedule, updateMinistrySchedule, deleteMinistrySchedule, createPlaylistMusica, deletePlaylistMusica, getWorkshops, createWorkshop, updateWorkshop, deleteWorkshop, registerWorkshopParticipant, unregisterWorkshopParticipant, checkWorkshopRegistration, getWorkshopRegistrations } from '../lib/supabaseService';
 
 const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLogout }) => {
     const [localMember, setLocalMember] = useState(currentMember);
@@ -151,6 +152,24 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     const [showCreateScheduleModal, setShowCreateScheduleModal] = useState(false);
     const [showEditScheduleModal, setShowEditScheduleModal] = useState(false);
     const [scheduleToEdit, setScheduleToEdit] = useState(null);
+    const [isLiderJovens, setIsLiderJovens] = useState(false);
+    const [oficinas, setOficinas] = useState([]);
+    const [jovensMembers, setJovensMembers] = useState([]);
+    const [showOficinaModal, setShowOficinaModal] = useState(false);
+    const [selectedOficina, setSelectedOficina] = useState(null);
+    const [showOficinaDetailsModal, setShowOficinaDetailsModal] = useState(false);
+    const [oficinaDetails, setOficinaDetails] = useState(null);
+    const [isOficinaRegistered, setIsOficinaRegistered] = useState(false);
+    const [oficinaFormData, setOficinaFormData] = useState({
+        nome: '',
+        descricao: '',
+        data: format(new Date(), 'yyyy-MM-dd'),
+        horario: '19:00',
+        local: '',
+        vagas: 12,
+        inscritos: 0,
+        quem_pode_se_inscrever: ['todos']
+    });
     const [newScheduleData, setNewScheduleData] = useState({
         data: '',
         horario: '',
@@ -345,6 +364,36 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
         };
 
         loadSchedules();
+    }, [activeTab, currentMember]);
+
+    // Verificar se é líder jovens e carregar dados
+    useEffect(() => {
+        const checkLiderAndLoadData = async () => {
+            if (activeTab === 'jovens' && currentMember) {
+                const memberRoles = currentMember.funcoes || [];
+                const isLider = memberRoles.includes('lider jovens');
+                setIsLiderJovens(isLider);
+
+                try {
+                    // Carregar oficinas
+                    const workshopsData = await getWorkshops();
+                    setOficinas(workshopsData || []);
+
+                    // Carregar membros jovens
+                    const allMembers = await getMembers();
+                    const jovens = allMembers.filter(m => {
+                        const age = calculateAge(m.nascimento);
+                        const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+                        return (age !== null && age >= 13 && age <= 30) || funcoes.includes('jovem');
+                    });
+                    setJovensMembers(jovens);
+                } catch (error) {
+                    console.error('Erro ao carregar dados de jovens:', error);
+                }
+            }
+        };
+
+        checkLiderAndLoadData();
     }, [activeTab, currentMember]);
 
     // Eventos futuros ordenados por data
@@ -836,6 +885,124 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
         } catch (error) {
             console.error('Erro ao adicionar música:', error);
             alert('Erro ao adicionar música');
+        }
+    };
+
+    // Funções de gestão de oficinas
+    const handleSaveOficina = async () => {
+        try {
+            const oficinaData = {
+                nome: oficinaFormData.nome,
+                descricao: oficinaFormData.descricao,
+                data: `${oficinaFormData.data}T${oficinaFormData.horario}:00`,
+                local: oficinaFormData.local,
+                vagas: parseInt(oficinaFormData.vagas),
+                inscritos: parseInt(oficinaFormData.inscritos),
+                quem_pode_se_inscrever: oficinaFormData.quem_pode_se_inscrever
+            };
+
+            if (selectedOficina) {
+                await updateWorkshop(selectedOficina.id, oficinaData);
+                alert('Oficina atualizada com sucesso!');
+            } else {
+                await createWorkshop(oficinaData);
+                alert('Oficina criada com sucesso!');
+            }
+
+            const workshopsData = await getWorkshops();
+            setOficinas(workshopsData || []);
+            setShowOficinaModal(false);
+            setSelectedOficina(null);
+            setOficinaFormData({
+                nome: '',
+                descricao: '',
+                data: format(new Date(), 'yyyy-MM-dd'),
+                horario: '19:00',
+                local: '',
+                vagas: 12,
+                inscritos: 0,
+                quem_pode_se_inscrever: ['todos']
+            });
+        } catch (error) {
+            console.error('Erro ao salvar oficina:', error);
+            alert('Erro ao salvar oficina');
+        }
+    };
+
+    const handleDeleteOficina = async (id) => {
+        if (!confirm('Deseja realmente deletar esta oficina?')) return;
+
+        try {
+            await deleteWorkshop(id);
+            alert('Oficina deletada com sucesso!');
+            const workshopsData = await getWorkshops();
+            setOficinas(workshopsData || []);
+            setShowOficinaModal(false);
+            setSelectedOficina(null);
+        } catch (error) {
+            console.error('Erro ao deletar oficina:', error);
+            alert('Erro ao deletar oficina');
+        }
+    };
+
+    const handleEditOficina = (oficina) => {
+        setSelectedOficina(oficina);
+        
+        let dataFormatada = oficina.data;
+        let horarioFormatado = '19:00';
+        
+        if (oficina.data && oficina.data.includes('T')) {
+            const [dataPart, horaPart] = oficina.data.split('T');
+            dataFormatada = dataPart;
+            if (horaPart) {
+                horarioFormatado = horaPart.substring(0, 5);
+            }
+        }
+        
+        setOficinaFormData({
+            nome: oficina.nome || '',
+            descricao: oficina.descricao || '',
+            data: dataFormatada,
+            horario: horarioFormatado,
+            local: oficina.local || '',
+            vagas: oficina.vagas || 12,
+            inscritos: oficina.inscritos || 0,
+            quem_pode_se_inscrever: oficina.quem_pode_se_inscrever || ['todos']
+        });
+
+        setShowOficinaModal(true);
+    };
+
+    const handleViewOficinaDetails = async (oficina) => {
+        try {
+            setOficinaDetails(oficina);
+            const isRegistered = await checkWorkshopRegistration(oficina.id, localMember.id);
+            setIsOficinaRegistered(isRegistered);
+            setShowOficinaDetailsModal(true);
+        } catch (error) {
+            console.error('Erro ao verificar inscrição:', error);
+        }
+    };
+
+    const handleOficinaRegistration = async () => {
+        if (!oficinaDetails || !localMember) return;
+
+        try {
+            if (isOficinaRegistered) {
+                await unregisterWorkshopParticipant(oficinaDetails.id, localMember.id);
+                setIsOficinaRegistered(false);
+                alert('Inscrição cancelada com sucesso!');
+            } else {
+                await registerWorkshopParticipant(oficinaDetails.id, localMember.id);
+                setIsOficinaRegistered(true);
+                alert('Inscrição confirmada com sucesso!');
+            }
+            
+            const updatedOficinas = await getWorkshops();
+            setOficinas(updatedOficinas);
+        } catch (error) {
+            console.error('Erro ao processar inscrição:', error);
+            alert('Erro ao processar inscrição. Tente novamente.');
         }
     };
 
@@ -1642,38 +1809,146 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                     {/* Jovens */}
                     {activeTab === 'jovens' && (
                         <div className="space-y-4">
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-                                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-                                    <Sparkles className="w-6 h-6 mr-2 text-indigo-600" />
-                                    Ministério de Jovens
-                                </h2>
-                                <p className="text-gray-600 dark:text-gray-400 mb-4">
-                                    Espaço dedicado aos jovens de 13 a 30 anos. Venha fazer parte dessa família!
-                                </p>
+                            {isLiderJovens && (
+                                <div className="flex justify-between items-center">
+                                    <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Jovens</h1>
+                                    <button
+                                        onClick={() => {
+                                            setSelectedOficina(null);
+                                            setOficinaFormData({
+                                                nome: '',
+                                                descricao: '',
+                                                data: format(new Date(), 'yyyy-MM-dd'),
+                                                horario: '19:00',
+                                                local: '',
+                                                vagas: 12,
+                                                inscritos: 0,
+                                                quem_pode_se_inscrever: ['todos']
+                                            });
+                                            setShowOficinaModal(true);
+                                        }}
+                                        className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                                    >
+                                        <Plus className="w-4 h-4 mr-2" />
+                                        Nova Oficina
+                                    </button>
+                                </div>
+                            )}
 
+                            {isLiderJovens && (
                                 <div className="card">
-                                    <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Faixas Etárias</h3>
-                                    <div className="space-y-3">
-                                        <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <Sparkles className="w-5 h-5 text-blue-600" />
-                                                <span className="text-gray-900 dark:text-white">Adolescentes (13-18 anos)</span>
-                                            </div>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">Total de Jovens</p>
+                                            <p className="text-2xl font-bold text-gray-900 dark:text-white">{jovensMembers.length}</p>
                                         </div>
-                                        <div className="flex items-center justify-between p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <Sparkles className="w-5 h-5 text-indigo-600" />
-                                                <span className="text-gray-900 dark:text-white">Jovens (19-24 anos)</span>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <Sparkles className="w-5 h-5 text-purple-600" />
-                                                <span className="text-gray-900 dark:text-white">Jovens Adultos (25-30 anos)</span>
-                                            </div>
-                                        </div>
+                                        <Sparkles className="w-8 h-8 text-indigo-500" />
                                     </div>
                                 </div>
+                            )}
+
+                            <div className="card">
+                                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Jovens por Faixa Etária</h3>
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                                        <div className="flex items-center gap-3">
+                                            <Sparkles className="w-5 h-5 text-blue-600" />
+                                            <span className="text-gray-900 dark:text-white">13-18 anos (Adolescentes)</span>
+                                        </div>
+                                        <span className="font-semibold text-gray-900 dark:text-white">
+                                            {jovensMembers.filter(j => {
+                                                const age = calculateAge(j.nascimento);
+                                                return age >= 13 && age <= 18;
+                                            }).length}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
+                                        <div className="flex items-center gap-3">
+                                            <Sparkles className="w-5 h-5 text-indigo-600" />
+                                            <span className="text-gray-900 dark:text-white">19-24 anos (Jovens)</span>
+                                        </div>
+                                        <span className="font-semibold text-gray-900 dark:text-white">
+                                            {jovensMembers.filter(j => {
+                                                const age = calculateAge(j.nascimento);
+                                                return age >= 19 && age <= 24;
+                                            }).length}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                                        <div className="flex items-center gap-3">
+                                            <Sparkles className="w-5 h-5 text-purple-600" />
+                                            <span className="text-gray-900 dark:text-white">25+ anos (Jovens Adultos)</span>
+                                        </div>
+                                        <span className="font-semibold text-gray-900 dark:text-white">
+                                            {jovensMembers.filter(j => {
+                                                const age = calculateAge(j.nascimento);
+                                                return age >= 25;
+                                            }).length}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="card">
+                                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Oficinas</h3>
+                                {oficinas.length === 0 ? (
+                                    <div className="text-center py-12">
+                                        <Sparkles className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
+                                        <p className="text-gray-500 dark:text-gray-400">Nenhuma oficina cadastrada ainda.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {oficinas.map((oficina) => (
+                                            <div
+                                                key={oficina.id}
+                                                className="p-4 border-l-4 border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
+                                                onClick={() => isLiderJovens ? handleEditOficina(oficina) : handleViewOficinaDetails(oficina)}
+                                            >
+                                                <div className="flex justify-between items-start">
+                                                    <div className="flex-1">
+                                                        <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
+                                                            {oficina.nome}
+                                                        </h4>
+                                                        {oficina.descricao && (
+                                                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                                                {oficina.descricao}
+                                                            </p>
+                                                        )}
+                                                        <div className="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                                            <span className="flex items-center gap-1">
+                                                                <Clock className="w-3 h-3" />
+                                                                {oficina.data && (
+                                                                    format(parseISO(oficina.data.split('T')[0]), "dd/MM/yyyy", { locale: ptBR })
+                                                                )} às {oficina.data && oficina.data.includes('T') ? oficina.data.split('T')[1].substring(0, 5) : '19:00'}
+                                                            </span>
+                                                            <span className="flex items-center gap-1">
+                                                                <Users className="w-3 h-3" />
+                                                                {oficina.inscritos || 0}/{oficina.vagas || 12} vagas
+                                                            </span>
+                                                            {oficina.local && (
+                                                                <span className="flex items-center gap-1">
+                                                                    <MapPin className="w-3 h-3" />
+                                                                    {oficina.local}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    {isLiderJovens && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDeleteOficina(oficina.id);
+                                                            }}
+                                                            className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -3515,6 +3790,306 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </button>
                                 </div>
                             </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal de Oficina */}
+                {showOficinaModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] overflow-y-auto p-4">
+                        <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
+                            <h3 className="text-base md:text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+                                {selectedOficina ? 'Editar Oficina' : 'Nova Oficina'}
+                            </h3>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Nome da Oficina *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={oficinaFormData.nome}
+                                        onChange={(e) => setOficinaFormData({ ...oficinaFormData, nome: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        placeholder="Ex: Louvor e Adoração"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Descrição
+                                    </label>
+                                    <textarea
+                                        value={oficinaFormData.descricao}
+                                        onChange={(e) => setOficinaFormData({ ...oficinaFormData, descricao: e.target.value })}
+                                        rows="3"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        placeholder="Descrição da oficina"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                            Data *
+                                        </label>
+                                        <input
+                                            type="date"
+                                            required
+                                            value={oficinaFormData.data}
+                                            onChange={(e) => setOficinaFormData({ ...oficinaFormData, data: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                            Horário *
+                                        </label>
+                                        <input
+                                            type="time"
+                                            required
+                                            value={oficinaFormData.horario}
+                                            onChange={(e) => setOficinaFormData({ ...oficinaFormData, horario: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Local
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={oficinaFormData.local}
+                                        onChange={(e) => setOficinaFormData({ ...oficinaFormData, local: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        placeholder="Ex: Sala 2"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Número de Vagas *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        required
+                                        min="1"
+                                        value={oficinaFormData.vagas}
+                                        onChange={(e) => setOficinaFormData({ ...oficinaFormData, vagas: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+                                        Quem pode se inscrever?
+                                    </label>
+                                    <div className="space-y-2 max-h-64 overflow-y-auto p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                                        <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                                            oficinaFormData.quem_pode_se_inscrever.includes('todos')
+                                                ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-500 shadow-sm'
+                                                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                        }`}>
+                                            <div className="relative flex items-center justify-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={oficinaFormData.quem_pode_se_inscrever.includes('todos')}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setOficinaFormData({ ...oficinaFormData, quem_pode_se_inscrever: ['todos'] });
+                                                        } else {
+                                                            setOficinaFormData({ ...oficinaFormData, quem_pode_se_inscrever: [] });
+                                                        }
+                                                    }}
+                                                    className="w-5 h-5 text-indigo-600 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-500 rounded focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                                                />
+                                            </div>
+                                            <span className={`ml-3 text-sm font-semibold ${
+                                                oficinaFormData.quem_pode_se_inscrever.includes('todos')
+                                                    ? 'text-indigo-700 dark:text-indigo-300'
+                                                    : 'text-gray-900 dark:text-white'
+                                            }`}>Todos os Membros</span>
+                                        </label>
+                                        {[
+                                            'membro',
+                                            'pastor',
+                                            'lider da diaconia',
+                                            'líder de louvor',
+                                            'lider kids',
+                                            'lider jovens',
+                                            'jovem',
+                                            'ministro',
+                                            'louvor',
+                                            'diaconia',
+                                            'professor kids'
+                                        ].map((funcao) => {
+                                            const isSelected = oficinaFormData.quem_pode_se_inscrever.includes(funcao);
+                                            const isTodosSelected = oficinaFormData.quem_pode_se_inscrever.includes('todos');
+                                            
+                                            return (
+                                                <label key={funcao} className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                                                    isTodosSelected
+                                                        ? 'border-gray-200 dark:border-gray-700 opacity-50 cursor-not-allowed'
+                                                        : isSelected
+                                                            ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-500 shadow-sm'
+                                                            : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                }`}>
+                                                    <div className="relative flex items-center justify-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelected}
+                                                            onChange={(e) => {
+                                                                const current = oficinaFormData.quem_pode_se_inscrever.filter(r => r !== 'todos');
+                                                                if (e.target.checked) {
+                                                                    setOficinaFormData({ ...oficinaFormData, quem_pode_se_inscrever: [...current, funcao] });
+                                                                } else {
+                                                                    setOficinaFormData({ ...oficinaFormData, quem_pode_se_inscrever: current.filter(r => r !== funcao) });
+                                                                }
+                                                            }}
+                                                            disabled={isTodosSelected}
+                                                            className="w-5 h-5 text-indigo-600 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-500 rounded focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                                        />
+                                                    </div>
+                                                    <span className={`ml-3 text-sm ${
+                                                        isTodosSelected
+                                                            ? 'text-gray-400 dark:text-gray-500'
+                                                            : isSelected
+                                                                ? 'text-indigo-700 dark:text-indigo-300 font-semibold'
+                                                                : 'text-gray-700 dark:text-gray-300'
+                                                    }`}>
+                                                        {funcao.charAt(0).toUpperCase() + funcao.slice(1)}
+                                                    </span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end gap-3 mt-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowOficinaModal(false);
+                                            setSelectedOficina(null);
+                                            setOficinaFormData({
+                                                nome: '',
+                                                descricao: '',
+                                                data: format(new Date(), 'yyyy-MM-dd'),
+                                                horario: '19:00',
+                                                local: '',
+                                                vagas: 12,
+                                                inscritos: 0,
+                                                quem_pode_se_inscrever: ['todos']
+                                            });
+                                        }}
+                                        className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveOficina}
+                                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                                    >
+                                        {selectedOficina ? 'Atualizar' : 'Criar'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal de Detalhes da Oficina (para membros não-líderes) */}
+                {showOficinaDetailsModal && oficinaDetails && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                            <div className="p-6">
+                                <div className="flex justify-between items-start mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                                        {oficinaDetails.nome}
+                                    </h2>
+                                    <button
+                                        onClick={() => {
+                                            setShowOficinaDetailsModal(false);
+                                            setOficinaDetails(null);
+                                        }}
+                                        className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                                    >
+                                        <X className="w-6 h-6" />
+                                    </button>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {oficinaDetails.descricao && (
+                                        <div>
+                                            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descrição</h3>
+                                            <p className="text-gray-900 dark:text-white">{oficinaDetails.descricao}</p>
+                                        </div>
+                                    )}
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Data e Horário</h3>
+                                            <p className="text-gray-900 dark:text-white flex items-center gap-2">
+                                                <Calendar className="w-4 h-4" />
+                                                {oficinaDetails.data && format(parseISO(oficinaDetails.data.split('T')[0]), "dd/MM/yyyy", { locale: ptBR })}
+                                            </p>
+                                            <p className="text-gray-900 dark:text-white flex items-center gap-2 mt-1">
+                                                <Clock className="w-4 h-4" />
+                                                {oficinaDetails.data && oficinaDetails.data.includes('T') ? oficinaDetails.data.split('T')[1].substring(0, 5) : '19:00'}
+                                            </p>
+                                        </div>
+
+                                        <div>
+                                            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Vagas</h3>
+                                            <p className="text-gray-900 dark:text-white flex items-center gap-2">
+                                                <Users className="w-4 h-4" />
+                                                {oficinaDetails.inscritos || 0}/{oficinaDetails.vagas || 12}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {oficinaDetails.local && (
+                                        <div>
+                                            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Local</h3>
+                                            <p className="text-gray-900 dark:text-white flex items-center gap-2">
+                                                <MapPin className="w-4 h-4" />
+                                                {oficinaDetails.local}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                        <button
+                                            onClick={() => {
+                                                setShowOficinaDetailsModal(false);
+                                                setOficinaDetails(null);
+                                            }}
+                                            className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                                        >
+                                            Fechar
+                                        </button>
+                                        <button
+                                            onClick={handleOficinaRegistration}
+                                            disabled={(oficinaDetails.inscritos >= oficinaDetails.vagas) && !isOficinaRegistered}
+                                            className={`px-4 py-2 rounded-lg text-white ${
+                                                isOficinaRegistered
+                                                    ? 'bg-red-600 hover:bg-red-700'
+                                                    : (oficinaDetails.inscritos >= oficinaDetails.vagas)
+                                                        ? 'bg-gray-400 cursor-not-allowed'
+                                                        : 'bg-indigo-600 hover:bg-indigo-700'
+                                            }`}
+                                        >
+                                            {isOficinaRegistered ? 'Cancelar Inscrição' : 'Inscrever-se'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}
