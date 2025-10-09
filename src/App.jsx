@@ -14,6 +14,8 @@ import {
     updateEvent,
     deleteEvent,
     createEventFood,
+    deleteEventFood,
+    getEventFoods,
     createFamily,
     updateFamily,
     createAviso,
@@ -533,6 +535,45 @@ function AppContent() {
     }
   };
 
+  const handleEditEvent = async (eventId, updatedData) => {
+    try {
+      // Separar comidas dos dados do evento
+      const { comidas, ...eventOnlyData } = updatedData;
+      
+      console.log('Editando evento:', eventId, eventOnlyData);
+      await updateEvent(eventId, eventOnlyData);
+      
+      // Adicionar apenas novas alimentações (deletar já é feito em tempo real no modal)
+      if (comidas) {
+        const newFoods = comidas.filter(c => !c.id);
+        for (const comida of newFoods) {
+          await createEventFood({
+            event_id: eventId,
+            nome: comida.nome,
+            responsavel: comida.responsavel || null,
+            membro_id: null
+          });
+        }
+      }
+      
+      setEvents(events.map(event => event.id === eventId ? { ...event, ...eventOnlyData } : event));
+      alert('Evento atualizado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao editar evento:', error);
+      alert(`Erro ao editar evento: ${error.message || error}`);
+    }
+  };
+
+  const handleDeleteEvent = async (eventId) => {
+    try {
+      await deleteEvent(eventId);
+      setEvents(events.filter(event => event.id !== eventId));
+    } catch (error) {
+      console.error('Erro ao deletar evento:', error);
+      alert('Erro ao deletar evento');
+    }
+  };
+
   const handleAddMember = async (memberData) => {
     try {
       console.log('Dados enviados para criar membro:', memberData);
@@ -756,6 +797,8 @@ function AppContent() {
               families={families}
               prayerRequests={prayerRequests}
               onAddEvent={handleAddEvent}
+              onEditEvent={handleEditEvent}
+              onDeleteEvent={handleDeleteEvent}
               onAddMember={handleAddMember}
               onEditMember={handleEditMember}
               onDeleteMember={handleDeleteMember}

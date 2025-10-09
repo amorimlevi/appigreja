@@ -38,7 +38,10 @@ export const updateMember = async (id, memberData) => {
     // Remover campos que não devem ser atualizados
     const { id: _, created_at, updated_at, data_cadastro, familiaId, ...cleanData } = memberData;
     
-    console.log('updateMember - ID:', id, 'Data:', cleanData);
+    console.log('updateMember - ID:', id);
+    console.log('updateMember - Dados recebidos:', memberData);
+    console.log('updateMember - Dados limpos a enviar:', cleanData);
+    console.log('updateMember - Funcoes:', cleanData.funcoes);
     
     const { data, error } = await supabase
         .from('members')
@@ -53,6 +56,7 @@ export const updateMember = async (id, memberData) => {
     }
     
     console.log('Membro atualizado no Supabase:', data);
+    console.log('Funcoes retornadas do Supabase:', data.funcoes);
     return data;
 }
 
@@ -86,6 +90,74 @@ export const searchMembers = async (searchTerm) => {
     
     if (error) throw error
     return data
+}
+
+// ========== ESCALAS DE MINISTÉRIOS ==========
+
+export const getMinistrySchedules = async (ministerio, dataInicio = null, dataFim = null) => {
+    let query = supabase
+        .from('ministry_schedules')
+        .select('*')
+        .eq('ministerio', ministerio)
+        .order('data', { ascending: true })
+    
+    if (dataInicio) {
+        query = query.gte('data', dataInicio)
+    }
+    
+    if (dataFim) {
+        query = query.lte('data', dataFim)
+    }
+    
+    const { data, error } = await query
+    
+    if (error) throw error
+    return data
+}
+
+export const getScheduleById = async (id) => {
+    const { data, error } = await supabase
+        .from('ministry_schedules')
+        .select('*')
+        .eq('id', id)
+        .single()
+    
+    if (error) throw error
+    return data
+}
+
+export const createMinistrySchedule = async (scheduleData) => {
+    const { data, error } = await supabase
+        .from('ministry_schedules')
+        .insert([scheduleData])
+        .select()
+        .single()
+    
+    if (error) throw error
+    return data
+}
+
+export const updateMinistrySchedule = async (id, scheduleData) => {
+    const { id: _, created_at, updated_at, ...cleanData } = scheduleData
+    
+    const { data, error } = await supabase
+        .from('ministry_schedules')
+        .update(cleanData)
+        .eq('id', id)
+        .select()
+        .single()
+    
+    if (error) throw error
+    return data
+}
+
+export const deleteMinistrySchedule = async (id) => {
+    const { error } = await supabase
+        .from('ministry_schedules')
+        .delete()
+        .eq('id', id)
+    
+    if (error) throw error
 }
 
 // ========== FAMÍLIAS ==========
@@ -172,7 +244,10 @@ export const deleteEvent = async (id) => {
 export const getEventFoods = async (eventId) => {
     const { data, error } = await supabase
         .from('event_foods')
-        .select('*')
+        .select(`
+            *,
+            member:members!event_foods_membro_id_fkey(id, nome)
+        `)
         .eq('event_id', eventId)
     
     if (error) throw error
@@ -200,6 +275,111 @@ export const updateEventFood = async (id, foodData) => {
     
     if (error) throw error
     return data
+}
+
+export const deleteEventFoods = async (eventId) => {
+    const { error } = await supabase
+        .from('event_foods')
+        .delete()
+        .eq('event_id', eventId)
+    
+    if (error) throw error
+}
+
+export const deleteEventFood = async (id) => {
+    console.log('deleteEventFood chamada com ID:', id);
+    const { data, error } = await supabase
+        .from('event_foods')
+        .delete()
+        .eq('id', id)
+        .select()
+    
+    console.log('Resultado da deleção:', { data, error });
+    if (error) {
+        console.error('Erro no deleteEventFood:', error);
+        throw error;
+    }
+    console.log('DeleteEventFood concluído sem erro');
+    return data;
+}
+
+export const cleanupPastEventFoods = async () => {
+    // Buscar eventos que já passaram
+    const now = new Date().toISOString()
+    const { data: pastEvents, error: eventsError } = await supabase
+        .from('events')
+        .select('id')
+        .lt('data', now)
+    
+    if (eventsError) throw eventsError
+    
+    if (pastEvents && pastEvents.length > 0) {
+        const eventIds = pastEvents.map(e => e.id)
+        
+        // Deletar todas as alimentações dos eventos passados
+        const { error: deleteError } = await supabase
+            .from('event_foods')
+            .delete()
+            .in('event_id', eventIds)
+        
+        if (deleteError) throw deleteError
+        
+        return { cleaned: pastEvents.length }
+    }
+    
+    return { cleaned: 0 }
+}
+
+// ========== PARTICIPANTES DE EVENTOS ==========
+
+export const registerEventParticipant = async (eventId, membroId) => {
+    const { data, error } = await supabase
+        .from('event_participants')
+        .insert([{
+            event_id: eventId,
+            membro_id: membroId,
+            confirmado: true
+        }])
+        .select()
+        .single()
+    
+    if (error) throw error
+    return data
+}
+
+export const unregisterEventParticipant = async (eventId, membroId) => {
+    const { error } = await supabase
+        .from('event_participants')
+        .delete()
+        .eq('event_id', eventId)
+        .eq('membro_id', membroId)
+    
+    if (error) throw error
+}
+
+export const getEventParticipants = async (eventId) => {
+    const { data, error } = await supabase
+        .from('event_participants')
+        .select(`
+            *,
+            member:members!event_participants_membro_id_fkey(id, nome)
+        `)
+        .eq('event_id', eventId)
+    
+    if (error) throw error
+    return data
+}
+
+export const checkEventRegistration = async (eventId, membroId) => {
+    const { data, error } = await supabase
+        .from('event_participants')
+        .select('*')
+        .eq('event_id', eventId)
+        .eq('membro_id', membroId)
+        .maybeSingle()
+    
+    if (error) throw error
+    return data !== null
 }
 
 // ========== WORKSHOPS ==========

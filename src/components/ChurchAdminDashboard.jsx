@@ -18,6 +18,8 @@ import {
     Phone,
     ChevronLeft,
     ChevronRight,
+    ChevronDown,
+    ChevronUp,
     Grid,
     List,
     Heart,
@@ -31,14 +33,16 @@ import {
     Sparkles,
     LogOut,
     Bell,
-    Send
+    Send,
+    CheckCircle
 } from 'lucide-react';
 import { format, isAfter, isBefore, startOfWeek, endOfWeek, addDays, subDays, differenceInYears, startOfMonth, endOfMonth, isSameMonth, isToday, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { formatId } from '../utils/formatters';
+import { getEventFoods, getEventParticipants, deleteEventFood, createMinistrySchedule, getMinistrySchedules, updateMinistrySchedule, deleteMinistrySchedule } from '../lib/supabaseService';
 
-const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], families = [], onAddEvent, onAddMember, onEditMember, onDeleteMember, onAddFamily, onEditFamily, onLogout }) => {
+const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], families = [], onAddEvent, onEditEvent, onDeleteEvent, onAddMember, onEditMember, onDeleteMember, onAddFamily, onEditFamily, onLogout }) => {
     console.log('ChurchAdminDashboard renderizando - members:', members.length, 'events:', events.length, 'families:', families.length)
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('dashboard');
@@ -105,6 +109,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         comidas: []
     });
     const [novaComida, setNovaComida] = useState('');
+    const [novaComidaEdit, setNovaComidaEdit] = useState('');
     const [showMusicModal, setShowMusicModal] = useState(false);
     const [newMusicData, setNewMusicData] = useState({
         nome: '',
@@ -129,18 +134,22 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         categoria: 'culto',
         data: format(new Date(), 'yyyy-MM-dd'),
         horario: '19:00',
+        descricao: '',
+        local: '',
+        observacoes: '',
         diaconosSelecionados: []
     });
     const [editEscalaData, setEditEscalaData] = useState({
         categoria: 'culto',
         data: '',
         horario: '19:00',
+        descricao: '',
+        local: '',
+        observacoes: '',
         diaconosSelecionados: []
     });
-    const [escalas, setEscalas] = useState(() => {
-        const saved = localStorage.getItem('escalaDiaconia');
-        return saved ? JSON.parse(saved) : [];
-    });
+    const [escalas, setEscalas] = useState([]);
+    const [loadingEscalas, setLoadingEscalas] = useState(false);
     const [showMusicosModal, setShowMusicosModal] = useState(false);
     const [showEscalaLouvorModal, setShowEscalaLouvorModal] = useState(false);
     const [showViewEscalaModal, setShowViewEscalaModal] = useState(false);
@@ -202,6 +211,20 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [selectedFoods, setSelectedFoods] = useState([]);
     const [selectedMemberForFood, setSelectedMemberForFood] = useState(null);
+    const [eventFoodsFromDB, setEventFoodsFromDB] = useState([]);
+    const [eventParticipants, setEventParticipants] = useState([]);
+    const [showParticipantsSection, setShowParticipantsSection] = useState(false);
+    const [showFoodsSection, setShowFoodsSection] = useState(false);
+    const [showEditEventModal, setShowEditEventModal] = useState(false);
+    const [showDeleteEventModal, setShowDeleteEventModal] = useState(false);
+    const [editEventData, setEditEventData] = useState({
+        nome: '',
+        data: '',
+        local: '',
+        descricao: '',
+        alimentacao: false,
+        comidas: []
+    });
 
     // Aplicar tema escuro ao DOM
     React.useEffect(() => {
@@ -212,6 +235,41 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         }
         localStorage.setItem('darkMode', darkMode.toString());
     }, [darkMode]);
+
+    // Carregar escalas de diaconia do Supabase quando mudar para a aba diaconia
+    React.useEffect(() => {
+        const loadDiaconiaSchedules = async () => {
+            if (activeTab === 'diaconia') {
+                setLoadingEscalas(true);
+                try {
+                    const schedules = await getMinistrySchedules('diaconia');
+
+                    // Converter formato do Supabase para o formato local esperado
+                    const escalasFormatadas = schedules.map(schedule => ({
+                        id: schedule.id,
+                        categoria: schedule.categoria || 'culto',
+                        data: schedule.data,
+                        horario: schedule.horario,
+                        descricao: schedule.descricao,
+                        local: schedule.local,
+                        observacoes: schedule.observacoes,
+                        diaconos: members.filter(m => schedule.membros_ids?.includes(m.id)),
+                        membros_ids: schedule.membros_ids
+                    }));
+
+                    setEscalas(escalasFormatadas);
+                    // Atualizar localStorage para compatibilidade
+                    localStorage.setItem('escalaDiaconia', JSON.stringify(escalasFormatadas));
+                } catch (error) {
+                    console.error('Erro ao carregar escalas de diaconia:', error);
+                } finally {
+                    setLoadingEscalas(false);
+                }
+            }
+        };
+
+        loadDiaconiaSchedules();
+    }, [activeTab, members]);
 
     const toggleDarkMode = () => {
         setDarkMode(!darkMode);
@@ -265,7 +323,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             const isSelected = prev.membrosIds.includes(memberId);
             return {
                 ...prev,
-                membrosIds: isSelected 
+                membrosIds: isSelected
                     ? prev.membrosIds.filter(id => id !== memberId)
                     : [...prev.membrosIds, memberId]
             };
@@ -277,7 +335,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             const isSelected = prev.membrosIds.includes(memberId);
             return {
                 ...prev,
-                membrosIds: isSelected 
+                membrosIds: isSelected
                     ? prev.membrosIds.filter(id => id !== memberId)
                     : [...prev.membrosIds, memberId]
             };
@@ -302,10 +360,13 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
 
     const handleEditEscalaDiaconia = (escala) => {
         setEditEscalaData({
-            categoria: escala.categoria,
+            categoria: escala.categoria || 'culto',
             data: escala.data,
             horario: escala.horario,
-            diaconosSelecionados: escala.diaconos.map(d => d.id)
+            descricao: escala.descricao || '',
+            local: escala.local || '',
+            observacoes: escala.observacoes || '',
+            diaconosSelecionados: escala.diaconos?.map(d => d.id) || escala.membros_ids || []
         });
         setShowEscalaOptionsModal(false);
         setShowEditEscalaModal(true);
@@ -318,7 +379,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                 const diaconosSelecionados = members
                     .filter(m => editEscalaData.diaconosSelecionados.includes(m.id))
                     .map(m => ({ id: m.id, nome: m.nome }));
-                
+
                 return {
                     ...escala,
                     categoria: editEscalaData.categoria,
@@ -329,7 +390,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             }
             return escala;
         });
-        
+
         setEscalas(updatedEscalas);
         localStorage.setItem('escalaDiaconia', JSON.stringify(updatedEscalas));
         setShowEditEscalaModal(false);
@@ -342,13 +403,25 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         });
     };
 
-    const handleDeleteEscalaDiaconia = (escalaId) => {
+    const handleDeleteEscalaDiaconia = async (escalaId) => {
         if (confirm('Tem certeza que deseja deletar esta escala?')) {
-            const updatedEscalas = escalas.filter(e => e.id !== escalaId);
-            setEscalas(updatedEscalas);
-            localStorage.setItem('escalaDiaconia', JSON.stringify(updatedEscalas));
-            setShowEscalaOptionsModal(false);
-            setSelectedEscalaDiaconia(null);
+            try {
+                // Deletar do Supabase
+                await deleteMinistrySchedule(escalaId);
+                
+                // Atualizar estado local
+                const updatedEscalas = escalas.filter(e => e.id !== escalaId);
+                setEscalas(updatedEscalas);
+                
+                // Manter localStorage como backup (opcional)
+                localStorage.setItem('escalaDiaconia', JSON.stringify(updatedEscalas));
+                
+                setShowEscalaOptionsModal(false);
+                setSelectedEscalaDiaconia(null);
+            } catch (error) {
+                console.error('Erro ao deletar escala:', error);
+                alert('Erro ao deletar escala. Tente novamente.');
+            }
         }
     };
 
@@ -405,8 +478,8 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         'louvor',
         'diaconia',
         'professor kids',
-        
-        
+
+
     ];
 
     // Função para parsear datas de eventos
@@ -508,7 +581,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             return idA - idB;
         });
     }, [members, genderFilter, ageFilter, roleFilter, searchTerm]);
-    
+
     // Membros individuais (sem família) para a view individual
     const individualMembers = useMemo(() => {
         return filteredMembers.filter(member => !member.familia || member.familia.trim() === '');
@@ -588,12 +661,12 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
     // Agrupar membros por família (usando dados do Supabase)
     const familyGroups = useMemo(() => {
         console.log('Calculando familyGroups - families:', families, 'members:', members);
-        
+
         return families.map(family => {
-            const familyMembers = members.filter(member => 
+            const familyMembers = members.filter(member =>
                 family.membros_ids && family.membros_ids.includes(member.id)
             );
-            
+
             return {
                 id: family.id,
                 nome: family.nome,
@@ -944,22 +1017,20 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700">
                 <button
                     onClick={() => setMemberView('individual')}
-                    className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 ${
-                        memberView === 'individual'
+                    className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 ${memberView === 'individual'
                             ? 'border-gray-900 dark:border-white text-gray-900 dark:text-white'
                             : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                    }`}
+                        }`}
                 >
                     <Users className="w-4 h-4 inline mr-2" />
                     Individual
                 </button>
                 <button
                     onClick={() => setMemberView('familias')}
-                    className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 ${
-                        memberView === 'familias'
+                    className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 ${memberView === 'familias'
                             ? 'border-gray-900 dark:border-white text-gray-900 dark:text-white'
                             : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                    }`}
+                        }`}
                 >
                     <Users className="w-4 h-4 inline mr-2" />
                     Famílias
@@ -979,100 +1050,100 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                             return null;
                         })()}
                         {filteredMembers.map((member, index) => {
-                        const age = calculateAge(member.nascimento);
-                        const initials = getInitials(member.nome);
-                        const memberId = generateMemberId(member, index);
+                            const age = calculateAge(member.nascimento);
+                            const initials = getInitials(member.nome);
+                            const memberId = generateMemberId(member, index);
 
-                        return (
-                            <div key={memberId} className="card hover:shadow-lg transition-shadow">
-                                <div className="flex items-start justify-between mb-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-14 w-14 rounded-full bg-gray-900 dark:bg-white flex items-center justify-center text-white dark:text-gray-900 font-semibold text-xl">
-                                            {initials}
+                            return (
+                                <div key={memberId} className="card hover:shadow-lg transition-shadow">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-14 w-14 rounded-full bg-gray-900 dark:bg-white flex items-center justify-center text-white dark:text-gray-900 font-semibold text-xl">
+                                                {initials}
+                                            </div>
+                                            <div>
+                                                <h3 className="font-semibold text-gray-900 dark:text-white text-base md:text-lg">{member.nome}</h3>
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">ID: {member.id ? formatId(member.id) : memberId}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h3 className="font-semibold text-gray-900 dark:text-white text-base md:text-lg">{member.nome}</h3>
-                                            <p className="text-sm text-gray-500 dark:text-gray-400">ID: {member.id ? formatId(member.id) : memberId}</p>
-                                        </div>
-                                    </div>
-                                    <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${member.status === 'ativo'
+                                        <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${member.status === 'ativo'
                                             ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200'
                                             : 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-200'
-                                        }`}>
-                                        {member.status || 'ativo'}
-                                    </span>
-                                </div>
-
-                                <div className="space-y-2 mb-4">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm text-gray-500 dark:text-gray-400">Função:</span>
-                                        <div className="flex flex-wrap gap-1 justify-end">
-                                            {(member.funcoes && member.funcoes.length > 0 ? member.funcoes : ['membro']).map((funcao, idx) => {
-                                                const funcaoLower = funcao.toLowerCase();
-                                                const getFuncaoColor = () => {
-                                                    if (age !== null && age <= 12) return 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200';
-                                                    if (funcaoLower === 'pastor') return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
-                                                    if (funcaoLower === 'diácono' || funcaoLower === 'diacono' || funcaoLower === 'diaconia') return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-                                                    if (funcaoLower === 'louvor' || funcaoLower.includes('louvor')) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-                                                    if (funcaoLower === 'músico' || funcaoLower === 'musico') return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
-                                                    if (funcaoLower.includes('lider') || funcaoLower.includes('líder')) return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200';
-                                                    if (funcaoLower === 'jovem' || funcaoLower === 'jovens') return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
-                                                    if (funcaoLower.includes('kids') || funcaoLower.includes('criança')) return 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200';
-                                                    if (funcaoLower.includes('professor')) return 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200';
-                                                    if (funcaoLower === 'membro') return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
-                                                    return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200';
-                                                };
-                                                
-                                                return (
-                                                    <span key={idx} className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getFuncaoColor()}`}>
-                                                        {age !== null && age <= 12 && idx === 0 ? 'Criança' : funcao.charAt(0).toUpperCase() + funcao.slice(1)}
-                                                    </span>
-                                                );
-                                            })}
-                                        </div>
+                                            }`}>
+                                            {member.status || 'ativo'}
+                                        </span>
                                     </div>
 
-                                    <div className="flex items-center justify-between text-sm">
-                                        <span className="text-sm text-gray-500 dark:text-gray-400">Gênero:</span>
-                                        <span className="text-gray-900 dark:text-white capitalize text-sm font-medium">{member.genero || 'N/A'}</span>
-                                    </div>
+                                    <div className="space-y-2 mb-4">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-sm text-gray-500 dark:text-gray-400">Função:</span>
+                                            <div className="flex flex-wrap gap-1 justify-end">
+                                                {(member.funcoes && member.funcoes.length > 0 ? member.funcoes : ['membro']).map((funcao, idx) => {
+                                                    const funcaoLower = funcao.toLowerCase();
+                                                    const getFuncaoColor = () => {
+                                                        if (age !== null && age <= 12) return 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200';
+                                                        if (funcaoLower === 'pastor') return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+                                                        if (funcaoLower === 'diácono' || funcaoLower === 'diacono' || funcaoLower === 'diaconia') return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+                                                        if (funcaoLower === 'louvor' || funcaoLower.includes('louvor')) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+                                                        if (funcaoLower === 'músico' || funcaoLower === 'musico') return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+                                                        if (funcaoLower.includes('lider') || funcaoLower.includes('líder')) return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200';
+                                                        if (funcaoLower === 'jovem' || funcaoLower === 'jovens') return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
+                                                        if (funcaoLower.includes('kids') || funcaoLower.includes('criança')) return 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200';
+                                                        if (funcaoLower.includes('professor')) return 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200';
+                                                        if (funcaoLower === 'membro') return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+                                                        return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200';
+                                                    };
 
-                                    <div className="flex items-center justify-between text-sm">
-                                        <span className="text-sm text-gray-500 dark:text-gray-400">Idade:</span>
-                                        <span className="text-gray-900 dark:text-white text-sm font-medium">{age ? `${age} anos` : 'N/A'}</span>
-                                    </div>
-
-                                    {member.telefone && (
-                                        <div className="flex items-center justify-between text-sm">
-                                            <div className="flex items-center gap-2">
-                                                <Phone className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                                                <span className="text-sm text-gray-500 dark:text-gray-400">Telefone:</span>
+                                                    return (
+                                                        <span key={idx} className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getFuncaoColor()}`}>
+                                                            {age !== null && age <= 12 && idx === 0 ? 'Criança' : funcao.charAt(0).toUpperCase() + funcao.slice(1)}
+                                                        </span>
+                                                    );
+                                                })}
                                             </div>
-                                            <span className="text-gray-900 dark:text-white text-sm font-medium">{member.telefone}</span>
                                         </div>
-                                    )}
-                                </div>
 
-                                <div className="flex gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
-                                    <button
-                                        onClick={() => handleEditMember(member)}
-                                        className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                                    >
-                                        <Edit className="w-4 h-4" />
-                                        <span className="text-sm">Editar</span>
-                                    </button>
-                                    <button
-                                        onClick={() => handleDeleteMember(member)}
-                                        className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                        <span className="text-sm">Deletar</span>
-                                    </button>
+                                        <div className="flex items-center justify-between text-sm">
+                                            <span className="text-sm text-gray-500 dark:text-gray-400">Gênero:</span>
+                                            <span className="text-gray-900 dark:text-white capitalize text-sm font-medium">{member.genero || 'N/A'}</span>
+                                        </div>
+
+                                        <div className="flex items-center justify-between text-sm">
+                                            <span className="text-sm text-gray-500 dark:text-gray-400">Idade:</span>
+                                            <span className="text-gray-900 dark:text-white text-sm font-medium">{age ? `${age} anos` : 'N/A'}</span>
+                                        </div>
+
+                                        {member.telefone && (
+                                            <div className="flex items-center justify-between text-sm">
+                                                <div className="flex items-center gap-2">
+                                                    <Phone className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                                                    <span className="text-sm text-gray-500 dark:text-gray-400">Telefone:</span>
+                                                </div>
+                                                <span className="text-gray-900 dark:text-white text-sm font-medium">{member.telefone}</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+                                        <button
+                                            onClick={() => handleEditMember(member)}
+                                            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                                        >
+                                            <Edit className="w-4 h-4" />
+                                            <span className="text-sm">Editar</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteMember(member)}
+                                            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                            <span className="text-sm">Deletar</span>
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                        );
-                    })}
-                </div>
+                            );
+                        })}
+                    </div>
                 )
             ) : (
                 // Visualização de Famílias
@@ -1085,10 +1156,10 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         {familyGroups.map((family, index) => {
                             const isExpanded = expandedFamilies[family.id];
-                            
+
                             return (
                                 <div key={family.id} className="card hover:shadow-lg transition-shadow">
-                                    <div 
+                                    <div
                                         className="flex items-center justify-between cursor-pointer"
                                         onClick={() => {
                                             setExpandedFamilies(prev => ({
@@ -1134,7 +1205,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             {family.membros.map((member, memberIndex) => {
                                                 const age = calculateAge(member.nascimento);
                                                 const initials = getInitials(member.nome);
-                                                
+
                                                 return (
                                                     <div key={memberIndex} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                                                         <div className="flex items-center gap-3">
@@ -1169,7 +1240,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                                         if (funcaoLower === 'membro') return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
                                                                         return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200';
                                                                     };
-                                                                    
+
                                                                     return (
                                                                         <span key={idx} className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getFuncaoColor()}`}>
                                                                             {age !== null && age <= 12 && idx === 0 ? 'Criança' : funcao.charAt(0).toUpperCase() + funcao.slice(1)}
@@ -1270,9 +1341,9 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         {format(day, 'd')}
                                     </div>
                                     {dayEvents.map((event, idx) => (
-                                        <div 
-                                            key={`${event.id}-${idx}`} 
-                                            className={`calendar-event text-xs ${event.tipo === 'oficina' ? 'bg-purple-500' : ''}`} 
+                                        <div
+                                            key={`${event.id}-${idx}`}
+                                            className={`calendar-event text-xs ${event.tipo === 'oficina' ? 'bg-purple-500' : ''}`}
                                             title={event.nome}
                                         >
                                             {event.tipo === 'oficina' && '🎓 '}
@@ -1378,16 +1449,44 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 <p className="text-gray-500 dark:text-gray-400">Nenhum evento futuro agendado.</p>
                             ) : (
                                 futureEvents.map(event => (
-                                    <div 
-                                        key={event.id} 
-                                        className={`p-3 rounded-lg border-l-4 cursor-pointer transition-colors ${
-                                            event.tipo === 'oficina' 
-                                                ? 'bg-purple-50 border-purple-500 hover:bg-purple-100' 
+                                    <div
+                                        key={event.id}
+                                        className={`p-3 rounded-lg border-l-4 cursor-pointer transition-colors ${event.tipo === 'oficina'
+                                                ? 'bg-purple-50 border-purple-500 hover:bg-purple-100'
                                                 : 'bg-green-50 border-green-500 hover:bg-green-100'
-                                        }`}
-                                        onClick={() => {
+                                            }`}
+                                        onClick={async () => {
                                             setSelectedEvent(event);
                                             setSelectedFoods([]);
+                                            setShowParticipantsSection(false);
+                                            setShowFoodsSection(false);
+
+                                            // Buscar alimentações do banco de dados
+                                            if (event.alimentacao && event.id) {
+                                                try {
+                                                    const foods = await getEventFoods(event.id);
+                                                    setEventFoodsFromDB(foods || []);
+                                                } catch (error) {
+                                                    console.error('Erro ao buscar alimentações:', error);
+                                                    setEventFoodsFromDB([]);
+                                                }
+                                            } else {
+                                                setEventFoodsFromDB([]);
+                                            }
+
+                                            // Buscar participantes do evento
+                                            if (event.id) {
+                                                try {
+                                                    const participants = await getEventParticipants(event.id);
+                                                    setEventParticipants(participants || []);
+                                                } catch (error) {
+                                                    console.error('Erro ao buscar participantes:', error);
+                                                    setEventParticipants([]);
+                                                }
+                                            } else {
+                                                setEventParticipants([]);
+                                            }
+
                                             setShowEventDetailsModal(true);
                                         }}
                                     >
@@ -1620,43 +1719,50 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
     );
 
     const renderDiaconia = () => {
-    const necessitados = members.filter(m => m.status === 'necessitado' || m.observacoes?.toLowerCase().includes('ajuda'));
-    const diaconos = members.filter(m => m.funcao === 'diácono' || m.funcao === 'diaconia' || m.funcao === 'líder da diaconia');
-    
-    return (
-    <div className="space-y-6">
-    <div className="flex justify-between items-center">
-    <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white"> Diaconia</h1>
-    <button 
-        onClick={() => {
-            setNewEscalaData({
-                data: format(new Date(), 'yyyy-MM-dd'),
-                horario: '19:00',
-                diaconosSelecionados: []
-            });
-            setShowEscalaModal(true);
-        }}
-        className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
-    <Plus className="w-4 h-4 mr-2" />
-Montar escala        </button>
+        const necessitados = members.filter(m => m.status === 'necessitado' || m.observacoes?.toLowerCase().includes('ajuda'));
+        const diaconos = members.filter(m => {
+            const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+            return funcoes.some(f => f === 'diácono' || f === 'diaconia' || f === 'líder da diaconia' || f === 'lider da diaconia');
+        });
+
+        return (
+            <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                    <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white"> Diaconia</h1>
+                    <button
+                        onClick={() => {
+                            setNewEscalaData({
+                                categoria: 'culto',
+                                data: format(new Date(), 'yyyy-MM-dd'),
+                                horario: '19:00',
+                                descricao: '',
+                                local: '',
+                                observacoes: '',
+                                diaconosSelecionados: []
+                            });
+                            setShowEscalaModal(true);
+                        }}
+                        className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Montar escala        </button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="card">
-        <div className="flex items-center justify-between">
-            <div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Diáconos</p>
-        <p className="text-2xl font-bold text-gray-900 dark:text-white">{diaconos.length}</p>
-    </div>
-        <Users className="w-8 h-8 text-purple-500" />
-        </div>
-    </div>
+                    <div className="card">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Diáconos</p>
+                                <p className="text-2xl font-bold text-gray-900 dark:text-white">{diaconos.length}</p>
+                            </div>
+                            <Users className="w-8 h-8 text-purple-500" />
+                        </div>
+                    </div>
 
-    </div>
+                </div>
 
-    <div className="card">
-            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center">
-                    <Users className="w-5 h-5 mr-2 text-purple-600" />
+                <div className="card">
+                    <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center">
+                        <Users className="w-5 h-5 mr-2 text-purple-600" />
                         Lista de Diáconos ({diaconos.length})
                     </h3>
                     {diaconos.length === 0 ? (
@@ -1669,7 +1775,7 @@ Montar escala        </button>
                             {diaconos.map((diacono, index) => {
                                 const age = calculateAge(diacono.nascimento);
                                 const initials = getInitials(diacono.nome);
-                                
+
                                 return (
                                     <div key={diacono.id || index} className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
                                         <div className="flex items-center gap-3">
@@ -1712,37 +1818,33 @@ Montar escala        </button>
                                 const dataEscala = parseISO(escala.data);
                                 const isProxima = index === 0;
                                 const dataFormatada = format(dataEscala, "EEEE - dd/MM/yyyy", { locale: ptBR });
-                                
+
                                 return (
-                                    <div 
-                                        key={escala.id} 
+                                    <div
+                                        key={escala.id}
                                         onClick={() => {
                                             setSelectedEscalaDiaconia(escala);
                                             setShowEscalaOptionsModal(true);
                                         }}
-                                        className={`p-4 border-l-4 rounded-lg cursor-pointer hover:shadow-lg transition-shadow ${
-                                            isProxima 
-                                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+                                        className={`p-4 border-l-4 rounded-lg cursor-pointer hover:shadow-lg transition-shadow ${isProxima
+                                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                                                 : 'border-gray-400 bg-gray-50 dark:bg-gray-700/50'
-                                        }`}
+                                            }`}
                                     >
                                         <div className="flex items-center justify-between mb-3">
-                                            <p className={`font-semibold capitalize ${
-                                                isProxima ? 'text-blue-900 dark:text-blue-300' : 'text-gray-900 dark:text-gray-300'
-                                            }`}>
+                                            <p className={`font-semibold capitalize ${isProxima ? 'text-blue-900 dark:text-blue-300' : 'text-gray-900 dark:text-gray-300'
+                                                }`}>
                                                 {dataFormatada}
                                             </p>
                                             <div className="flex items-center gap-2">
                                                 {escala.categoria && (
-                                                    <span className={`px-3 py-1 text-xs font-semibold rounded-full capitalize ${
-                                                        escala.categoria === 'culto' ? 'bg-purple-600 text-white' : 'bg-orange-600 text-white'
-                                                    }`}>
+                                                    <span className={`px-3 py-1 text-xs font-semibold rounded-full capitalize ${escala.categoria === 'culto' ? 'bg-purple-600 text-white' : 'bg-orange-600 text-white'
+                                                        }`}>
                                                         {escala.categoria}
                                                     </span>
                                                 )}
-                                                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                                                    isProxima ? 'bg-blue-600 text-white' : 'bg-gray-400 text-white'
-                                                }`}>
+                                                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${isProxima ? 'bg-blue-600 text-white' : 'bg-gray-400 text-white'
+                                                    }`}>
                                                     {escala.horario}
                                                 </span>
                                                 {isProxima && (
@@ -1752,24 +1854,21 @@ Montar escala        </button>
                                         </div>
                                         <div className="space-y-2">
                                             <div className="flex items-start gap-2">
-                                                <Users className={`w-4 h-4 mt-0.5 ${
-                                                    isProxima ? 'text-blue-600' : 'text-gray-600 dark:text-gray-400'
-                                                }`} />
+                                                <Users className={`w-4 h-4 mt-0.5 ${isProxima ? 'text-blue-600' : 'text-gray-600 dark:text-gray-400'
+                                                    }`} />
                                                 <div className="flex-1">
-                                                    <span className={`font-medium text-sm ${
-                                                        isProxima ? 'text-blue-800 dark:text-blue-400' : 'text-gray-700 dark:text-gray-400'
-                                                    }`}>
+                                                    <span className={`font-medium text-sm ${isProxima ? 'text-blue-800 dark:text-blue-400' : 'text-gray-700 dark:text-gray-400'
+                                                        }`}>
                                                         Diáconos escalados:
                                                     </span>
                                                     <div className="mt-1 flex flex-wrap gap-2">
                                                         {escala.diaconos.map((diacono, dIndex) => (
-                                                            <span 
+                                                            <span
                                                                 key={dIndex}
-                                                                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
-                                                                    isProxima 
-                                                                        ? 'bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200' 
+                                                                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${isProxima
+                                                                        ? 'bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200'
                                                                         : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
-                                                                }`}
+                                                                    }`}
                                                             >
                                                                 <div className="h-5 w-5 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs">
                                                                     {getInitials(diacono.nome)}
@@ -1788,22 +1887,25 @@ Montar escala        </button>
                     )}
                 </div>
 
-                
-                
+
+
 
             </div>
         );
     };
 
     const renderLouvor = () => {
-        const musicos = members.filter(m => m.funcao === 'músico' || m.funcao === 'líder de louvor' || m.funcao === 'louvor');
-        
+        const musicos = members.filter(m => {
+            const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+            return funcoes.some(f => f === 'músico' || f === 'líder de louvor' || f === 'louvor');
+        });
+
         return (
             <div className="space-y-6">
                 <div className="flex justify-between items-center gap-2">
                     <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Louvor</h1>
                     <div className="flex gap-2">
-                        <button 
+                        <button
                             onClick={() => {
                                 setNewEscalaLouvorData({
                                     tipo: 'culto',
@@ -1818,7 +1920,7 @@ Montar escala        </button>
                             <Plus className="w-4 h-4 mr-2" />
                             Nova Escala
                         </button>
-                        <button 
+                        <button
                             onClick={() => setShowMusicModal(true)}
                             className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
                             <Plus className="w-4 h-4 mr-2" />
@@ -1828,7 +1930,7 @@ Montar escala        </button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div 
+                    <div
                         className="card cursor-pointer hover:shadow-lg transition-shadow"
                         onClick={() => setShowMusicosModal(true)}
                     >
@@ -1840,8 +1942,8 @@ Montar escala        </button>
                             <Music className="w-8 h-8 text-purple-500" />
                         </div>
                     </div>
-                    
-                    <div 
+
+                    <div
                         className="card cursor-pointer hover:shadow-lg transition-shadow"
                         onClick={() => setShowMusicasCadastradasModal(true)}
                     >
@@ -1853,7 +1955,7 @@ Montar escala        </button>
                             <Music className="w-8 h-8 text-green-500" />
                         </div>
                     </div>
-                    
+
                 </div>
 
                 <div className="card">
@@ -1874,35 +1976,31 @@ Montar escala        </button>
                                 const dataEscala = new Date(`${escala.data}T${escala.horario}`);
                                 const isProxima = dataEscala >= now && index === escalasLouvor.filter(e => new Date(`${e.data}T${e.horario}`) >= now).sort((a, b) => new Date(`${a.data}T${a.horario}`) - new Date(`${b.data}T${b.horario}`)).findIndex(e => e.id === escala.id) && escalasLouvor.filter(e => new Date(`${e.data}T${e.horario}`) >= now).sort((a, b) => new Date(`${a.data}T${a.horario}`) - new Date(`${b.data}T${b.horario}`)).findIndex(e => e.id === escala.id) === 0;
                                 const dataFormatada = format(parseISO(escala.data), "EEEE - dd/MM/yyyy", { locale: ptBR });
-                                
+
                                 return (
-                                    <div 
-                                        key={escala.id} 
+                                    <div
+                                        key={escala.id}
                                         onClick={() => {
                                             setSelectedEscala(escala);
                                             setShowViewEscalaModal(true);
                                         }}
-                                        className={`p-4 border-l-4 rounded-lg cursor-pointer hover:shadow-md transition-all ${
-                                            isProxima 
-                                                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' 
+                                        className={`p-4 border-l-4 rounded-lg cursor-pointer hover:shadow-md transition-all ${isProxima
+                                                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
                                                 : 'border-gray-400 bg-gray-50 dark:bg-gray-700/50'
-                                        }`}
+                                            }`}
                                     >
                                         <div className="flex items-center justify-between mb-3">
-                                            <p className={`font-semibold capitalize ${
-                                                isProxima ? 'text-purple-900 dark:text-purple-300' : 'text-gray-900 dark:text-gray-300'
-                                            }`}>
+                                            <p className={`font-semibold capitalize ${isProxima ? 'text-purple-900 dark:text-purple-300' : 'text-gray-900 dark:text-gray-300'
+                                                }`}>
                                                 {dataFormatada}
                                             </p>
                                             <div className="flex items-center gap-2">
-                                                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                                                    escala.tipo === 'culto' ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'
-                                                }`}>
+                                                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${escala.tipo === 'culto' ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'
+                                                    }`}>
                                                     {escala.tipo === 'culto' ? 'Culto' : 'Ensaio'}
                                                 </span>
-                                                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                                                    isProxima ? 'bg-purple-600 text-white' : 'bg-gray-400 text-white'
-                                                }`}>
+                                                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${isProxima ? 'bg-purple-600 text-white' : 'bg-gray-400 text-white'
+                                                    }`}>
                                                     {escala.horario}
                                                 </span>
                                                 {isProxima && (
@@ -1913,37 +2011,32 @@ Montar escala        </button>
                                         <div className="space-y-2">
                                             {escala.musicas && escala.musicas.length > 0 && (
                                                 <div className="flex items-start gap-2">
-                                                    <Music className={`w-4 h-4 mt-0.5 ${
-                                                        isProxima ? 'text-purple-600' : 'text-gray-600 dark:text-gray-400'
-                                                    }`} />
+                                                    <Music className={`w-4 h-4 mt-0.5 ${isProxima ? 'text-purple-600' : 'text-gray-600 dark:text-gray-400'
+                                                        }`} />
                                                     <div className="flex-1">
-                                                        <span className={`font-medium text-sm ${
-                                                            isProxima ? 'text-purple-800 dark:text-purple-400' : 'text-gray-700 dark:text-gray-400'
-                                                        }`}>
+                                                        <span className={`font-medium text-sm ${isProxima ? 'text-purple-800 dark:text-purple-400' : 'text-gray-700 dark:text-gray-400'
+                                                            }`}>
                                                             {escala.musicas.length} {escala.musicas.length === 1 ? 'música' : 'músicas'}
                                                         </span>
                                                     </div>
                                                 </div>
                                             )}
                                             <div className="flex items-start gap-2">
-                                                <Users className={`w-4 h-4 mt-0.5 ${
-                                                    isProxima ? 'text-purple-600' : 'text-gray-600 dark:text-gray-400'
-                                                }`} />
+                                                <Users className={`w-4 h-4 mt-0.5 ${isProxima ? 'text-purple-600' : 'text-gray-600 dark:text-gray-400'
+                                                    }`} />
                                                 <div className="flex-1">
-                                                    <span className={`font-medium text-sm ${
-                                                        isProxima ? 'text-purple-800 dark:text-purple-400' : 'text-gray-700 dark:text-gray-400'
-                                                    }`}>
+                                                    <span className={`font-medium text-sm ${isProxima ? 'text-purple-800 dark:text-purple-400' : 'text-gray-700 dark:text-gray-400'
+                                                        }`}>
                                                         Músicos escalados:
                                                     </span>
                                                     <div className="mt-1 flex flex-wrap gap-2">
                                                         {escala.musicos.map((musico, mIndex) => (
-                                                            <span 
+                                                            <span
                                                                 key={mIndex}
-                                                                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
-                                                                    isProxima 
-                                                                        ? 'bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-200' 
+                                                                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${isProxima
+                                                                        ? 'bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-200'
                                                                         : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
-                                                                }`}
+                                                                    }`}
                                                             >
                                                                 <div className="h-5 w-5 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs">
                                                                     {getInitials(musico.nome)}
@@ -1995,14 +2088,17 @@ Montar escala        </button>
             const age = calculateAge(m.nascimento);
             return age !== null && age <= 12;
         });
-        
-        const professores = members.filter(m => m.funcao === 'professor kids' || m.funcao === 'lider kids');
-        
+
+        const professores = members.filter(m => {
+            const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+            return funcoes.some(f => f === 'professor kids' || f === 'lider kids');
+        });
+
         return (
             <div className="space-y-6">
                 <div className="flex justify-between items-center">
                     <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Kids</h1>
-                    <button 
+                    <button
                         onClick={() => setShowEscalaProfessoresModal(true)}
                         className="flex items-center px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700"
                     >
@@ -2012,7 +2108,7 @@ Montar escala        </button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div 
+                    <div
                         className="card cursor-pointer hover:shadow-lg transition-shadow"
                         onClick={() => setShowCriancasModal(true)}
                     >
@@ -2024,8 +2120,8 @@ Montar escala        </button>
                             <Baby className="w-8 h-8 text-pink-500" />
                         </div>
                     </div>
-                    
-                    <div 
+
+                    <div
                         className="card cursor-pointer hover:shadow-lg transition-shadow"
                         onClick={() => setShowProfessoresModal(true)}
                     >
@@ -2037,11 +2133,11 @@ Montar escala        </button>
                             <Users className="w-8 h-8 text-blue-500" />
                         </div>
                     </div>
-                    
-                    
+
+
                 </div>
 
-                
+
 
                 <div className="card">
                     <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Crianças por Faixa Etária</h3>
@@ -2100,7 +2196,7 @@ Montar escala        </button>
                                 .map((escala, idx) => {
                                     const hasPequenos = escala.turmas?.includes('Pequenos');
                                     const hasGrandes = escala.turmas?.includes('Grandes');
-                                    
+
                                     let cardClasses = "p-4 rounded-lg border ";
                                     if (hasPequenos && hasGrandes) {
                                         cardClasses += "bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-blue-300 dark:border-blue-700";
@@ -2111,57 +2207,56 @@ Montar escala        </button>
                                     } else {
                                         cardClasses += "bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 border-pink-200 dark:border-pink-800";
                                     }
-                                    
+
                                     return (
-                                    <div 
-                                        key={idx} 
-                                        className={`${cardClasses} cursor-pointer hover:shadow-lg transition-shadow`}
-                                        onClick={() => {
-                                            setSelectedEscalaProfessores(escala);
-                                            setShowDetalhesEscalaProfessoresModal(true);
-                                        }}
-                                    >
-                                        <div className="flex items-center justify-between mb-2">
-                                            <div className="flex items-center gap-2">
-                                                <Calendar className="w-5 h-5 text-pink-600" />
-                                                <div>
-                                                    <span className="font-medium text-gray-900 dark:text-white">
-                                                        {format(parseISO(escala.data), "dd/MM/yyyy", { locale: ptBR })} - {escala.horario}
-                                                    </span>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                        {format(parseISO(escala.data), "EEEE", { locale: ptBR })}
-                                                    </p>
+                                        <div
+                                            key={idx}
+                                            className={`${cardClasses} cursor-pointer hover:shadow-lg transition-shadow`}
+                                            onClick={() => {
+                                                setSelectedEscalaProfessores(escala);
+                                                setShowDetalhesEscalaProfessoresModal(true);
+                                            }}
+                                        >
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <Calendar className="w-5 h-5 text-pink-600" />
+                                                    <div>
+                                                        <span className="font-medium text-gray-900 dark:text-white">
+                                                            {format(parseISO(escala.data), "dd/MM/yyyy", { locale: ptBR })} - {escala.horario}
+                                                        </span>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                            {format(parseISO(escala.data), "EEEE", { locale: ptBR })}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {escala.turmas && escala.turmas.length > 0 && (
+                                                <div className="mb-2">
+                                                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Turmas:</p>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {escala.turmas.map((turma, i) => (
+                                                            <span key={i} className={`text-xs px-2 py-0.5 text-white rounded-full ${turma === 'Pequenos' ? 'bg-blue-500' : 'bg-purple-600'
+                                                                }`}>
+                                                                {turma}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            <div className="mt-3">
+                                                <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Professores escalados:</p>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {escala.professoresSelecionados.map((profId, i) => {
+                                                        const prof = members.find(m => m.id === profId);
+                                                        return prof ? (
+                                                            <span key={i} className="text-xs px-2 py-1 bg-pink-600 text-white rounded-full">
+                                                                {prof.nome}
+                                                            </span>
+                                                        ) : null;
+                                                    })}
                                                 </div>
                                             </div>
                                         </div>
-                                        {escala.turmas && escala.turmas.length > 0 && (
-                                            <div className="mb-2">
-                                                <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Turmas:</p>
-                                                <div className="flex flex-wrap gap-1">
-                                                    {escala.turmas.map((turma, i) => (
-                                                        <span key={i} className={`text-xs px-2 py-0.5 text-white rounded-full ${
-                                                            turma === 'Pequenos' ? 'bg-blue-500' : 'bg-purple-600'
-                                                        }`}>
-                                                            {turma}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                        <div className="mt-3">
-                                            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Professores escalados:</p>
-                                            <div className="flex flex-wrap gap-2">
-                                                {escala.professoresSelecionados.map((profId, i) => {
-                                                    const prof = members.find(m => m.id === profId);
-                                                    return prof ? (
-                                                        <span key={i} className="text-xs px-2 py-1 bg-pink-600 text-white rounded-full">
-                                                            {prof.nome}
-                                                        </span>
-                                                    ) : null;
-                                                })}
-                                            </div>
-                                        </div>
-                                    </div>
                                     );
                                 })}
                         </div>
@@ -2174,14 +2269,15 @@ Montar escala        </button>
     const renderJovens = () => {
         const jovens = members.filter(m => {
             const age = calculateAge(m.nascimento);
-            return (age !== null && age >= 13 && age <= 30) || (m.funcao === 'jovem');
+            const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+            return (age !== null && age >= 13 && age <= 30) || funcoes.includes('jovem');
         });
-        
+
         return (
             <div className="space-y-6">
                 <div className="flex justify-between items-center">
                     <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Jovens</h1>
-                    <button 
+                    <button
                         onClick={() => setShowOficinaModal(true)}
                         className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                     >
@@ -2191,7 +2287,7 @@ Montar escala        </button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div 
+                    <div
                         className="card cursor-pointer hover:shadow-lg transition-shadow"
                         onClick={() => setShowJovensModal(true)}
                     >
@@ -2205,7 +2301,7 @@ Montar escala        </button>
                     </div>
                 </div>
 
-                
+
 
                 <div className="card">
                     <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Jovens por Faixa Etária</h3>
@@ -2259,8 +2355,8 @@ Montar escala        </button>
                     ) : (
                         <div className="space-y-3">
                             {oficinas.map((oficina) => (
-                                <div 
-                                    key={oficina.id} 
+                                <div
+                                    key={oficina.id}
                                     className="p-4 border-l-4 border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg"
                                 >
                                     <div className="flex items-start justify-between">
@@ -2288,7 +2384,7 @@ Montar escala        </button>
                                                     const updatedOficinas = oficinas.filter(o => o.id !== oficina.id);
                                                     setOficinas(updatedOficinas);
                                                     localStorage.setItem('oficinas', JSON.stringify(updatedOficinas));
-                                                    
+
                                                     // Também remover o evento correspondente
                                                     const updatedEvents = events.filter(e => e.oficinaId !== oficina.id);
                                                     setEvents(updatedEvents);
@@ -2313,12 +2409,12 @@ Montar escala        </button>
         const getDestinatariosCount = (destinatarios) => {
             // Se destinatarios é uma string (avisos antigos), converter para array
             const tipos = Array.isArray(destinatarios) ? destinatarios : [destinatarios];
-            
+
             if (tipos.includes('todos')) return members.length;
-            
+
             // Criar um Set para evitar contar o mesmo membro várias vezes
             const membrosUnicos = new Set();
-            
+
             tipos.forEach(tipo => {
                 if (tipo === 'criancas') {
                     members.filter(m => {
@@ -2328,7 +2424,8 @@ Montar escala        </button>
                 } else if (tipo === 'jovens') {
                     members.filter(m => {
                         const age = calculateAge(m.nascimento);
-                        return (age !== null && age >= 13 && age <= 30) || (m.funcao === 'jovem');
+                        const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+                        return (age !== null && age >= 13 && age <= 30) || funcoes.includes('jovem');
                     }).forEach(m => membrosUnicos.add(m.id));
                 } else if (tipo === 'adultos') {
                     members.filter(m => {
@@ -2336,10 +2433,13 @@ Montar escala        </button>
                         return age !== null && age > 30;
                     }).forEach(m => membrosUnicos.add(m.id));
                 } else if (availableRoles.includes(tipo)) {
-                    members.filter(m => (m.funcao || 'membro') === tipo).forEach(m => membrosUnicos.add(m.id));
+                    members.filter(m => {
+                        const funcoes = m.funcoes || (m.funcao ? [m.funcao] : ['membro']);
+                        return funcoes.includes(tipo);
+                    }).forEach(m => membrosUnicos.add(m.id));
                 }
             });
-            
+
             return membrosUnicos.size;
         };
 
@@ -2347,7 +2447,7 @@ Montar escala        </button>
             <div className="space-y-6">
                 <div className="flex justify-between items-center">
                     <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Avisos</h1>
-                    <button 
+                    <button
                         onClick={() => setShowAvisoModal(true)}
                         className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                     >
@@ -2366,8 +2466,8 @@ Montar escala        </button>
                     ) : (
                         <div className="space-y-3">
                             {avisos.slice().reverse().map((aviso) => (
-                                <div 
-                                    key={aviso.id} 
+                                <div
+                                    key={aviso.id}
                                     className="p-4 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20 rounded-lg"
                                 >
                                     <div className="flex items-start justify-between">
@@ -2453,7 +2553,7 @@ Montar escala        </button>
             <div className="space-y-6">
                 <div className="flex justify-between items-center">
                     <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Playlist Zoe</h1>
-                    <button 
+                    <button
                         onClick={handleAddMusic}
                         className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
                     >
@@ -2482,9 +2582,9 @@ Montar escala        </button>
                                             <p className="text-sm text-gray-600 dark:text-gray-400">{musica.artista}</p>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <a 
-                                                href={musica.link} 
-                                                target="_blank" 
+                                            <a
+                                                href={musica.link}
+                                                target="_blank"
                                                 rel="noopener noreferrer"
                                                 className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 flex items-center gap-2"
                                             >
@@ -2512,7 +2612,7 @@ Montar escala        </button>
                             <p className="text-sm text-gray-600 dark:text-gray-400">Total de Músicas</p>
                             <p className="text-2xl font-bold text-gray-900 dark:text-white">{playlistMusicas.length}</p>
                         </div>
-                       
+
                         <div className="p-4 bg-gradient-to-r from-blue-100 to-cyan-100 dark:from-blue-900/30 dark:to-cyan-900/30 rounded-lg">
                             <p className="text-sm text-gray-600 dark:text-gray-400">Última Atualização</p>
                             <p className="text-lg font-bold text-gray-900 dark:text-white">Hoje</p>
@@ -2526,7 +2626,7 @@ Montar escala        </button>
                         <div>
                             <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Sobre a Playlist Zoe</h4>
                             <p className="text-sm text-gray-600 dark:text-gray-400">
-                                Esta playlist contém as músicas mais tocadas nos cultos e encontros da Igreja Zoe. 
+                                Esta playlist contém as músicas mais tocadas nos cultos e encontros da Igreja Zoe.
                                 Utilize os links para ouvir e ensaiar as músicas durante a semana.
                             </p>
                         </div>
@@ -2537,7 +2637,7 @@ Montar escala        </button>
     };
 
     return (
-        <div className="flex flex-col md:flex-row h-screen bg-white dark:bg-gray-900 transition-colors" style={{ 
+        <div className="flex flex-col md:flex-row h-screen bg-white dark:bg-gray-900 transition-colors" style={{
             paddingTop: 'env(safe-area-inset-top, 0px)'
         }}>
             {/* Sidebar Desktop */}
@@ -2590,9 +2690,9 @@ Montar escala        </button>
                         className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-[60] transition-opacity"
                         onClick={() => setSidebarOpen(false)}
                     />
-                    <div 
+                    <div
                         className={`md:hidden fixed left-4 right-4 bg-white dark:bg-gray-800 rounded-3xl shadow-2xl z-[70] transform transition-all duration-300 ${sidebarOpen ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'
-                        }`}
+                            }`}
                         style={{
                             bottom: `calc(6rem + env(safe-area-inset-bottom, 0px))`
                         }}>
@@ -2613,8 +2713,8 @@ Montar escala        </button>
                                                 setSidebarOpen(false);
                                             }}
                                             className={`flex flex-col items-center justify-center p-4 rounded-2xl transition-all ${isActive
-                                                    ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-lg scale-105'
-                                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:scale-105'
+                                                ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-lg scale-105'
+                                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:scale-105'
                                                 }`}
                                         >
                                             {item.id === 'playlistzoe' ? (
@@ -2645,7 +2745,7 @@ Montar escala        </button>
             </button>
 
             {/* Main Content */}
-            <div className="flex-1 overflow-auto" style={{ 
+            <div className="flex-1 overflow-auto" style={{
                 height: '100%',
                 overflowY: 'scroll',
                 WebkitOverflowScrolling: 'touch',
@@ -2726,8 +2826,8 @@ Montar escala        </button>
                                         value={newMemberData.nascimento}
                                         onChange={(e) => {
                                             const idade = calculateAge(e.target.value);
-                                            setNewMemberData({ 
-                                                ...newMemberData, 
+                                            setNewMemberData({
+                                                ...newMemberData,
                                                 nascimento: e.target.value,
                                                 idade: idade !== null ? idade.toString() : ''
                                             });
@@ -2797,11 +2897,10 @@ Montar escala        </button>
                                                             }}
                                                             className="sr-only"
                                                         />
-                                                        <div className={`w-6 h-6 border-2 rounded flex items-center justify-center transition-all ${
-                                                            isChecked 
-                                                                ? 'bg-gray-800 border-gray-800 dark:bg-white dark:border-white' 
+                                                        <div className={`w-6 h-6 border-2 rounded flex items-center justify-center transition-all ${isChecked
+                                                                ? 'bg-gray-800 border-gray-800 dark:bg-white dark:border-white'
                                                                 : 'bg-white border-gray-400 dark:bg-gray-700 dark:border-gray-500'
-                                                        }`}>
+                                                            }`}>
                                                             {isChecked && (
                                                                 <X className="w-4 h-4 text-white dark:text-gray-800" strokeWidth={3} />
                                                             )}
@@ -3055,6 +3154,252 @@ Montar escala        </button>
                 </div>
             )}
 
+            {/* Modal de Edição de Evento */}
+            {showEditEventModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] overflow-y-auto p-4">
+                    <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
+                        <h3 className="text-base md:text-lg font-semibold mb-4 text-gray-900 dark:text-white">Editar Evento</h3>
+
+                        <form onSubmit={(e) => {
+                            e.preventDefault();
+                            if (onEditEvent && selectedEvent) {
+                                onEditEvent(selectedEvent.id, editEventData);
+                            }
+                            setShowEditEventModal(false);
+                            setSelectedEvent(null);
+                        }} className="space-y-4">
+                            <div className="grid grid-cols-1 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Nome do Evento *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={editEventData.nome}
+                                        onChange={(e) => setEditEventData({ ...editEventData, nome: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                            Data *
+                                        </label>
+                                        <input
+                                            type="date"
+                                            required
+                                            value={editEventData.data?.split('T')[0] || ''}
+                                            onChange={(e) => {
+                                                const time = editEventData.data?.split('T')[1] || '19:00';
+                                                setEditEventData({ ...editEventData, data: `${e.target.value}T${time}` });
+                                            }}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                            Hora *
+                                        </label>
+                                        <input
+                                            type="time"
+                                            required
+                                            value={editEventData.data?.split('T')[1] || '19:00'}
+                                            onChange={(e) => {
+                                                const date = editEventData.data?.split('T')[0] || format(new Date(), 'yyyy-MM-dd');
+                                                setEditEventData({ ...editEventData, data: `${date}T${e.target.value}` });
+                                            }}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Local
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={editEventData.local}
+                                        onChange={(e) => setEditEventData({ ...editEventData, local: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Descrição
+                                    </label>
+                                    <textarea
+                                        value={editEventData.descricao}
+                                        onChange={(e) => setEditEventData({ ...editEventData, descricao: e.target.value })}
+                                        rows="3"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    />
+                                </div>
+
+                                <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
+                                    <label className="flex items-center space-x-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={editEventData.alimentacao || false}
+                                            onChange={(e) => setEditEventData({ ...editEventData, alimentacao: e.target.checked, comidas: e.target.checked ? (editEventData.comidas || []) : [] })}
+                                            className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                                        />
+                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Alimentação</span>
+                                    </label>
+                                </div>
+
+                                {editEventData.alimentacao && (
+                                    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg space-y-3">
+                                        <div className="flex space-x-2">
+                                            <input
+                                                type="text"
+                                                value={novaComidaEdit}
+                                                onChange={(e) => setNovaComidaEdit(e.target.value)}
+                                                onKeyPress={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        if (novaComidaEdit.trim()) {
+                                                            setEditEventData({
+                                                                ...editEventData,
+                                                                comidas: [...(editEventData.comidas || []), { nome: novaComidaEdit.trim(), responsavel: null }]
+                                                            });
+                                                            setNovaComidaEdit('');
+                                                        }
+                                                    }
+                                                }}
+                                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                placeholder="Digite uma comida (ex: Refrigerante, Salgados...)"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (novaComidaEdit.trim()) {
+                                                        setEditEventData({
+                                                            ...editEventData,
+                                                            comidas: [...(editEventData.comidas || []), { nome: novaComidaEdit.trim(), responsavel: null }]
+                                                        });
+                                                        setNovaComidaEdit('');
+                                                    }
+                                                }}
+                                                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center"
+                                            >
+                                                <Plus className="w-4 h-4" />
+                                            </button>
+                                        </div>
+
+                                        {editEventData.comidas && editEventData.comidas.length > 0 && (
+                                            <div className="space-y-2">
+                                                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Comidas do evento:</p>
+                                                <div className="space-y-2">
+                                                    {editEventData.comidas.map((comida, index) => (
+                                                        <div key={index} className="flex items-center justify-between bg-white dark:bg-gray-700 p-2 rounded border border-gray-200 dark:border-gray-600">
+                                                            <div>
+                                                                <span className="text-sm text-gray-700 dark:text-gray-300">{comida.nome}</span>
+                                                                {comida.responsavel && (
+                                                                    <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                                                                        ({comida.responsavel})
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={async () => {
+                                                                    console.log('Deletando comida:', comida);
+                                                                    // Se tem ID, deletar do banco de dados
+                                                                    if (comida.id) {
+                                                                        try {
+                                                                            console.log('Deletando alimentação do BD com ID:', comida.id);
+                                                                            await deleteEventFood(comida.id);
+                                                                            console.log('Alimentação deletada com sucesso');
+                                                                        } catch (error) {
+                                                                            console.error('Erro ao deletar alimentação:', error);
+                                                                            alert(`Erro ao deletar alimentação: ${error.message || error}`);
+                                                                            return;
+                                                                        }
+                                                                    } else {
+                                                                        console.log('Comida sem ID, apenas removendo da lista local');
+                                                                    }
+
+                                                                    // Remover da lista local
+                                                                    setEditEventData({
+                                                                        ...editEventData,
+                                                                        comidas: (editEventData.comidas || []).filter((_, i) => i !== index)
+                                                                    });
+                                                                }}
+                                                                className="text-red-600 hover:text-red-700"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex justify-end space-x-2 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowEditEventModal(false);
+                                        setShowEventDetailsModal(true);
+                                    }}
+                                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                >
+                                    Salvar Alterações
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Confirmação de Exclusão */}
+            {showDeleteEventModal && selectedEvent && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[110] p-4">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-md w-full">
+                        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Confirmar Exclusão</h3>
+                        <p className="text-gray-700 dark:text-gray-300 mb-6">
+                            Tem certeza que deseja deletar o evento <strong>{selectedEvent.nome}</strong>? Esta ação não pode ser desfeita.
+                        </p>
+                        <div className="flex justify-end space-x-2">
+                            <button
+                                onClick={() => setShowDeleteEventModal(false)}
+                                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (onDeleteEvent && selectedEvent) {
+                                        onDeleteEvent(selectedEvent.id);
+                                    }
+                                    setShowDeleteEventModal(false);
+                                    setShowEventDetailsModal(false);
+                                    setSelectedEvent(null);
+                                    setEventFoodsFromDB([]);
+                                    setEventParticipants([]);
+                                }}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                            >
+                                Deletar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {showEventDetailsModal && selectedEvent && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -3091,27 +3436,79 @@ Montar escala        </button>
                                 </div>
                             )}
 
-                            {selectedEvent.alimentacao && selectedEvent.comidas && selectedEvent.comidas.length > 0 && (
-                                <div className="border-t border-gray-200 dark:border-gray-600 pt-4 space-y-4">
-                                    <div>
-                                        <h4 className="font-semibold mb-3 text-gray-900 dark:text-white flex items-center">
-                                            <Users className="w-4 h-4 mr-2" />
-                                            Controle de Alimentação (Admin)
-                                        </h4>
-                                        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                            {/* Participantes Inscritos */}
+                            {eventParticipants.length > 0 && (
+                                <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
+                                    <button
+                                        onClick={() => setShowParticipantsSection(!showParticipantsSection)}
+                                        className="w-full flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                                    >
+                                        <div className="flex items-center">
+                                            <Users className="w-4 h-4 mr-2 text-gray-900 dark:text-white" />
+                                            <h4 className="font-semibold text-gray-900 dark:text-white">
+                                                Participantes Inscritos ({eventParticipants.length})
+                                            </h4>
+                                        </div>
+                                        {showParticipantsSection ? (
+                                            <ChevronUp className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                                        ) : (
+                                            <ChevronDown className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                                        )}
+                                    </button>
+
+                                    {showParticipantsSection && (
+                                        <div className="mt-3 bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                {eventParticipants.map((participant) => (
+                                                    <div
+                                                        key={participant.id}
+                                                        className="flex items-center p-2 bg-white dark:bg-gray-700 rounded text-sm"
+                                                    >
+                                                        <CheckCircle className="w-4 h-4 mr-2 text-green-500" />
+                                                        <span className="text-gray-700 dark:text-gray-300">
+                                                            {participant.member ? participant.member.nome : 'Nome não disponível'}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {selectedEvent.alimentacao && eventFoodsFromDB.length > 0 && (
+                                <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
+                                    <button
+                                        onClick={() => setShowFoodsSection(!showFoodsSection)}
+                                        className="w-full flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                                    >
+                                        <div className="flex items-center">
+                                            <Gift className="w-4 h-4 mr-2 text-gray-900 dark:text-white" />
+                                            <h4 className="font-semibold text-gray-900 dark:text-white">
+                                                Alimentações do Evento ({eventFoodsFromDB.length})
+                                            </h4>
+                                        </div>
+                                        {showFoodsSection ? (
+                                            <ChevronUp className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                                        ) : (
+                                            <ChevronDown className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                                        )}
+                                    </button>
+
+                                    {showFoodsSection && (
+                                        <div className="mt-3 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
                                             <p className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-3">
                                                 Distribuição de alimentos:
                                             </p>
                                             <div className="space-y-2">
-                                                {selectedEvent.comidas.map((comida, index) => (
-                                                    <div key={index} className="flex items-center justify-between text-sm">
-                                                        <span className="text-gray-700 dark:text-gray-300 font-medium">{comida.nome}:</span>
-                                                        <span className={`px-2 py-1 rounded ${
-                                                            comida.responsavel 
-                                                                ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' 
+                                                {eventFoodsFromDB.map((food) => (
+                                                    <div key={food.id} className="flex items-center justify-between text-sm p-2 bg-white dark:bg-gray-700 rounded">
+                                                        <span className="text-gray-700 dark:text-gray-300 font-medium">{food.nome}</span>
+                                                        <span className={`px-3 py-1 rounded ${food.member
+                                                                ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
                                                                 : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
-                                                        }`}>
-                                                            {comida.responsavel || 'Aguardando'}
+                                                            }`}>
+                                                            {food.member ? food.member.nome : 'Aguardando'}
                                                         </span>
                                                     </div>
                                                 ))}
@@ -3119,159 +3516,71 @@ Montar escala        </button>
                                             <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
                                                 <div className="flex justify-between text-sm">
                                                     <span className="text-blue-700 dark:text-blue-400">Total de itens:</span>
-                                                    <span className="font-semibold text-blue-800 dark:text-blue-300">{selectedEvent.comidas.length}</span>
+                                                    <span className="font-semibold text-blue-800 dark:text-blue-300">{eventFoodsFromDB.length}</span>
                                                 </div>
                                                 <div className="flex justify-between text-sm mt-1">
                                                     <span className="text-blue-700 dark:text-blue-400">Confirmados:</span>
                                                     <span className="font-semibold text-green-600 dark:text-green-400">
-                                                        {selectedEvent.comidas.filter(c => c.responsavel).length}
+                                                        {eventFoodsFromDB.filter(f => f.member).length}
                                                     </span>
                                                 </div>
                                                 <div className="flex justify-between text-sm mt-1">
                                                     <span className="text-blue-700 dark:text-blue-400">Pendentes:</span>
                                                     <span className="font-semibold text-yellow-600 dark:text-yellow-400">
-                                                        {selectedEvent.comidas.filter(c => !c.responsavel).length}
+                                                        {eventFoodsFromDB.filter(f => !f.member).length}
                                                     </span>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-
-                                    <div>
-                                        <h4 className="font-semibold mb-3 text-gray-900 dark:text-white flex items-center">
-                                            <Gift className="w-4 h-4 mr-2" />
-                                            Selecionar Alimento (Membro)
-                                        </h4>
-                                        
-                                        <div className="mb-4">
-                                            <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-                                                Simular como membro:
-                                            </label>
-                                            <select
-                                                value={selectedMemberForFood?.id || ''}
-                                                onChange={(e) => {
-                                                    const member = members.find(m => m.id === e.target.value);
-                                                    setSelectedMemberForFood(member);
-                                                    setSelectedFoods([]);
-                                                }}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                            >
-                                                <option value="">Selecione um membro</option>
-                                                {members.map(member => (
-                                                    <option key={member.id} value={member.id}>
-                                                        {member.nome}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                No aplicativo do membro, ele já estará identificado automaticamente
-                                            </p>
-                                        </div>
-
-                                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                                            {selectedMemberForFood ? `Selecionando como: ${selectedMemberForFood.nome}` : 'Selecione um membro acima para continuar'}
-                                        </p>
-                                    </div>
-                                    <div className="space-y-2">
-                                        {selectedEvent.comidas.map((comida, index) => {
-                                            const isSelected = selectedFoods.includes(index);
-                                            const jaEscolhido = comida.responsavel && comida.responsavel !== selectedMemberForFood?.nome;
-                                            const euEscolhi = comida.responsavel === selectedMemberForFood?.nome;
-                                            
-                                            return (
-                                                <div 
-                                                    key={index} 
-                                                    className={`p-3 rounded-lg transition-all ${
-                                                        isSelected || euEscolhi
-                                                            ? 'bg-green-100 dark:bg-green-900 border-2 border-green-500' 
-                                                            : jaEscolhido
-                                                            ? 'bg-gray-100 dark:bg-gray-800 border-2 border-gray-300 opacity-60'
-                                                            : 'bg-gray-50 dark:bg-gray-700 border-2 border-transparent'
-                                                    }`}
-                                                >
-                                                    <label className={`flex items-center justify-between ${jaEscolhido ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
-                                                        <div className="flex items-center space-x-3">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={isSelected || euEscolhi}
-                                                                disabled={jaEscolhido || !selectedMemberForFood}
-                                                                onChange={(e) => {
-                                                                    if (e.target.checked) {
-                                                                        setSelectedFoods([...selectedFoods, index]);
-                                                                    } else {
-                                                                        setSelectedFoods(selectedFoods.filter(i => i !== index));
-                                                                    }
-                                                                }}
-                                                                className={`w-5 h-5 text-green-600 rounded focus:ring-green-500 ${(jaEscolhido || !selectedMemberForFood) ? 'cursor-not-allowed' : ''}`}
-                                                            />
-                                                            <span className={`text-sm font-medium ${
-                                                                isSelected || euEscolhi
-                                                                    ? 'text-green-800 dark:text-green-200' 
-                                                                    : jaEscolhido
-                                                                    ? 'text-gray-500 dark:text-gray-500'
-                                                                    : 'text-gray-700 dark:text-gray-300'
-                                                            }`}>
-                                                                {comida.nome}
-                                                            </span>
-                                                        </div>
-                                                        {comida.responsavel && (
-                                                            <span className={`text-xs px-2 py-1 rounded ${
-                                                                comida.responsavel === selectedMemberForFood?.nome
-                                                                    ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                                                                    : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                                                            }`}>
-                                                                {comida.responsavel}
-                                                            </span>
-                                                        )}
-                                                    </label>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
+                                    )}
                                 </div>
                             )}
                         </div>
 
-                        <div className="flex justify-end space-x-2 mt-6">
+                        <div className="flex justify-between mt-6">
+                            <div className="flex space-x-2">
+                                <button
+                                    onClick={async () => {
+                                        // Carregar alimentações do evento
+                                        const foods = await getEventFoods(selectedEvent.id);
+
+                                        setEditEventData({
+                                            nome: selectedEvent.nome,
+                                            data: selectedEvent.data,
+                                            local: selectedEvent.local || '',
+                                            descricao: selectedEvent.descricao || '',
+                                            alimentacao: selectedEvent.alimentacao || false,
+                                            comidas: foods.map(f => ({ id: f.id, nome: f.nome, responsavel: f.member?.nome || null }))
+                                        });
+                                        setShowEditEventModal(true);
+                                        setShowEventDetailsModal(false);
+                                    }}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
+                                >
+                                    <Edit className="w-4 h-4" />
+                                    <span>Editar</span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setShowDeleteEventModal(true);
+                                    }}
+                                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center space-x-2"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                    <span>Deletar</span>
+                                </button>
+                            </div>
                             <button
                                 onClick={() => {
                                     setShowEventDetailsModal(false);
                                     setSelectedEvent(null);
-                                    setSelectedFoods([]);
+                                    setEventFoodsFromDB([]);
+                                    setEventParticipants([]);
                                 }}
                                 className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
                             >
                                 Fechar
                             </button>
-                            {selectedFoods.length > 0 && selectedMemberForFood && (
-                                <button
-                                    onClick={() => {
-                                        // Atualiza as comidas com os responsáveis
-                                        const updatedComidas = selectedEvent.comidas.map((comida, index) => {
-                                            if (selectedFoods.includes(index) && !comida.responsavel) {
-                                                return {
-                                                    ...comida,
-                                                    responsavel: selectedMemberForFood.nome
-                                                };
-                                            }
-                                            return comida;
-                                        });
-                                        
-                                        setSelectedEvent({
-                                            ...selectedEvent,
-                                            comidas: updatedComidas
-                                        });
-                                        
-                                        console.log('Comidas selecionadas:', updatedComidas);
-                                        // Aqui você pode chamar uma função para salvar no backend ou localStorage
-                                        
-                                        setSelectedFoods([]);
-                                    }}
-                                    className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2"
-                                >
-                                    <span>Confirmar Seleção</span>
-                                </button>
-                            )}
                         </div>
                     </div>
                 </div>
@@ -3407,8 +3716,8 @@ Montar escala        </button>
                                         value={editMemberData.nascimento}
                                         onChange={(e) => {
                                             const idade = calculateAge(e.target.value);
-                                            setEditMemberData({ 
-                                                ...editMemberData, 
+                                            setEditMemberData({
+                                                ...editMemberData,
                                                 nascimento: e.target.value,
                                                 idade: idade !== null ? idade.toString() : ''
                                             });
@@ -3479,11 +3788,10 @@ Montar escala        </button>
                                                             }}
                                                             className="sr-only"
                                                         />
-                                                        <div className={`w-6 h-6 border-2 rounded flex items-center justify-center transition-all ${
-                                                            isChecked 
-                                                                ? 'bg-gray-800 border-gray-800 dark:bg-white dark:border-white' 
+                                                        <div className={`w-6 h-6 border-2 rounded flex items-center justify-center transition-all ${isChecked
+                                                                ? 'bg-gray-800 border-gray-800 dark:bg-white dark:border-white'
                                                                 : 'bg-white border-gray-400 dark:bg-gray-700 dark:border-gray-500'
-                                                        }`}>
+                                                            }`}>
                                                             {isChecked && (
                                                                 <X className="w-4 h-4 text-white dark:text-gray-800" strokeWidth={3} />
                                                             )}
@@ -3605,7 +3913,7 @@ Montar escala        </button>
                                         id: generateFamilyId(newFamilyData)
                                     };
                                     await onAddFamily(familyWithId);
-                                    
+
                                     // Só fechar o modal se não houver erro
                                     setNewFamilyData({
                                         nome: '',
@@ -3668,7 +3976,7 @@ Montar escala        </button>
                                         Novo Membro
                                     </button>
                                 </div>
-                                
+
                                 {/* Campo de busca */}
                                 <div className="mb-3 relative">
                                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -3693,7 +4001,7 @@ Montar escala        </button>
                                         </div>
                                     ) : (
                                         (() => {
-                                            const filteredMembers = members.filter(member => 
+                                            const filteredMembers = members.filter(member =>
                                                 member.nome.toLowerCase().includes(familyMemberSearch.toLowerCase())
                                             );
 
@@ -3718,9 +4026,8 @@ Montar escala        </button>
                                                             <div
                                                                 key={memberId}
                                                                 onClick={() => toggleMemberInFamily(memberId)}
-                                                                className={`flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${
-                                                                    isSelected ? 'bg-green-50 dark:bg-green-900/20' : ''
-                                                                }`}
+                                                                className={`flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${isSelected ? 'bg-green-50 dark:bg-green-900/20' : ''
+                                                                    }`}
                                                             >
                                                                 <input
                                                                     type="checkbox"
@@ -3851,7 +4158,7 @@ Montar escala        </button>
                                                 if (!member) return null;
                                                 const age = calculateAge(member.nascimento);
                                                 const initials = getInitials(member.nome);
-                                                
+
                                                 return (
                                                     <div key={memberId} className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded border border-green-300 dark:border-green-700">
                                                         <div className="flex items-center gap-2">
@@ -3882,7 +4189,7 @@ Montar escala        </button>
                                         </div>
                                     </div>
                                 )}
-                                
+
                                 {/* Campo de busca */}
                                 <div className="mb-3 relative">
                                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -3907,7 +4214,7 @@ Montar escala        </button>
                                         </div>
                                     ) : (
                                         (() => {
-                                            const filteredMembers = members.filter(member => 
+                                            const filteredMembers = members.filter(member =>
                                                 member.nome.toLowerCase().includes(familyMemberSearch.toLowerCase())
                                             );
 
@@ -3932,9 +4239,8 @@ Montar escala        </button>
                                                             <div
                                                                 key={memberId}
                                                                 onClick={() => toggleMemberInEditFamily(memberId)}
-                                                                className={`flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${
-                                                                    isSelected ? 'bg-green-50 dark:bg-green-900/20' : ''
-                                                                }`}
+                                                                className={`flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${isSelected ? 'bg-green-50 dark:bg-green-900/20' : ''
+                                                                    }`}
                                                             >
                                                                 <input
                                                                     type="checkbox"
@@ -4031,23 +4337,66 @@ Montar escala        </button>
                     <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                         <div className="p-6">
                             <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Montar Escala de Diaconia</h2>
-                            <form onSubmit={(e) => {
+                            <form onSubmit={async (e) => {
                                 e.preventDefault();
-                                // Salvar escala
-                                const novaEscala = {
-                                    id: Date.now(),
-                                    categoria: newEscalaData.categoria,
-                                    data: newEscalaData.data,
-                                    horario: newEscalaData.horario,
-                                    diaconos: members.filter(m => 
-                                        newEscalaData.diaconosSelecionados.includes(m.id || `diacono-${members.indexOf(m)}`)
-                                    )
-                                };
-                                const novasEscalas = [...escalas, novaEscala];
-                                setEscalas(novasEscalas);
-                                localStorage.setItem('escalaDiaconia', JSON.stringify(novasEscalas));
-                                console.log('Escala criada:', novaEscala);
-                                setShowEscalaModal(false);
+
+                                try {
+                                    // Obter IDs dos diáconos selecionados
+                                    const membrosIds = members
+                                        .filter(m => newEscalaData.diaconosSelecionados.includes(m.id || `diacono-${members.indexOf(m)}`))
+                                        .map(m => m.id)
+                                        .filter(id => id);
+
+                                    // Dados para salvar no Supabase
+                                    const scheduleData = {
+                                        ministerio: 'diaconia',
+                                        categoria: newEscalaData.categoria,
+                                        data: newEscalaData.data,
+                                        horario: newEscalaData.horario,
+                                        descricao: newEscalaData.descricao || null,
+                                        local: newEscalaData.local || null,
+                                        membros_ids: membrosIds,
+                                        observacoes: newEscalaData.observacoes || null
+                                    };
+
+                                    console.log('Dados a serem enviados:', scheduleData);
+                                    console.log('newEscalaData.categoria:', newEscalaData.categoria);
+
+                                    // Salvar no Supabase
+                                    const novaEscalaSupabase = await createMinistrySchedule(scheduleData);
+                                    console.log('Escala criada no Supabase:', novaEscalaSupabase);
+
+                                    // Atualizar estado local (mantendo compatibilidade com o código existente)
+                                    const novaEscala = {
+                                        id: novaEscalaSupabase.id,
+                                        categoria: newEscalaData.categoria,
+                                        data: newEscalaData.data,
+                                        horario: newEscalaData.horario,
+                                        diaconos: members.filter(m =>
+                                            newEscalaData.diaconosSelecionados.includes(m.id || `diacono-${members.indexOf(m)}`)
+                                        )
+                                    };
+                                    const novasEscalas = [...escalas, novaEscala];
+                                    setEscalas(novasEscalas);
+                                    localStorage.setItem('escalaDiaconia', JSON.stringify(novasEscalas));
+
+                                    alert('Escala criada com sucesso!');
+                                    setShowEscalaModal(false);
+                                    
+                                    // Resetar formulário
+                                    setNewEscalaData({
+                                        categoria: 'culto',
+                                        data: format(new Date(), 'yyyy-MM-dd'),
+                                        horario: '19:00',
+                                        descricao: '',
+                                        local: '',
+                                        observacoes: '',
+                                        diaconosSelecionados: []
+                                    });
+                                } catch (error) {
+                                    console.error('Erro ao criar escala:', error);
+                                    alert('Erro ao criar escala: ' + error.message);
+                                }
                             }}>
                                 <div className="space-y-4">
                                     <div>
@@ -4056,7 +4405,10 @@ Montar escala        </button>
                                         </label>
                                         <select
                                             value={newEscalaData.categoria}
-                                            onChange={(e) => setNewEscalaData({ ...newEscalaData, categoria: e.target.value })}
+                                            onChange={(e) => {
+                                                console.log('Categoria selecionada:', e.target.value);
+                                                setNewEscalaData({ ...newEscalaData, categoria: e.target.value });
+                                            }}
                                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white"
                                             required
                                         >
@@ -4092,21 +4444,62 @@ Montar escala        </button>
                                         </div>
                                     </div>
 
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Descrição (opcional)
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={newEscalaData.descricao || ''}
+                                            onChange={(e) => setNewEscalaData({ ...newEscalaData, descricao: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white"
+                                            placeholder="Ex: Culto de celebração"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Local (opcional)
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={newEscalaData.local || ''}
+                                            onChange={(e) => setNewEscalaData({ ...newEscalaData, local: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white"
+                                            placeholder="Ex: Templo principal"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Observações (opcional)
+                                        </label>
+                                        <textarea
+                                            value={newEscalaData.observacoes || ''}
+                                            onChange={(e) => setNewEscalaData({ ...newEscalaData, observacoes: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white"
+                                            rows="2"
+                                            placeholder="Ex: Trazer uniforme"
+                                        />
+                                    </div>
+
                                     <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
                                         <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
                                             Selecione os Diáconos ({newEscalaData.diaconosSelecionados.length} selecionados)
                                         </h3>
                                         <div className="space-y-2 max-h-60 overflow-y-auto">
-                                            {members.filter(m => m.funcao === 'diácono' || m.funcao === 'diaconia' || m.funcao === 'líder da diaconia').map((diacono, index) => {
+                                            {members.filter(m => {
+                                                const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+                                                return funcoes.some(f => f === 'diácono' || f === 'diaconia' || f === 'líder da diaconia' || f === 'lider da diaconia');
+                                            }).map((diacono, index) => {
                                                 const diaconoId = diacono.id || `diacono-${index}`;
                                                 const isSelected = newEscalaData.diaconosSelecionados.includes(diaconoId);
-                                                
+
                                                 return (
-                                                    <div 
-                                                        key={index} 
-                                                        className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
-                                                            isSelected ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'
-                                                        }`}
+                                                    <div
+                                                        key={index}
+                                                        className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'
+                                                            }`}
                                                         onClick={() => {
                                                             const newSelecionados = isSelected
                                                                 ? newEscalaData.diaconosSelecionados.filter(id => id !== diaconoId)
@@ -4126,7 +4519,7 @@ Montar escala        </button>
                                                         <input
                                                             type="checkbox"
                                                             checked={isSelected}
-                                                            onChange={() => {}}
+                                                            onChange={() => { }}
                                                             className="w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500"
                                                         />
                                                     </div>
@@ -4144,6 +4537,9 @@ Montar escala        </button>
                                                 categoria: 'culto',
                                                 data: format(new Date(), 'yyyy-MM-dd'),
                                                 horario: '19:00',
+                                                descricao: '',
+                                                local: '',
+                                                observacoes: '',
                                                 diaconosSelecionados: []
                                             });
                                             setShowEscalaModal(false);
@@ -4194,7 +4590,7 @@ Montar escala        </button>
                                     {members.filter(m => m.funcao === 'músico' || m.funcao === 'líder de louvor' || m.funcao === 'louvor').map((musico, index) => {
                                         const age = calculateAge(musico.nascimento);
                                         const initials = getInitials(musico.nome);
-                                        
+
                                         return (
                                             <div key={index} className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800 hover:shadow-md transition-shadow">
                                                 <div className="flex items-center gap-3 mb-3">
@@ -4207,11 +4603,10 @@ Montar escala        </button>
                                                             {musico.funcao}
                                                         </p>
                                                     </div>
-                                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                                                        musico.funcao === 'líder de louvor' 
-                                                            ? 'bg-purple-600 text-white' 
+                                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${musico.funcao === 'líder de louvor'
+                                                            ? 'bg-purple-600 text-white'
                                                             : 'bg-purple-100 dark:bg-purple-800 text-purple-800 dark:text-purple-200'
-                                                    }`}>
+                                                        }`}>
                                                         {musico.funcao === 'líder de louvor' ? 'Líder' : 'Membro'}
                                                     </span>
                                                 </div>
@@ -4253,7 +4648,7 @@ Montar escala        </button>
                                         const musico = members.find(m => (m.id || `musico-${members.indexOf(m)}`) === musicoId);
                                         return { ...musico, instrumento };
                                     });
-                                
+
                                 const novaEscala = {
                                     id: Date.now(),
                                     tipo: newEscalaLouvorData.tipo,
@@ -4262,7 +4657,7 @@ Montar escala        </button>
                                     musicas: newEscalaLouvorData.musicas,
                                     musicos: musicos
                                 };
-                                const novasEscalas = [...escalasLouvor, novaEscala].sort((a, b) => 
+                                const novasEscalas = [...escalasLouvor, novaEscala].sort((a, b) =>
                                     new Date(`${a.data}T${a.horario}`) - new Date(`${b.data}T${b.horario}`)
                                 );
                                 setEscalasLouvor(novasEscalas);
@@ -4323,7 +4718,7 @@ Montar escala        </button>
                                         <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
                                             Músicas ({newEscalaLouvorData.musicas.length}/5)
                                         </h3>
-                                        
+
                                         <div className="flex gap-2 mb-4">
                                             <input
                                                 type="text"
@@ -4399,7 +4794,7 @@ Montar escala        </button>
                                             {['Voz 1', 'Voz 2', 'Voz 3', 'Teclado 1', 'Teclado 2', 'Guitarra', 'Contrabaixo', 'Violão', 'Bateria'].map((instrumento) => {
                                                 const musicoId = newEscalaLouvorData.instrumentos[instrumento];
                                                 const musico = musicoId ? members.find(m => (m.id || `musico-${members.indexOf(m)}`) === musicoId) : null;
-                                                
+
                                                 return (
                                                     <div key={instrumento} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                                                         <div className="flex items-center justify-between mb-2">
@@ -4421,7 +4816,7 @@ Montar escala        </button>
                                                                 </button>
                                                             )}
                                                         </div>
-                                                        
+
                                                         {musico ? (
                                                             <div className="flex items-center gap-3 p-2 bg-purple-100 dark:bg-purple-900/30 rounded">
                                                                 <div className="h-8 w-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-semibold">
@@ -4661,8 +5056,8 @@ Montar escala        </button>
                             ) : (
                                 <div className="space-y-3">
                                     {playlistMusicas.map((musica) => (
-                                        <div 
-                                            key={musica.id} 
+                                        <div
+                                            key={musica.id}
                                             className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg hover:shadow-md transition-shadow"
                                         >
                                             <div className="flex items-start justify-between gap-3">
@@ -4750,10 +5145,10 @@ Montar escala        </button>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {members.filter(m => m.funcao === 'professor kids' || m.funcao === 'lider kids').map((professor, index) => {
                                         const age = calculateAge(professor.nascimento);
-                                        
+
                                         return (
-                                            <div 
-                                                key={professor.id || index} 
+                                            <div
+                                                key={professor.id || index}
                                                 className="p-4 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-lg border border-blue-200 dark:border-blue-800 hover:shadow-md transition-shadow"
                                             >
                                                 <div className="flex items-start gap-3 mb-3">
@@ -4766,11 +5161,10 @@ Montar escala        </button>
                                                             {professor.funcao}
                                                         </p>
                                                     </div>
-                                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                                                        professor.funcao === 'lider kids' 
-                                                            ? 'bg-pink-600 text-white' 
+                                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${professor.funcao === 'lider kids'
+                                                            ? 'bg-pink-600 text-white'
                                                             : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
-                                                    }`}>
+                                                        }`}>
                                                         {professor.funcao === 'lider kids' ? 'Líder' : 'Professor'}
                                                     </span>
                                                 </div>
@@ -4834,10 +5228,10 @@ Montar escala        </button>
                                         return age !== null && age <= 12;
                                     }).map((crianca, index) => {
                                         const age = calculateAge(crianca.nascimento);
-                                        
+
                                         return (
-                                            <div 
-                                                key={crianca.id || index} 
+                                            <div
+                                                key={crianca.id || index}
                                                 className="p-4 bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 rounded-lg border border-pink-200 dark:border-pink-800 hover:shadow-md transition-shadow"
                                             >
                                                 <div className="flex items-start gap-3 mb-3">
@@ -4922,7 +5316,7 @@ Montar escala        </button>
                                         const age = calculateAge(jovem.nascimento);
                                         let categoria = '';
                                         let corCategoria = '';
-                                        
+
                                         if (age >= 13 && age <= 18) {
                                             categoria = 'Adolescente';
                                             corCategoria = 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200';
@@ -4933,10 +5327,10 @@ Montar escala        </button>
                                             categoria = 'Jovem Adulto';
                                             corCategoria = 'bg-purple-100 dark:bg-purple-800 text-purple-800 dark:text-purple-200';
                                         }
-                                        
+
                                         return (
-                                            <div 
-                                                key={jovem.id || index} 
+                                            <div
+                                                key={jovem.id || index}
                                                 className="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800 hover:shadow-md transition-shadow"
                                             >
                                                 <div className="flex items-start gap-3 mb-3">
@@ -4998,15 +5392,15 @@ Montar escala        </button>
                                     Nova Escala de Professores
                                 </h2>
                                 <button
-                                onClick={() => {
-                                setShowEscalaProfessoresModal(false);
-                                setNewEscalaProfessoresData({
-                                turmas: [],
-                                data: format(new Date(), 'yyyy-MM-dd'),
-                                horario: '09:00',
-                                    professoresSelecionados: []
-                                    });
-                                }}
+                                    onClick={() => {
+                                        setShowEscalaProfessoresModal(false);
+                                        setNewEscalaProfessoresData({
+                                            turmas: [],
+                                            data: format(new Date(), 'yyyy-MM-dd'),
+                                            horario: '09:00',
+                                            professoresSelecionados: []
+                                        });
+                                    }}
                                     className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                                 >
                                     <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
@@ -5047,7 +5441,7 @@ Montar escala        </button>
                                             {['Pequenos', 'Grandes'].map((turma) => {
                                                 const isSelected = newEscalaProfessoresData.turmas.includes(turma);
                                                 return (
-                                                    <div 
+                                                    <div
                                                         key={turma}
                                                         onClick={() => {
                                                             if (isSelected) {
@@ -5062,11 +5456,10 @@ Montar escala        </button>
                                                                 });
                                                             }
                                                         }}
-                                                        className={`p-4 rounded-lg border-2 cursor-pointer transition-all text-center ${
-                                                            isSelected 
-                                                                ? 'border-pink-600 bg-pink-50 dark:bg-pink-900/30' 
+                                                        className={`p-4 rounded-lg border-2 cursor-pointer transition-all text-center ${isSelected
+                                                                ? 'border-pink-600 bg-pink-50 dark:bg-pink-900/30'
                                                                 : 'border-gray-200 dark:border-gray-700 hover:border-pink-300 dark:hover:border-pink-700'
-                                                        }`}
+                                                            }`}
                                                     >
                                                         <div className="flex items-center justify-center gap-2">
                                                             <span className="font-medium text-gray-900 dark:text-white">{turma}</span>
@@ -5115,7 +5508,7 @@ Montar escala        </button>
                                         <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
                                             Selecione os Professores ({newEscalaProfessoresData.professoresSelecionados.length} selecionados)
                                         </h3>
-                                        
+
                                         {members.filter(m => m.funcao === 'professor kids' || m.funcao === 'lider kids').length === 0 ? (
                                             <div className="text-center py-8 bg-gray-50 dark:bg-gray-700 rounded-lg">
                                                 <Users className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
@@ -5129,9 +5522,9 @@ Montar escala        </button>
                                                 {members.filter(m => m.funcao === 'professor kids' || m.funcao === 'lider kids').map((professor) => {
                                                     const isSelected = newEscalaProfessoresData.professoresSelecionados.includes(professor.id);
                                                     const age = calculateAge(professor.nascimento);
-                                                    
+
                                                     return (
-                                                        <div 
+                                                        <div
                                                             key={professor.id}
                                                             onClick={() => {
                                                                 if (isSelected) {
@@ -5146,11 +5539,10 @@ Montar escala        </button>
                                                                     });
                                                                 }
                                                             }}
-                                                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                                                                isSelected 
-                                                                    ? 'border-pink-600 bg-pink-50 dark:bg-pink-900/30' 
+                                                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${isSelected
+                                                                    ? 'border-pink-600 bg-pink-50 dark:bg-pink-900/30'
                                                                     : 'border-gray-200 dark:border-gray-700 hover:border-pink-300 dark:hover:border-pink-700'
-                                                            }`}
+                                                                }`}
                                                         >
                                                             <div className="flex items-center gap-3">
                                                                 <div className="h-10 w-10 rounded-full bg-pink-600 flex items-center justify-center text-white font-semibold">
@@ -5161,11 +5553,10 @@ Montar escala        </button>
                                                                         <h4 className="font-medium text-gray-900 dark:text-white">
                                                                             {professor.nome}
                                                                         </h4>
-                                                                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                                                            professor.funcao === 'lider kids' 
-                                                                                ? 'bg-pink-600 text-white' 
+                                                                        <span className={`text-xs px-2 py-0.5 rounded-full ${professor.funcao === 'lider kids'
+                                                                                ? 'bg-pink-600 text-white'
                                                                                 : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
-                                                                        }`}>
+                                                                            }`}>
                                                                             {professor.funcao === 'lider kids' ? 'Líder' : 'Professor'}
                                                                         </span>
                                                                     </div>
@@ -5273,11 +5664,10 @@ Montar escala        </button>
                                         </h3>
                                         <div className="flex flex-wrap gap-3">
                                             {selectedEscalaProfessores.turmas.map((turma, i) => (
-                                                <div 
-                                                    key={i} 
-                                                    className={`px-6 py-3 rounded-lg text-white font-medium text-lg ${
-                                                        turma === 'Pequenos' ? 'bg-blue-500' : 'bg-purple-600'
-                                                    }`}
+                                                <div
+                                                    key={i}
+                                                    className={`px-6 py-3 rounded-lg text-white font-medium text-lg ${turma === 'Pequenos' ? 'bg-blue-500' : 'bg-purple-600'
+                                                        }`}
                                                 >
                                                     {turma}
                                                 </div>
@@ -5297,10 +5687,10 @@ Montar escala        </button>
                                             const prof = members.find(m => m.id === profId);
                                             if (!prof) return null;
                                             const age = calculateAge(prof.nascimento);
-                                            
+
                                             return (
-                                                <div 
-                                                    key={i} 
+                                                <div
+                                                    key={i}
                                                     className="p-4 rounded-lg border-2 border-pink-200 dark:border-pink-800 bg-white dark:bg-gray-700"
                                                 >
                                                     <div className="flex items-center gap-3">
@@ -5312,11 +5702,10 @@ Montar escala        </button>
                                                                 <h4 className="font-semibold text-gray-900 dark:text-white text-lg">
                                                                     {prof.nome}
                                                                 </h4>
-                                                                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                                                    prof.funcao === 'lider kids' 
-                                                                        ? 'bg-pink-600 text-white' 
+                                                                <span className={`text-xs px-2 py-0.5 rounded-full ${prof.funcao === 'lider kids'
+                                                                        ? 'bg-pink-600 text-white'
                                                                         : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
-                                                                }`}>
+                                                                    }`}>
                                                                     {prof.funcao === 'lider kids' ? 'Líder' : 'Professor'}
                                                                 </span>
                                                             </div>
@@ -5455,7 +5844,7 @@ Montar escala        </button>
                                                 required
                                             >
                                                 <option value="culto">Culto</option>
-                                                <option value="evento">Evento</option>
+                                                <option value="limpeza">Limpeza</option>
                                             </select>
                                         </div>
                                         <div>
@@ -5484,11 +5873,50 @@ Montar escala        </button>
                                         </div>
                                     </div>
 
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Descrição (opcional)
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={editEscalaData.descricao || ''}
+                                            onChange={(e) => setEditEscalaData({ ...editEscalaData, descricao: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                            placeholder="Ex: Culto de celebração"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Local (opcional)
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={editEscalaData.local || ''}
+                                            onChange={(e) => setEditEscalaData({ ...editEscalaData, local: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                            placeholder="Ex: Templo principal"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Observações (opcional)
+                                        </label>
+                                        <textarea
+                                            value={editEscalaData.observacoes || ''}
+                                            onChange={(e) => setEditEscalaData({ ...editEscalaData, observacoes: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                            rows="2"
+                                            placeholder="Ex: Trazer uniforme"
+                                        />
+                                    </div>
+
                                     <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
                                         <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
                                             Selecione os Diáconos ({editEscalaData.diaconosSelecionados.length} selecionados)
                                         </h3>
-                                        
+
                                         {members.filter(m => m.funcao === 'diaconia' || m.funcao === 'lider da diaconia').length === 0 ? (
                                             <div className="text-center py-8 bg-gray-50 dark:bg-gray-700 rounded-lg">
                                                 <Users className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
@@ -5499,9 +5927,9 @@ Montar escala        </button>
                                                 {members.filter(m => m.funcao === 'diaconia' || m.funcao === 'lider da diaconia').map((diacono) => {
                                                     const isSelected = editEscalaData.diaconosSelecionados.includes(diacono.id);
                                                     const age = calculateAge(diacono.nascimento);
-                                                    
+
                                                     return (
-                                                        <div 
+                                                        <div
                                                             key={diacono.id}
                                                             onClick={() => {
                                                                 if (isSelected) {
@@ -5516,11 +5944,10 @@ Montar escala        </button>
                                                                     });
                                                                 }
                                                             }}
-                                                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                                                                isSelected 
-                                                                    ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30' 
+                                                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${isSelected
+                                                                    ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30'
                                                                     : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700'
-                                                            }`}
+                                                                }`}
                                                         >
                                                             <div className="flex items-center gap-3">
                                                                 <div className="h-10 w-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-semibold">
@@ -5531,11 +5958,10 @@ Montar escala        </button>
                                                                         <h4 className="font-medium text-gray-900 dark:text-white">
                                                                             {diacono.nome}
                                                                         </h4>
-                                                                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                                                            diacono.funcao === 'lider da diaconia' 
-                                                                                ? 'bg-purple-600 text-white' 
+                                                                        <span className={`text-xs px-2 py-0.5 rounded-full ${diacono.funcao === 'lider da diaconia'
+                                                                                ? 'bg-purple-600 text-white'
                                                                                 : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
-                                                                        }`}>
+                                                                            }`}>
                                                                             {diacono.funcao === 'lider da diaconia' ? 'Líder' : 'Diácono'}
                                                                         </span>
                                                                     </div>
@@ -5662,7 +6088,7 @@ Montar escala        </button>
                                             Destinatários
                                         </label>
                                         <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-3 max-h-48 overflow-y-auto bg-white dark:bg-gray-700 space-y-2">
-                                            <div 
+                                            <div
                                                 onClick={() => {
                                                     if (newAvisoData.destinatarios.includes('todos')) {
                                                         setNewAvisoData({ ...newAvisoData, destinatarios: [] });
@@ -5670,17 +6096,15 @@ Montar escala        </button>
                                                         setNewAvisoData({ ...newAvisoData, destinatarios: ['todos'] });
                                                     }
                                                 }}
-                                                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
-                                                    newAvisoData.destinatarios.includes('todos') 
-                                                        ? 'bg-blue-100 dark:bg-blue-900 border-2 border-blue-500' 
+                                                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${newAvisoData.destinatarios.includes('todos')
+                                                        ? 'bg-blue-100 dark:bg-blue-900 border-2 border-blue-500'
                                                         : 'bg-gray-50 dark:bg-gray-600 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-500'
-                                                }`}
+                                                    }`}
                                             >
-                                                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                                                    newAvisoData.destinatarios.includes('todos')
+                                                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${newAvisoData.destinatarios.includes('todos')
                                                         ? 'bg-blue-600 border-blue-600'
                                                         : 'border-gray-400 dark:border-gray-500'
-                                                }`}>
+                                                    }`}>
                                                     {newAvisoData.destinatarios.includes('todos') && (
                                                         <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -5689,15 +6113,15 @@ Montar escala        </button>
                                                 </div>
                                                 <span className="text-gray-900 dark:text-white font-semibold">Todos os Membros</span>
                                             </div>
-                                            
+
                                             <div className="border-t border-gray-200 dark:border-gray-600 my-2"></div>
-                                            
+
                                             {availableRoles.map(role => (
-                                                <div 
+                                                <div
                                                     key={role}
                                                     onClick={() => {
                                                         if (newAvisoData.destinatarios.includes('todos')) return;
-                                                        
+
                                                         let newDest = [...newAvisoData.destinatarios];
                                                         if (newDest.includes(role)) {
                                                             newDest = newDest.filter(d => d !== role);
@@ -5708,19 +6132,17 @@ Montar escala        </button>
                                                         }
                                                         setNewAvisoData({ ...newAvisoData, destinatarios: newDest });
                                                     }}
-                                                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
-                                                        newAvisoData.destinatarios.includes('todos')
+                                                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${newAvisoData.destinatarios.includes('todos')
                                                             ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-700'
                                                             : newAvisoData.destinatarios.includes(role)
                                                                 ? 'bg-blue-100 dark:bg-blue-900 border-2 border-blue-500'
                                                                 : 'bg-gray-50 dark:bg-gray-600 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-500'
-                                                    }`}
+                                                        }`}
                                                 >
-                                                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                                                        newAvisoData.destinatarios.includes(role) && !newAvisoData.destinatarios.includes('todos')
+                                                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${newAvisoData.destinatarios.includes(role) && !newAvisoData.destinatarios.includes('todos')
                                                             ? 'bg-blue-600 border-blue-600'
                                                             : 'border-gray-400 dark:border-gray-500'
-                                                    }`}>
+                                                        }`}>
                                                         {newAvisoData.destinatarios.includes(role) && !newAvisoData.destinatarios.includes('todos') && (
                                                             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -5806,7 +6228,7 @@ Montar escala        </button>
                                 const updatedOficinas = [...oficinas, novaOficina];
                                 setOficinas(updatedOficinas);
                                 localStorage.setItem('oficinas', JSON.stringify(updatedOficinas));
-                                
+
                                 // Criar evento correspondente para o calendário
                                 if (onAddEvent) {
                                     onAddEvent({
@@ -5819,7 +6241,7 @@ Montar escala        </button>
                                         tipo: 'oficina'
                                     });
                                 }
-                                
+
                                 setShowOficinaModal(false);
                                 setNewOficinaData({
                                     nome: '',
@@ -5924,7 +6346,7 @@ Montar escala        </button>
                                             Quem pode se inscrever?
                                         </label>
                                         <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-3 max-h-48 overflow-y-auto bg-white dark:bg-gray-700 space-y-2">
-                                            <div 
+                                            <div
                                                 onClick={() => {
                                                     if (newOficinaData.permissaoInscricao.includes('todos')) {
                                                         setNewOficinaData({ ...newOficinaData, permissaoInscricao: [] });
@@ -5932,17 +6354,15 @@ Montar escala        </button>
                                                         setNewOficinaData({ ...newOficinaData, permissaoInscricao: ['todos'] });
                                                     }
                                                 }}
-                                                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
-                                                    newOficinaData.permissaoInscricao.includes('todos') 
-                                                        ? 'bg-indigo-100 dark:bg-indigo-900 border-2 border-indigo-500' 
+                                                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${newOficinaData.permissaoInscricao.includes('todos')
+                                                        ? 'bg-indigo-100 dark:bg-indigo-900 border-2 border-indigo-500'
                                                         : 'bg-gray-50 dark:bg-gray-600 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-500'
-                                                }`}
+                                                    }`}
                                             >
-                                                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                                                    newOficinaData.permissaoInscricao.includes('todos')
+                                                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${newOficinaData.permissaoInscricao.includes('todos')
                                                         ? 'bg-indigo-600 border-indigo-600'
                                                         : 'border-gray-400 dark:border-gray-500'
-                                                }`}>
+                                                    }`}>
                                                     {newOficinaData.permissaoInscricao.includes('todos') && (
                                                         <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -5951,15 +6371,15 @@ Montar escala        </button>
                                                 </div>
                                                 <span className="text-gray-900 dark:text-white font-semibold">Todos os Membros</span>
                                             </div>
-                                            
+
                                             <div className="border-t border-gray-200 dark:border-gray-600 my-2"></div>
-                                            
+
                                             {availableRoles.map(role => (
-                                                <div 
+                                                <div
                                                     key={role}
                                                     onClick={() => {
                                                         if (newOficinaData.permissaoInscricao.includes('todos')) return;
-                                                        
+
                                                         let newPerm = [...newOficinaData.permissaoInscricao];
                                                         if (newPerm.includes(role)) {
                                                             newPerm = newPerm.filter(d => d !== role);
@@ -5970,19 +6390,17 @@ Montar escala        </button>
                                                         }
                                                         setNewOficinaData({ ...newOficinaData, permissaoInscricao: newPerm });
                                                     }}
-                                                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
-                                                        newOficinaData.permissaoInscricao.includes('todos')
+                                                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${newOficinaData.permissaoInscricao.includes('todos')
                                                             ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-700'
                                                             : newOficinaData.permissaoInscricao.includes(role)
                                                                 ? 'bg-indigo-100 dark:bg-indigo-900 border-2 border-indigo-500'
                                                                 : 'bg-gray-50 dark:bg-gray-600 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-500'
-                                                    }`}
+                                                        }`}
                                                 >
-                                                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                                                        newOficinaData.permissaoInscricao.includes(role) && !newOficinaData.permissaoInscricao.includes('todos')
+                                                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${newOficinaData.permissaoInscricao.includes(role) && !newOficinaData.permissaoInscricao.includes('todos')
                                                             ? 'bg-indigo-600 border-indigo-600'
                                                             : 'border-gray-400 dark:border-gray-500'
-                                                    }`}>
+                                                        }`}>
                                                         {newOficinaData.permissaoInscricao.includes(role) && !newOficinaData.permissaoInscricao.includes('todos') && (
                                                             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />

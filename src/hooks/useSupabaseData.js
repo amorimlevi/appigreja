@@ -4,7 +4,8 @@ import {
     getEvents, 
     getFamilies, 
     getAvisos, 
-    getPrayerRequests 
+    getPrayerRequests,
+    cleanupPastEventFoods
 } from '../lib/supabaseService'
 
 export const useSupabaseData = () => {
@@ -20,6 +21,15 @@ export const useSupabaseData = () => {
         try {
             setLoading(true)
             setError(null)
+
+            // Limpar alimentações de eventos passados
+            try {
+                await cleanupPastEventFoods()
+                console.log('Alimentações de eventos passados limpas com sucesso')
+            } catch (cleanupErr) {
+                console.error('Erro ao limpar alimentações de eventos passados:', cleanupErr)
+                // Não interrompe o carregamento se a limpeza falhar
+            }
 
             const [
                 membersData, 
