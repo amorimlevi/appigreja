@@ -36,9 +36,10 @@ import {
 import { format, isAfter, isBefore, startOfWeek, endOfWeek, addDays, subDays, differenceInYears, startOfMonth, endOfMonth, isSameMonth, isToday, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { formatId } from '../utils/formatters';
 
-const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], onAddEvent, onAddMember, onEditMember, onDeleteMember, onAddFamily, onEditFamily, onLogout }) => {
-    console.log('ChurchAdminDashboard renderizando - members:', members.length, 'events:', events.length)
+const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], families = [], onAddEvent, onAddMember, onEditMember, onDeleteMember, onAddFamily, onEditFamily, onLogout }) => {
+    console.log('ChurchAdminDashboard renderizando - members:', members.length, 'events:', events.length, 'families:', families.length)
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('dashboard');
     const [genderFilter, setGenderFilter] = useState('all');
@@ -81,7 +82,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         nascimento: '',
         idade: '',
         genero: 'masculino',
-        funcao: 'membro',
+        funcoes: [],
         status: 'ativo',
         familia: ''
     });
@@ -91,7 +92,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         nascimento: '',
         idade: '',
         genero: 'masculino',
-        funcao: 'membro',
+        funcoes: [],
         status: 'ativo',
         familia: ''
     });
@@ -224,7 +225,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             nascimento: '',
             idade: '',
             genero: 'masculino',
-            funcao: 'membro',
+            funcoes: ['membro'],
             status: 'ativo',
             familia: ''
         });
@@ -363,7 +364,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             nascimento: member.nascimento || '',
             idade: member.idade || '',
             genero: member.genero || 'masculino',
-            funcao: member.funcao || 'membro',
+            funcoes: member.funcoes || (member.funcao ? [member.funcao] : []),
             status: member.status || 'ativo',
             familia: member.familia || ''
         });
@@ -500,6 +501,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             }
 
             return true;
+        }).sort((a, b) => {
+            // Ordenar por ID crescente
+            const idA = a.id || 0;
+            const idB = b.id || 0;
+            return idA - idB;
         });
     }, [members, genderFilter, ageFilter, roleFilter, searchTerm]);
     
@@ -579,44 +585,24 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         return { total, byGender, chartData };
     }, [filteredMembers]);
 
-    // Agrupar membros por família
+    // Agrupar membros por família (usando dados do Supabase)
     const familyGroups = useMemo(() => {
-        const groups = {};
+        console.log('Calculando familyGroups - families:', families, 'members:', members);
         
-        console.log('Calculando familyGroups com members:', members);
-        
-        // Filtrar apenas membros que TÊM uma família definida
-        members.forEach(member => {
-            console.log('Membro:', member.nome, 'Familia:', member.familia, 'FamiliaId:', member.familiaId);
-            // Pular membros sem família ou com família vazia
-            if (!member.familia || member.familia.trim() === '' || !member.familiaId) {
-                console.log('  -> Pulando (sem família)');
-                return;
-            }
-            const familyId = member.familiaId;
-            const familyName = member.familia.trim();
-            if (!groups[familyId]) {
-                groups[familyId] = {
-                    id: familyId,
-                    nome: familyName,
-                    membros: []
-                };
-            }
-            groups[familyId].membros.push(member);
-            console.log('  -> Adicionado à família:', familyName, 'ID:', familyId);
-        });
-
-        const result = Object.values(groups).map(family => ({
-            id: family.id,
-            nome: family.nome,
-            membros: family.membros,
-            totalMembros: family.membros.length
-        })).sort((a, b) => b.totalMembros - a.totalMembros);
-        
-        console.log('familyGroups resultado:', result);
-        
-        return result;
-    }, [members]);
+        return families.map(family => {
+            const familyMembers = members.filter(member => 
+                family.membros_ids && family.membros_ids.includes(member.id)
+            );
+            
+            return {
+                id: family.id,
+                nome: family.nome,
+                descricao: family.descricao,
+                membros: familyMembers,
+                totalMembros: familyMembers.length
+            };
+        }).sort((a, b) => b.totalMembros - a.totalMembros);
+    }, [families, members]);
 
     // Filtros de eventos
     const filteredEvents = useMemo(() => {
@@ -1006,7 +992,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         </div>
                                         <div>
                                             <h3 className="font-semibold text-gray-900 dark:text-white text-base md:text-lg">{member.nome}</h3>
-                                            <p className="text-sm text-gray-500 dark:text-gray-400">{memberId}</p>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">ID: {member.id ? formatId(member.id) : memberId}</p>
                                         </div>
                                     </div>
                                     <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${member.status === 'ativo'
@@ -1020,16 +1006,30 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 <div className="space-y-2 mb-4">
                                     <div className="flex items-center justify-between">
                                         <span className="text-sm text-gray-500 dark:text-gray-400">Função:</span>
-                                        <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${
-                                            age !== null && age <= 12 ? 'bg-pink-100 text-pink-800 dark:bg-pink-800 dark:text-pink-200' :
-                                            (member.funcao || 'membro') === 'pastor' ? 'bg-purple-100 text-purple-800 dark:bg-purple-800 dark:text-purple-200' :
-                                                (member.funcao || 'membro') === 'diácono' ? 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-200' :
-                                                    (member.funcao || 'membro') === 'líder de louvor' ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200' :
-                                                        (member.funcao || 'membro') === 'músico' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-200' :
-                                                            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-                                            }`}>
-                                            {age !== null && age <= 12 ? 'Criança' : (member.funcao || 'membro').charAt(0).toUpperCase() + (member.funcao || 'membro').slice(1)}
-                                        </span>
+                                        <div className="flex flex-wrap gap-1 justify-end">
+                                            {(member.funcoes && member.funcoes.length > 0 ? member.funcoes : ['membro']).map((funcao, idx) => {
+                                                const funcaoLower = funcao.toLowerCase();
+                                                const getFuncaoColor = () => {
+                                                    if (age !== null && age <= 12) return 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200';
+                                                    if (funcaoLower === 'pastor') return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+                                                    if (funcaoLower === 'diácono' || funcaoLower === 'diacono' || funcaoLower === 'diaconia') return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+                                                    if (funcaoLower === 'louvor' || funcaoLower.includes('louvor')) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+                                                    if (funcaoLower === 'músico' || funcaoLower === 'musico') return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+                                                    if (funcaoLower.includes('lider') || funcaoLower.includes('líder')) return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200';
+                                                    if (funcaoLower === 'jovem' || funcaoLower === 'jovens') return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
+                                                    if (funcaoLower.includes('kids') || funcaoLower.includes('criança')) return 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200';
+                                                    if (funcaoLower.includes('professor')) return 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200';
+                                                    if (funcaoLower === 'membro') return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+                                                    return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200';
+                                                };
+                                                
+                                                return (
+                                                    <span key={idx} className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getFuncaoColor()}`}>
+                                                        {age !== null && age <= 12 && idx === 0 ? 'Criança' : funcao.charAt(0).toUpperCase() + funcao.slice(1)}
+                                                    </span>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
 
                                     <div className="flex items-center justify-between text-sm">
@@ -1153,16 +1153,30 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                         </div>
 
                                                         <div className="flex flex-col items-end gap-1">
-                                                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                                                age !== null && age <= 12 ? 'bg-pink-100 text-pink-800 dark:bg-pink-800 dark:text-pink-200' :
-                                                                (member.funcao || 'membro') === 'pastor' ? 'bg-purple-100 text-purple-800 dark:bg-purple-800 dark:text-purple-200' :
-                                                                    (member.funcao || 'membro') === 'diácono' ? 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-200' :
-                                                                        (member.funcao || 'membro') === 'líder de louvor' ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200' :
-                                                                            (member.funcao || 'membro') === 'músico' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-200' :
-                                                                                'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-                                                            }`}>
-                                                                {age !== null && age <= 12 ? 'Criança' : (member.funcao || 'membro').charAt(0).toUpperCase() + (member.funcao || 'membro').slice(1)}
-                                                            </span>
+                                                            <div className="flex flex-wrap gap-1 justify-end">
+                                                                {(member.funcoes && member.funcoes.length > 0 ? member.funcoes : ['membro']).map((funcao, idx) => {
+                                                                    const funcaoLower = funcao.toLowerCase();
+                                                                    const getFuncaoColor = () => {
+                                                                        if (age !== null && age <= 12) return 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200';
+                                                                        if (funcaoLower === 'pastor') return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+                                                                        if (funcaoLower === 'diácono' || funcaoLower === 'diacono' || funcaoLower === 'diaconia') return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+                                                                        if (funcaoLower === 'louvor' || funcaoLower.includes('louvor')) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+                                                                        if (funcaoLower === 'músico' || funcaoLower === 'musico') return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+                                                                        if (funcaoLower.includes('lider') || funcaoLower.includes('líder')) return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200';
+                                                                        if (funcaoLower === 'jovem' || funcaoLower === 'jovens') return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
+                                                                        if (funcaoLower.includes('kids') || funcaoLower.includes('criança')) return 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200';
+                                                                        if (funcaoLower.includes('professor')) return 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200';
+                                                                        if (funcaoLower === 'membro') return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+                                                                        return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200';
+                                                                    };
+                                                                    
+                                                                    return (
+                                                                        <span key={idx} className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getFuncaoColor()}`}>
+                                                                            {age !== null && age <= 12 && idx === 0 ? 'Criança' : funcao.charAt(0).toUpperCase() + funcao.slice(1)}
+                                                                        </span>
+                                                                    );
+                                                                })}
+                                                            </div>
                                                             <div className="flex gap-1">
                                                                 <button
                                                                     onClick={(e) => {
@@ -2669,7 +2683,7 @@ Montar escala        </button>
                                 nascimento: '',
                                 idade: '',
                                 genero: 'masculino',
-                                funcao: 'membro',
+                                funcoes: ['membro'],
                                 status: 'ativo',
                                 familia: ''
                             });
@@ -2756,21 +2770,53 @@ Montar escala        </button>
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                                        Função *
+                                    <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+                                        Funções * (Selecione uma ou mais)
                                     </label>
-                                    <select
-                                        required
-                                        value={newMemberData.funcao}
-                                        onChange={(e) => setNewMemberData({ ...newMemberData, funcao: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                    >
-                                        {availableRoles.map(role => (
-                                            <option key={role} value={role}>
-                                                {role.charAt(0).toUpperCase() + role.slice(1)}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <div className="space-y-2 p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50 max-h-40 overflow-y-auto">
+                                        {availableRoles.map((role) => {
+                                            const isChecked = newMemberData.funcoes.includes(role);
+                                            return (
+                                                <label key={role} className="flex items-center space-x-3 cursor-pointer p-2 hover:bg-gray-100 dark:hover:bg-gray-600 rounded transition-colors">
+                                                    <div className="relative flex items-center justify-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isChecked}
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    setNewMemberData({
+                                                                        ...newMemberData,
+                                                                        funcoes: [...newMemberData.funcoes, role]
+                                                                    });
+                                                                } else {
+                                                                    setNewMemberData({
+                                                                        ...newMemberData,
+                                                                        funcoes: newMemberData.funcoes.filter(f => f !== role)
+                                                                    });
+                                                                }
+                                                            }}
+                                                            className="sr-only"
+                                                        />
+                                                        <div className={`w-6 h-6 border-2 rounded flex items-center justify-center transition-all ${
+                                                            isChecked 
+                                                                ? 'bg-gray-800 border-gray-800 dark:bg-white dark:border-white' 
+                                                                : 'bg-white border-gray-400 dark:bg-gray-700 dark:border-gray-500'
+                                                        }`}>
+                                                            {isChecked && (
+                                                                <X className="w-4 h-4 text-white dark:text-gray-800" strokeWidth={3} />
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 select-none">
+                                                        {role.charAt(0).toUpperCase() + role.slice(1)}
+                                                    </span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                    {newMemberData.funcoes.length === 0 && (
+                                        <p className="text-xs text-red-500 mt-1">Selecione pelo menos uma função</p>
+                                    )}
                                 </div>
 
                                 <div className="sm:col-span-2">
@@ -3405,21 +3451,54 @@ Montar escala        </button>
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                                        Função *
+                                    <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+                                        Funções * (Selecione uma ou mais)
                                     </label>
-                                    <select
-                                        required
-                                        value={editMemberData.funcao}
-                                        onChange={(e) => setEditMemberData({ ...editMemberData, funcao: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                    >
-                                        {availableRoles.map(role => (
-                                            <option key={role} value={role}>
-                                                {role.charAt(0).toUpperCase() + role.slice(1)}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <div className="space-y-2 p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50 max-h-40 overflow-y-auto">
+                                        {availableRoles.map((role) => {
+                                            const isChecked = editMemberData.funcoes?.includes(role) || false;
+                                            return (
+                                                <label key={role} className="flex items-center space-x-3 cursor-pointer p-2 hover:bg-gray-100 dark:hover:bg-gray-600 rounded transition-colors">
+                                                    <div className="relative flex items-center justify-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isChecked}
+                                                            onChange={(e) => {
+                                                                const funcoes = editMemberData.funcoes || [];
+                                                                if (e.target.checked) {
+                                                                    setEditMemberData({
+                                                                        ...editMemberData,
+                                                                        funcoes: [...funcoes, role]
+                                                                    });
+                                                                } else {
+                                                                    setEditMemberData({
+                                                                        ...editMemberData,
+                                                                        funcoes: funcoes.filter(f => f !== role)
+                                                                    });
+                                                                }
+                                                            }}
+                                                            className="sr-only"
+                                                        />
+                                                        <div className={`w-6 h-6 border-2 rounded flex items-center justify-center transition-all ${
+                                                            isChecked 
+                                                                ? 'bg-gray-800 border-gray-800 dark:bg-white dark:border-white' 
+                                                                : 'bg-white border-gray-400 dark:bg-gray-700 dark:border-gray-500'
+                                                        }`}>
+                                                            {isChecked && (
+                                                                <X className="w-4 h-4 text-white dark:text-gray-800" strokeWidth={3} />
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 select-none">
+                                                        {role.charAt(0).toUpperCase() + role.slice(1)}
+                                                    </span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                    {(!editMemberData.funcoes || editMemberData.funcoes.length === 0) && (
+                                        <p className="text-xs text-red-500 mt-1">Selecione pelo menos uma função</p>
+                                    )}
                                 </div>
 
                                 <div>
@@ -3517,22 +3596,29 @@ Montar escala        </button>
                     <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg max-w-3xl w-full my-8 max-h-[90vh] overflow-y-auto">
                         <h3 className="text-base md:text-lg font-semibold mb-4 text-gray-900 dark:text-white">Criar Nova Família</h3>
 
-                        <form onSubmit={(e) => {
+                        <form onSubmit={async (e) => {
                             e.preventDefault();
                             if (onAddFamily) {
-                                const familyWithId = {
-                                    ...newFamilyData,
-                                    id: generateFamilyId(newFamilyData)
-                                };
-                                onAddFamily(familyWithId);
+                                try {
+                                    const familyWithId = {
+                                        ...newFamilyData,
+                                        id: generateFamilyId(newFamilyData)
+                                    };
+                                    await onAddFamily(familyWithId);
+                                    
+                                    // Só fechar o modal se não houver erro
+                                    setNewFamilyData({
+                                        nome: '',
+                                        descricao: '',
+                                        membrosIds: []
+                                    });
+                                    setFamilyMemberSearch('');
+                                    setShowFamilyModal(false);
+                                } catch (error) {
+                                    // Erro já foi tratado no handleAddFamily
+                                    console.error('Erro no formulário:', error);
+                                }
                             }
-                            setNewFamilyData({
-                                nome: '',
-                                descricao: '',
-                                membrosIds: []
-                            });
-                            setFamilyMemberSearch('');
-                            setShowFamilyModal(false);
                         }} className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="md:col-span-2">
@@ -3565,10 +3651,23 @@ Montar escala        </button>
 
                             {/* Lista de membros para adicionar à família */}
                             <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                                <h4 className="text-sm font-semibold mb-3 text-gray-900 dark:text-white flex items-center">
-                                    <Users className="w-4 h-4 mr-2" />
-                                    Adicionar Membros à Família ({newFamilyData.membrosIds.length} selecionados)
-                                </h4>
+                                <div className="flex items-center justify-between mb-3">
+                                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center">
+                                        <Users className="w-4 h-4 mr-2" />
+                                        Adicionar Membros à Família ({newFamilyData.membrosIds.length} selecionados)
+                                    </h4>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowFamilyModal(false);
+                                            setShowMemberModal(true);
+                                        }}
+                                        className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                                    >
+                                        <Plus className="w-4 h-4" />
+                                        Novo Membro
+                                    </button>
+                                </div>
                                 
                                 {/* Campo de busca */}
                                 <div className="mb-3 relative">

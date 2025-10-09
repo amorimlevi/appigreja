@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserPlus, ArrowLeft, Moon, Sun } from 'lucide-react';
+import { UserPlus, ArrowLeft, Moon, Sun, X } from 'lucide-react';
 
 const MemberSignup = ({ onSignup, onBack }) => {
     const [darkMode, setDarkMode] = useState(() => {
@@ -11,11 +11,24 @@ const MemberSignup = ({ onSignup, onBack }) => {
         email: '',
         telefone: '',
         nascimento: '',
+        idade: null,
         genero: 'masculino',
-        funcao: 'membro',
+        funcoes: [],
         senha: '',
         confirmarSenha: ''
     });
+
+    const calculateAge = (birthDate) => {
+        if (!birthDate) return null;
+        const today = new Date();
+        const birth = new Date(birthDate);
+        let age = today.getFullYear() - birth.getFullYear();
+        const monthDiff = today.getMonth() - birth.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+            age--;
+        }
+        return age;
+    };
     
     const [error, setError] = useState('');
 
@@ -39,14 +52,21 @@ const MemberSignup = ({ onSignup, onBack }) => {
             return;
         }
 
+        // Validar se pelo menos uma função foi selecionada
+        if (formData.funcoes.length === 0) {
+            setError('Selecione pelo menos uma função');
+            return;
+        }
+
         // Criar novo membro
         const newMember = {
             nome: formData.nome,
             email: formData.email,
             telefone: formData.telefone,
             nascimento: formData.nascimento,
+            idade: formData.idade,
             genero: formData.genero,
-            funcao: 'membro',
+            funcoes: formData.funcoes,
             status: 'ativo',
             senha: formData.senha
         };
@@ -131,7 +151,15 @@ const MemberSignup = ({ onSignup, onBack }) => {
                             <input
                                 type="date"
                                 value={formData.nascimento}
-                                onChange={(e) => setFormData({ ...formData, nascimento: e.target.value })}
+                                onChange={(e) => {
+                                    const newBirthDate = e.target.value;
+                                    const calculatedAge = calculateAge(newBirthDate);
+                                    setFormData({ 
+                                        ...formData, 
+                                        nascimento: newBirthDate,
+                                        idade: calculatedAge
+                                    });
+                                }}
                                 className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                                 required
                             />
@@ -154,26 +182,65 @@ const MemberSignup = ({ onSignup, onBack }) => {
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Função *
+                                Funções * (Selecione uma ou mais)
                             </label>
-                            <select
-                                value={formData.funcao}
-                                onChange={(e) => setFormData({ ...formData, funcao: e.target.value })}
-                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                                required
-                            >
-                                <option value="membro">Membro</option>
-                                <option value="pastor">Pastor</option>
-                                <option value="lider da diaconia">Líder da Diaconia</option>
-                                <option value="líder de louvor">Líder de Louvor</option>
-                                <option value="lider kids">Líder Kids</option>
-                                <option value="lider jovens">Líder Jovens</option>
-                                <option value="jovem">Jovem</option>
-                                <option value="ministro">Ministro</option>
-                                <option value="louvor">Louvor</option>
-                                <option value="diaconia">Diaconia</option>
-                                <option value="professor kids">Professor Kids</option>
-                            </select>
+                            <div className="space-y-2 p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50 max-h-48 overflow-y-auto">
+                                {[
+                                    'membro',
+                                    'pastor', 
+                                    'lider da diaconia',
+                                    'líder de louvor',
+                                    'lider kids',
+                                    'lider jovens',
+                                    'jovem',
+                                    'ministro',
+                                    'louvor',
+                                    'diaconia',
+                                    'professor kids'
+                                ].map((funcao) => {
+                                    const isChecked = formData.funcoes.includes(funcao);
+                                    const label = funcao.charAt(0).toUpperCase() + funcao.slice(1);
+                                    return (
+                                        <label key={funcao} className="flex items-center space-x-3 cursor-pointer p-2 hover:bg-gray-100 dark:hover:bg-gray-600 rounded transition-colors">
+                                            <div className="relative flex items-center justify-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setFormData({
+                                                                ...formData,
+                                                                funcoes: [...formData.funcoes, funcao]
+                                                            });
+                                                        } else {
+                                                            setFormData({
+                                                                ...formData,
+                                                                funcoes: formData.funcoes.filter(f => f !== funcao)
+                                                            });
+                                                        }
+                                                    }}
+                                                    className="sr-only"
+                                                />
+                                                <div className={`w-6 h-6 border-2 rounded flex items-center justify-center transition-all ${
+                                                    isChecked 
+                                                        ? 'bg-blue-600 border-blue-600' 
+                                                        : 'bg-white border-gray-400 dark:bg-gray-700 dark:border-gray-500'
+                                                }`}>
+                                                    {isChecked && (
+                                                        <X className="w-4 h-4 text-white" strokeWidth={3} />
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300 select-none">
+                                                {label}
+                                            </span>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                            {formData.funcoes.length === 0 && (
+                                <p className="text-xs text-red-500 mt-1">Selecione pelo menos uma função</p>
+                            )}
                         </div>
 
                         <div>

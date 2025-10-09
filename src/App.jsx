@@ -5,6 +5,20 @@ import Login from './components/Login'
 import MemberApp from './components/MemberApp'
 import MemberLogin from './components/MemberLogin'
 import MemberSignup from './components/MemberSignup'
+import { useSupabaseData } from './hooks/useSupabaseData'
+import { 
+    createMember, 
+    updateMember, 
+    deleteMember, 
+    createEvent, 
+    updateEvent,
+    deleteEvent,
+    createEventFood,
+    createFamily,
+    updateFamily,
+    createAviso,
+    loginMember
+} from './lib/supabaseService'
 
 console.log('App.jsx carregado!')
 document.addEventListener('DOMContentLoaded', () => {
@@ -465,11 +479,24 @@ class DataManager {
 
 function AppContent() {
   const location = useLocation();
-  const [dataManager] = useState(new DataManager());
-  const [members, setMembers] = useState([]);
-  const [events, setEvents] = useState([]);
-  const [prayerRequests, setPrayerRequests] = useState([]);
-  const [avisos, setAvisos] = useState([]);
+  
+  // Usar hook do Supabase
+  const {
+    members,
+    setMembers,
+    events,
+    setEvents,
+    families,
+    setFamilies,
+    avisos,
+    setAvisos,
+    prayerRequests,
+    setPrayerRequests,
+    loading,
+    error,
+    reload
+  } = useSupabaseData();
+  
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return localStorage.getItem('church_authenticated') === 'true';
   });
@@ -479,93 +506,166 @@ function AppContent() {
   });
   const [showSignup, setShowSignup] = useState(false);
 
-  useEffect(() => {
-    // Carregar dados iniciais
-    setMembers(dataManager.getMembers());
-    setEvents(dataManager.getEvents());
-    setPrayerRequests(dataManager.getPrayerRequests());
-    
-    // Carregar avisos do localStorage
-    const savedAvisos = JSON.parse(localStorage.getItem('church_avisos')) || [];
-    setAvisos(savedAvisos);
-
-    // Salvar dados de exemplo no localStorage se não existirem
-    if (!localStorage.getItem('church_members')) {
-      dataManager.saveMembers();
-    }
-    if (!localStorage.getItem('church_events')) {
-      dataManager.saveEvents();
-    }
-    if (!localStorage.getItem('church_prayers')) {
-      dataManager.savePrayerRequests();
-    }
-  }, [dataManager]);
-
-  const handleAddEvent = (eventData) => {
-    const newEvent = {
-      id: `EVT${String(events.length + 1).padStart(4, '0')}`,
-      ...eventData
-    };
-    const updatedEvents = [...events, newEvent];
-    setEvents(updatedEvents);
-    dataManager.events = updatedEvents;
-    dataManager.saveEvents();
-  };
-
-  const handleAddMember = (memberData) => {
-    const newMember = {
-      id: `MBR${String(members.length + 1).padStart(4, '0')}`,
-      ...memberData
-    };
-    const updatedMembers = [...members, newMember];
-    setMembers(updatedMembers);
-    dataManager.members = updatedMembers;
-    dataManager.saveMembers();
-  };
-
-  const handleEditMember = (member, updatedData) => {
-    const updatedMembers = members.map(m => 
-      m.id === member.id ? { ...m, ...updatedData } : m
-    );
-    setMembers(updatedMembers);
-    dataManager.members = updatedMembers;
-    dataManager.saveMembers();
-  };
-
-  const handleDeleteMember = (member) => {
-    const updatedMembers = members.filter(m => m.id !== member.id);
-    setMembers(updatedMembers);
-    dataManager.members = updatedMembers;
-    dataManager.saveMembers();
-  };
-
-  const handleAddFamily = (familyData) => {
-    const updatedMembers = members.map(member => {
-      if (familyData.membrosIds.includes(member.id)) {
-        return { ...member, familia: familyData.nome, familiaId: familyData.id };
+  const handleAddEvent = async (eventData) => {
+    try {
+      // Separar comidas dos dados do evento
+      const { comidas, ...eventOnlyData } = eventData;
+      
+      // Criar o evento
+      const newEvent = await createEvent(eventOnlyData);
+      
+      // Se há comidas, criar cada uma na tabela event_foods
+      if (comidas && comidas.length > 0) {
+        for (const comida of comidas) {
+          await createEventFood({
+            event_id: newEvent.id,
+            nome: comida.nome,
+            responsavel: comida.responsavel || null,
+            membro_id: null
+          });
+        }
       }
-      return member;
-    });
-    setMembers(updatedMembers);
-    dataManager.members = updatedMembers;
-    dataManager.saveMembers();
+      
+      setEvents([...events, newEvent]);
+    } catch (error) {
+      console.error('Erro ao criar evento:', error);
+      alert('Erro ao criar evento');
+    }
   };
 
-  const handleEditFamily = (oldFamilyId, familyData) => {
-    const updatedMembers = members.map(member => {
-      // Remove membros que não estão mais na família
-      if (member.familiaId === oldFamilyId && !familyData.membrosIds.includes(member.id)) {
-        return { ...member, familia: '', familiaId: '' };
+  const handleAddMember = async (memberData) => {
+    try {
+      console.log('Dados enviados para criar membro:', memberData);
+      
+      // Limpar dados: converter campos vazios para null
+      const cleanedData = {
+        ...memberData,
+        senha: memberData.senha || 'senha123',
+        idade: memberData.idade && memberData.idade !== '' ? parseInt(memberData.idade) : null,
+        nascimento: memberData.nascimento && memberData.nascimento !== '' ? memberData.nascimento : null,
+        email: memberData.email && memberData.email !== '' ? memberData.email : null,
+        telefone: memberData.telefone && memberData.telefone !== '' ? memberData.telefone : null,
+        familia: memberData.familia && memberData.familia !== '' ? memberData.familia : null,
+        funcoes: Array.isArray(memberData.funcoes) && memberData.funcoes.length > 0 ? memberData.funcoes : ['membro']
+      };
+      
+      const newMember = await createMember(cleanedData);
+      setMembers([...members, newMember]);
+    } catch (error) {
+      console.error('Erro detalhado ao criar membro:', error);
+      alert(`Erro ao criar membro: ${error.message || error}`);
+    }
+  };
+
+  const handleEditMember = async (member, updatedData) => {
+    try {
+      console.log('Editando membro:', member.id, 'com dados:', updatedData);
+      
+      // Limpar dados antes de enviar
+      const cleanedData = {
+        ...updatedData,
+        idade: updatedData.idade && updatedData.idade !== '' ? parseInt(updatedData.idade) : null,
+        nascimento: updatedData.nascimento && updatedData.nascimento !== '' ? updatedData.nascimento : null,
+        email: updatedData.email && updatedData.email !== '' ? updatedData.email : null,
+        telefone: updatedData.telefone && updatedData.telefone !== '' ? updatedData.telefone : null,
+        familia: updatedData.familia && updatedData.familia !== '' ? updatedData.familia : null,
+        funcoes: Array.isArray(updatedData.funcoes) && updatedData.funcoes.length > 0 ? updatedData.funcoes : ['membro']
+      };
+      
+      console.log('Dados limpos:', cleanedData);
+      
+      const updated = await updateMember(member.id, cleanedData);
+      setMembers(members.map(m => m.id === member.id ? updated : m));
+      
+      console.log('Membro atualizado com sucesso');
+    } catch (error) {
+      console.error('Erro detalhado ao atualizar membro:', error);
+      console.error('Mensagem:', error.message);
+      console.error('Detalhes:', error.details);
+      alert(`Erro ao atualizar membro: ${error.message || 'Erro desconhecido'}`);
+    }
+  };
+
+  const handleDeleteMember = async (member) => {
+    try {
+      await deleteMember(member.id);
+      setMembers(members.filter(m => m.id !== member.id));
+    } catch (error) {
+      console.error('Erro ao deletar membro:', error);
+      alert('Erro ao deletar membro');
+    }
+  };
+
+  const handleAddFamily = async (familyData) => {
+    try {
+      console.log('Tentando criar família com dados:', familyData);
+      
+      // Salvar família no Supabase
+      const newFamily = await createFamily({
+        nome: familyData.nome,
+        descricao: familyData.descricao || '',
+        membros_ids: familyData.membrosIds
+      });
+
+      console.log('Família criada no Supabase:', newFamily);
+
+      // Adicionar a nova família ao estado
+      setFamilies([...families, newFamily]);
+
+      // Atualizar membros localmente apenas se necessário
+      if (familyData.membrosIds && familyData.membrosIds.length > 0) {
+        console.log('Atualizando membros localmente...');
+        const updatedMembers = members.map(member => {
+          if (familyData.membrosIds.includes(member.id)) {
+            return { ...member, familia: familyData.nome, familiaId: newFamily.id };
+          }
+          return member;
+        });
+        setMembers(updatedMembers);
       }
-      // Adiciona ou atualiza membros na família
-      if (familyData.membrosIds.includes(member.id)) {
-        return { ...member, familia: familyData.nome, familiaId: familyData.id };
-      }
-      return member;
-    });
-    setMembers(updatedMembers);
-    dataManager.members = updatedMembers;
-    dataManager.saveMembers();
+
+      console.log('Família criada com sucesso!');
+    } catch (error) {
+      console.error('Erro completo ao criar família:', error);
+      console.error('Mensagem do erro:', error.message);
+      console.error('Detalhes:', error.details);
+      console.error('Hint:', error.hint);
+      alert(`Erro ao criar família: ${error.message || 'Tente novamente.'}`);
+      throw error; // Re-lançar o erro para que o modal saiba que falhou
+    }
+  };
+
+  const handleEditFamily = async (oldFamilyId, familyData) => {
+    try {
+      // Atualizar família no Supabase
+      const updatedFamily = await updateFamily(familyData.id || oldFamilyId, {
+        nome: familyData.nome,
+        descricao: familyData.descricao || '',
+        membros_ids: familyData.membrosIds
+      });
+
+      // Atualizar a família no estado
+      setFamilies(families.map(f => f.id === (familyData.id || oldFamilyId) ? updatedFamily : f));
+
+      // Atualizar membros localmente
+      const updatedMembers = members.map(member => {
+        // Remove membros que não estão mais na família
+        if (member.familiaId === oldFamilyId && !familyData.membrosIds.includes(member.id)) {
+          return { ...member, familia: '', familiaId: '' };
+        }
+        // Adiciona ou atualiza membros na família
+        if (familyData.membrosIds.includes(member.id)) {
+          return { ...member, familia: familyData.nome, familiaId: familyData.id || oldFamilyId };
+        }
+        return member;
+      });
+      setMembers(updatedMembers);
+
+      console.log('Família atualizada no Supabase');
+    } catch (error) {
+      console.error('Erro ao atualizar família:', error);
+      alert('Erro ao atualizar família. Tente novamente.');
+    }
   };
 
   const handleLogin = () => {
@@ -578,9 +678,16 @@ function AppContent() {
     setIsAuthenticated(false);
   };
 
-  const handleMemberLogin = (member) => {
-    setCurrentMember(member);
-    localStorage.setItem('current_member', JSON.stringify(member));
+  const handleMemberLogin = async (nomeOrEmail, senha) => {
+    try {
+      const member = await loginMember(nomeOrEmail, senha);
+      setCurrentMember(member);
+      localStorage.setItem('current_member', JSON.stringify(member));
+      return true;
+    } catch (error) {
+      console.error('Erro no login:', error);
+      return false;
+    }
   };
 
   const handleMemberLogout = () => {
@@ -588,21 +695,23 @@ function AppContent() {
     localStorage.removeItem('current_member');
   };
 
-  const handleMemberSignup = (memberData) => {
-    const newMember = {
-      id: `MBR${String(members.length + 1).padStart(4, '0')}`,
-      dataCadastro: new Date().toISOString(),
-      ...memberData
-    };
-    const updatedMembers = [...members, newMember];
-    setMembers(updatedMembers);
-    dataManager.members = updatedMembers;
-    dataManager.saveMembers();
-    
-    // Fazer login automático após cadastro
-    setCurrentMember(newMember);
-    localStorage.setItem('current_member', JSON.stringify(newMember));
-    setShowSignup(false);
+  const handleMemberSignup = async (memberData) => {
+    try {
+      const newMember = await createMember({
+        ...memberData,
+        data_cadastro: new Date().toISOString()
+      });
+      
+      setMembers([...members, newMember]);
+      
+      // Fazer login automático após cadastro
+      setCurrentMember(newMember);
+      localStorage.setItem('current_member', JSON.stringify(newMember));
+      setShowSignup(false);
+    } catch (error) {
+      console.error('Erro ao cadastrar:', error);
+      alert('Erro ao fazer cadastro');
+    }
   };
 
   console.log('Renderizando App - members:', members.length)
@@ -618,6 +727,7 @@ function AppContent() {
               currentMember={currentMember}
               events={events}
               avisos={avisos}
+              onAddMember={handleAddMember}
               onLogout={handleMemberLogout}
             />
           ) : showSignup ? (
@@ -643,6 +753,7 @@ function AppContent() {
             <ChurchAdminDashboard 
               members={members} 
               events={events}
+              families={families}
               prayerRequests={prayerRequests}
               onAddEvent={handleAddEvent}
               onAddMember={handleAddMember}

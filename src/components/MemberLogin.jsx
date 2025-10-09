@@ -9,7 +9,7 @@ const MemberLogin = ({ members, onLogin, onShowSignup }) => {
         return localStorage.getItem('darkMode') === 'true' || false;
     });
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
 
@@ -18,25 +18,12 @@ const MemberLogin = ({ members, onLogin, onShowSignup }) => {
             return;
         }
 
-        // Encontrar o membro por nome ou email
-        const member = members.find(m => 
-            m.nome?.toLowerCase() === emailOrName.toLowerCase() || 
-            m.email?.toLowerCase() === emailOrName.toLowerCase()
-        );
+        // Tentar fazer login
+        const success = await onLogin(emailOrName, password);
         
-        if (!member) {
-            setError('Usuário não encontrado');
-            return;
+        if (!success) {
+            setError('Usuário ou senha incorretos');
         }
-
-        // Verificar senha (se o membro tiver senha cadastrada)
-        if (member.senha && member.senha !== password) {
-            setError('Senha incorreta');
-            return;
-        }
-
-        // Login bem-sucedido
-        onLogin(member);
     };
 
     return (

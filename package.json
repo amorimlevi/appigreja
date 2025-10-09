@@ -14,6 +14,7 @@
     "@capacitor/cli": "^7.4.3",
     "@capacitor/ios": "^7.4.3",
     "@capacitor/status-bar": "^7.0.3",
+    "@supabase/supabase-js": "^2.74.0",
     "date-fns": "^2.30.0",
     "lucide-react": "^0.263.1",
     "react": "^18.2.0",
