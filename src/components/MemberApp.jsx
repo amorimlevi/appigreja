@@ -31,9 +31,10 @@ import {
 import { format, parseISO, isAfter, isBefore, startOfMonth, endOfMonth, isSameMonth, isToday, addDays, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatId } from '../utils/formatters';
-import { searchMembers, getEventFoods, updateEventFood, registerEventParticipant, unregisterEventParticipant, checkEventRegistration, updateMember, getMinistrySchedules, getMembers, getFamilyByMemberId, getUnreadAvisosCount, markAvisoAsRead, getAvisosWithReadStatus, getPlaylistMusicas } from '../lib/supabaseService';
+import { searchMembers, getEventFoods, updateEventFood, registerEventParticipant, unregisterEventParticipant, checkEventRegistration, updateMember, getMinistrySchedules, getMembers, getFamilyByMemberId, getUnreadAvisosCount, markAvisoAsRead, getAvisosWithReadStatus, getPlaylistMusicas, getMemberById, createMinistrySchedule, updateMinistrySchedule, deleteMinistrySchedule, createPlaylistMusica, deletePlaylistMusica } from '../lib/supabaseService';
 
 const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLogout }) => {
+    const [localMember, setLocalMember] = useState(currentMember);
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
     const calculateAge = (birthDate) => {
@@ -74,7 +75,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     // Filtrar itens de menu baseado nas flags do membro
     const menuItems = useMemo(() => {
         const items = [...defaultMenuItems];
-        const memberFuncoes = currentMember?.funcoes || [];
+        const memberFuncoes = localMember?.funcoes || [];
         const addedIds = new Set();
         
         // Adicionar itens de menu para cada flag que o membro possui (evitar duplicatas)
@@ -86,7 +87,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
         });
         
         return items;
-    }, [currentMember]);
+    }, [localMember]);
     const [activeTab, setActiveTab] = useState('home');
     const [calendarDate, setCalendarDate] = useState(new Date());
     const [eventView, setEventView] = useState('calendar'); // 'calendar' ou 'list'
@@ -147,13 +148,58 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     const [showRegisterOtherModal, setShowRegisterOtherModal] = useState(false);
     const [registerOtherSearch, setRegisterOtherSearch] = useState('');
     const [registerOtherResults, setRegisterOtherResults] = useState([]);
+    const [showCreateScheduleModal, setShowCreateScheduleModal] = useState(false);
+    const [showEditScheduleModal, setShowEditScheduleModal] = useState(false);
+    const [scheduleToEdit, setScheduleToEdit] = useState(null);
+    const [newScheduleData, setNewScheduleData] = useState({
+        data: '',
+        horario: '',
+        categoria: 'culto',
+        descricao: '',
+        local: '',
+        observacoes: '',
+        membros_ids: []
+    });
+    const [showMusicModal, setShowMusicModal] = useState(false);
+    const [newMusicData, setNewMusicData] = useState({
+        nome: '',
+        artista: '',
+        link: ''
+    });
+    const [showMusicListModal, setShowMusicListModal] = useState(false);
+    const [showMusiciansModal, setShowMusiciansModal] = useState(false);
+    const [louvorMembers, setLouvorMembers] = useState([]);
+
+    // Recarregar dados do membro a cada 10 segundos
+    useEffect(() => {
+        const reloadMemberData = async () => {
+            if (currentMember?.id) {
+                try {
+                    const updatedMember = await getMemberById(localMember.id);
+                    if (updatedMember) {
+                        setLocalMember(updatedMember);
+                        localStorage.setItem('current_member', JSON.stringify(updatedMember));
+                    }
+                } catch (error) {
+                    console.error('Erro ao recarregar dados do membro:', error);
+                }
+            }
+        };
+
+        // Carregar imediatamente
+        reloadMemberData();
+
+        // Recarregar a cada 10 segundos
+        const interval = setInterval(reloadMemberData, 10000);
+        return () => clearInterval(interval);
+    }, [currentMember?.id]);
 
     // Carregar família do membro ao montar o componente
     useEffect(() => {
         const loadFamily = async () => {
-            if (currentMember?.id) {
+            if (localMember?.id) {
                 try {
-                    const family = await getFamilyByMemberId(currentMember.id);
+                    const family = await getFamilyByMemberId(localMember.id);
                     if (family) {
                         // Carregar membros completos usando os IDs
                         const allMembers = await getMembers();
@@ -172,19 +218,19 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
             }
         };
         loadFamily();
-    }, [currentMember]);
+    }, [localMember?.id]);
 
     // Carregar contador de avisos não lidos e avisos filtrados
     useEffect(() => {
         const loadAvisosData = async () => {
-            if (currentMember?.id) {
+            if (localMember?.id) {
                 try {
                     // Carregar contador de não lidos
-                    const count = await getUnreadAvisosCount(currentMember.id);
+                    const count = await getUnreadAvisosCount(localMember.id);
                     setUnreadAvisosCount(count);
                     
                     // Carregar apenas avisos que este membro pode ver
-                    const avisosDoMembro = await getAvisosWithReadStatus(currentMember.id);
+                    const avisosDoMembro = await getAvisosWithReadStatus(localMember.id);
                     setFilteredAvisos(avisosDoMembro || []);
                 } catch (error) {
                     console.error('Erro ao carregar avisos:', error);
@@ -196,7 +242,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
         // Atualizar a cada 30 segundos
         const interval = setInterval(loadAvisosData, 30000);
         return () => clearInterval(interval);
-    }, [currentMember, activeTab]);
+    }, [localMember?.id, activeTab]);
 
     // Carregar playlist Zoe
     useEffect(() => {
@@ -274,6 +320,14 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                             break;
                         case 'louvor':
                             setLouvorSchedules(schedules);
+                            // Carregar todos os membros com flag louvor
+                            const allMembers = await getMembers();
+                            const musicosLouvor = allMembers.filter(m => 
+                                m.funcoes?.includes('louvor') || 
+                                m.funcoes?.includes('líder de louvor') ||
+                                m.funcoes?.includes('lider de louvor')
+                            );
+                            setLouvorMembers(musicosLouvor);
                             break;
                         case 'kids':
                             setKidsSchedules(schedules);
@@ -326,7 +380,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     const handleSelectEvent = async (event) => {
         try {
             // Verificar se o membro está inscrito no evento
-            const registered = await checkEventRegistration(event.id, currentMember.id);
+            const registered = await checkEventRegistration(event.id, localMember.id);
             setIsRegistered(registered);
 
             // Buscar comidas do evento se tiver alimentação
@@ -354,12 +408,12 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
         try {
             if (isRegistered) {
                 // Desinscrever
-                await unregisterEventParticipant(selectedEvent.id, currentMember.id);
+                await unregisterEventParticipant(selectedEvent.id, localMember.id);
                 setIsRegistered(false);
                 alert('Você foi desinscrito do evento.');
             } else {
                 // Inscrever
-                await registerEventParticipant(selectedEvent.id, currentMember.id);
+                await registerEventParticipant(selectedEvent.id, localMember.id);
                 setIsRegistered(true);
                 alert('Inscrição confirmada com sucesso!');
             }
@@ -379,8 +433,8 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 .filter(comida => selectedFoods[comida.nome])
                 .map(comida =>
                     updateEventFood(comida.id, {
-                        membro_id: currentMember.id,
-                        responsavel: currentMember.nome
+                        membro_id: localMember.id,
+                        responsavel: localMember.nome
                     })
                 );
 
@@ -393,9 +447,9 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                     if (selectedFoods[comida.nome]) {
                         return {
                             ...comida,
-                            responsavel: currentMember.nome,
-                            membro_id: currentMember.id,
-                            member: { id: currentMember.id, nome: currentMember.nome }
+                            responsavel: localMember.nome,
+                            membro_id: localMember.id,
+                            member: { id: localMember.id, nome: localMember.nome }
                         };
                     }
                     return comida;
@@ -425,12 +479,12 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
         if (query.trim().length >= 2) {
             const filtered = myFamily.membros.filter(member => 
                 member.nome.toLowerCase().includes(query.toLowerCase()) &&
-                member.id !== currentMember.id // Excluir o próprio usuário
+                member.id !== localMember.id // Excluir o próprio usuário
             );
             setRegisterOtherResults(filtered);
         } else {
             // Se não houver busca, mostrar todos da família exceto o próprio usuário
-            const familyMembers = myFamily.membros.filter(member => member.id !== currentMember.id);
+            const familyMembers = myFamily.membros.filter(member => member.id !== localMember.id);
             setRegisterOtherResults(familyMembers);
         }
     };
@@ -688,6 +742,103 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
         );
     };
 
+    // Verificar se é líder de louvor
+    const isLiderLouvor = localMember?.funcoes?.includes('líder de louvor') || localMember?.funcoes?.includes('lider de louvor');
+
+    // Função para criar escala
+    const handleCreateSchedule = async () => {
+        try {
+            await createMinistrySchedule({
+                ...newScheduleData,
+                ministerio: 'louvor'
+            });
+            
+            // Recarregar escalas
+            const escalas = await getMinistrySchedules('louvor');
+            setLouvorSchedules(escalas);
+            
+            // Resetar form e fechar modal
+            setNewScheduleData({
+                data: '',
+                horario: '',
+                categoria: 'culto',
+                descricao: '',
+                local: '',
+                observacoes: '',
+                membros_ids: []
+            });
+            setShowCreateScheduleModal(false);
+            alert('Escala criada com sucesso!');
+        } catch (error) {
+            console.error('Erro ao criar escala:', error);
+            alert('Erro ao criar escala');
+        }
+    };
+
+    // Função para atualizar escala
+    const handleUpdateSchedule = async () => {
+        try {
+            await updateMinistrySchedule(scheduleToEdit.id, newScheduleData);
+            
+            // Recarregar escalas
+            const escalas = await getMinistrySchedules('louvor');
+            setLouvorSchedules(escalas);
+            
+            setShowEditScheduleModal(false);
+            setScheduleToEdit(null);
+            alert('Escala atualizada com sucesso!');
+        } catch (error) {
+            console.error('Erro ao atualizar escala:', error);
+            alert('Erro ao atualizar escala');
+        }
+    };
+
+    // Função para deletar escala
+    const handleDeleteSchedule = async (id) => {
+        if (!confirm('Deseja realmente deletar esta escala?')) return;
+        
+        try {
+            await deleteMinistrySchedule(id);
+            
+            // Recarregar escalas
+            const escalas = await getMinistrySchedules('louvor');
+            setLouvorSchedules(escalas);
+            
+            alert('Escala deletada com sucesso!');
+        } catch (error) {
+            console.error('Erro ao deletar escala:', error);
+            alert('Erro ao deletar escala');
+        }
+    };
+
+    // Função para adicionar música
+    const handleSubmitMusic = async (e) => {
+        e.preventDefault();
+        try {
+            const maxOrdem = playlistMusicas.length > 0 
+                ? Math.max(...playlistMusicas.map(m => m.ordem || 0))
+                : 0;
+
+            const musicaData = {
+                titulo: newMusicData.nome,
+                artista: newMusicData.artista,
+                link: newMusicData.link,
+                ordem: maxOrdem + 1,
+                ativa: true
+            };
+
+            await createPlaylistMusica(musicaData);
+            const musicas = await getPlaylistMusicas();
+            setPlaylistMusicas(musicas || []);
+            setShowMusicModal(false);
+            setNewMusicData({ nome: '', artista: '', link: '' });
+            alert('Música adicionada com sucesso!');
+        } catch (error) {
+            console.error('Erro ao adicionar música:', error);
+            alert('Erro ao adicionar música');
+        }
+    };
+
     return (
         <div className={`min-h-screen ${darkMode ? 'dark' : ''}`}>
             <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -740,8 +891,8 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     <div>
                                         <p className="font-semibold text-gray-900 dark:text-white">{currentMember?.nome}</p>
                                         <p className="text-sm text-gray-600 dark:text-gray-400">
-                                            {currentMember?.funcoes && currentMember.funcoes.length > 0
-                                                ? currentMember.funcoes.join(', ')
+                                            {currentMember?.funcoes && localMember.funcoes.length > 0
+                                                ? localMember.funcoes.join(', ')
                                                 : currentMember?.funcao || 'Membro'
                                             }
                                         </p>
@@ -797,91 +948,115 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                     {/* Início */}
                     {activeTab === 'home' && (
                         <div className="space-y-6">
-                            {/* Próximo Evento */}
-                            {nextEvent && (
-                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-                                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Próximo Evento</h2>
-                                    <div
-                                        onClick={() => {
-                                            setSelectedEvent(nextEvent);
-                                            setShowEventDetailsModal(true);
-                                        }}
-                                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 p-4 rounded-lg transition-colors"
-                                    >
-                                        <h3 className="font-semibold text-gray-900 dark:text-white">
-                                            {nextEvent.tipo === 'oficina' && '🎓 '}
-                                            {nextEvent.nome}
-                                        </h3>
-                                        <div className="mt-2 flex items-center text-sm text-gray-600 dark:text-gray-400">
-                                            <Clock className="h-4 w-4 mr-1" />
-                                            {format(parseISO(nextEvent.data), "d 'de' MMMM 'às' HH:mm", { locale: ptBR })}
-                                        </div>
-                                        {nextEvent.local && (
-                                            <div className="mt-1 flex items-center text-sm text-gray-600 dark:text-gray-400">
-                                                <MapPin className="h-4 w-4 mr-1" />
-                                                {nextEvent.local}
+                            {/* Ouça Agora */}
+                            {playlistMusicas.length > 0 && (
+                                <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg shadow-lg p-6 text-white">
+                                    <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                                        <Music className="w-5 h-5" />
+                                        Ouça Agora
+                                    </h2>
+                                    {(() => {
+                                        const randomMusic = playlistMusicas[Math.floor(Math.random() * playlistMusicas.length)];
+                                        return (
+                                            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                                                <p className="font-semibold text-lg">{randomMusic.titulo}</p>
+                                                {randomMusic.artista && (
+                                                    <p className="text-sm text-white/80 mt-1">{randomMusic.artista}</p>
+                                                )}
+                                                {randomMusic.duracao && (
+                                                    <p className="text-xs text-white/70 mt-1">{randomMusic.duracao}</p>
+                                                )}
+                                                {randomMusic.link && (
+                                                    <button
+                                                        onClick={() => {
+                                                            let link = randomMusic.link;
+                                                            if (link.includes('youtu.be/')) {
+                                                                const videoId = link.split('youtu.be/')[1].split('?')[0];
+                                                                link = `https://www.youtube.com/watch?v=${videoId}`;
+                                                            }
+                                                            window.open(link, '_blank', 'noopener,noreferrer');
+                                                        }}
+                                                        className="mt-3 px-4 py-2 bg-white text-purple-600 rounded-lg text-sm font-medium hover:bg-white/90 transition-colors flex items-center gap-2"
+                                                    >
+                                                        <Music className="w-4 h-4" />
+                                                        Ouvir Agora
+                                                    </button>
+                                                )}
                                             </div>
-                                        )}
-                                    </div>
+                                        );
+                                    })()}
                                 </div>
                             )}
 
                             {/* Avisos Recentes */}
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                            <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg shadow-md p-6 border border-blue-200 dark:border-blue-700">
                                 <div className="flex items-center justify-between mb-4">
-                                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Avisos Recentes</h2>
+                                    <h2 className="text-lg font-bold text-blue-900 dark:text-blue-100 flex items-center gap-2">
+                                        <Bell className="w-5 h-5" />
+                                        Avisos Recentes
+                                    </h2>
                                     <button
                                         onClick={() => setActiveTab('avisos')}
-                                        className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                                        className="text-sm text-blue-700 dark:text-blue-300 hover:underline font-medium"
                                     >
-                                        Ver todos
+                                        Ver todos →
                                     </button>
                                 </div>
                                 {recentAvisos.length > 0 ? (
                                     <div className="space-y-3">
                                         {recentAvisos.map(aviso => (
-                                            <div key={aviso.id} className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                                                <p className="font-medium text-gray-900 dark:text-white">{aviso.titulo}</p>
-                                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{aviso.mensagem}</p>
+                                            <div key={aviso.id} className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border-l-4 border-blue-500 hover:shadow-md transition-shadow">
+                                                <p className="font-semibold text-gray-900 dark:text-white">{aviso.titulo}</p>
+                                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 line-clamp-2">{aviso.mensagem}</p>
                                             </div>
                                         ))}
                                     </div>
                                 ) : (
-                                    <p className="text-gray-500 dark:text-gray-400">Nenhum aviso recente</p>
+                                    <div className="text-center py-8">
+                                        <Bell className="w-12 h-12 mx-auto text-blue-300 dark:text-blue-700 mb-2" />
+                                        <p className="text-gray-500 dark:text-gray-400">Nenhum aviso recente</p>
+                                    </div>
                                 )}
                             </div>
 
                             {/* Próximos Eventos */}
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                            <div className="bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-800/20 rounded-lg shadow-md p-6 border border-green-200 dark:border-green-700">
                                 <div className="flex items-center justify-between mb-4">
-                                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Próximos Eventos</h2>
+                                    <h2 className="text-lg font-bold text-green-900 dark:text-green-100 flex items-center gap-2">
+                                        <Calendar className="w-5 h-5" />
+                                        Próximos Eventos
+                                    </h2>
                                     <button
                                         onClick={() => setActiveTab('eventos')}
-                                        className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                                        className="text-sm text-green-700 dark:text-green-300 hover:underline font-medium"
                                     >
-                                        Ver calendário
+                                        Ver calendário →
                                     </button>
                                 </div>
                                 {futureEvents.slice(0, 3).length > 0 ? (
-                                    <div className="space-y-2">
+                                    <div className="space-y-3">
                                         {futureEvents.slice(0, 3).map(event => (
                                             <div
                                                 key={event.id}
                                                 onClick={() => handleSelectEvent(event)}
-                                                className="p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 cursor-pointer transition-colors"
+                                                className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md cursor-pointer transition-all border-l-4 border-green-500 hover:scale-[1.02]"
                                             >
-                                                <p className="font-medium text-gray-900 dark:text-white">
+                                                <p className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                                                     {event.tipo === 'oficina' && '🎓 '}
                                                     {event.nome}
                                                 </p>
-                                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 flex items-center gap-1">
+                                                    <Clock className="w-4 h-4" />
                                                     {format(parseISO(event.data), "d 'de' MMMM 'às' HH:mm", { locale: ptBR })}
                                                 </p>
                                             </div>
                                         ))}
                                     </div>
                                 ) : (
-                                    <p className="text-gray-500 dark:text-gray-400">Nenhum evento agendado</p>
+                                    <div className="text-center py-8">
+                                        <Calendar className="w-12 h-12 mx-auto text-green-300 dark:text-green-700 mb-2" />
+                                        <p className="text-gray-500 dark:text-gray-400">Nenhum evento agendado</p>
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -1045,12 +1220,12 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     onClick={async () => {
                                                         try {
                                                             if (isUnread) {
-                                                                await markAvisoAsRead(aviso.id, currentMember.id);
+                                                                await markAvisoAsRead(aviso.id, localMember.id);
                                                                 // Atualizar lista de avisos
-                                                                const avisosDoMembro = await getAvisosWithReadStatus(currentMember.id);
+                                                                const avisosDoMembro = await getAvisosWithReadStatus(localMember.id);
                                                                 setFilteredAvisos(avisosDoMembro || []);
                                                                 // Atualizar contador
-                                                                const newCount = await getUnreadAvisosCount(currentMember.id);
+                                                                const newCount = await getUnreadAvisosCount(localMember.id);
                                                                 setUnreadAvisosCount(newCount);
                                                             }
                                                         } catch (error) {
@@ -1203,20 +1378,168 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                     {/* Louvor */}
                     {activeTab === 'louvor' && (
                         <div className="space-y-4">
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-                                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-                                    <Music className="w-6 h-6 mr-2 text-purple-600" />
-                                    Ministério de Louvor
-                                </h2>
-                                <p className="text-gray-600 dark:text-gray-400 mb-4">
-                                    Ministério dedicado a conduzir a congregação em adoração através da música.
-                                </p>
-                                <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-                                    <p className="text-sm text-gray-700 dark:text-gray-300">
-                                        Confira as músicas que estamos cantando na aba "Playlist Zoe" 🎵
+                            {isLiderLouvor ? (
+                                <>
+                                    {/* Botões de ação */}
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={() => setShowCreateScheduleModal(true)}
+                                            className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
+                                        >
+                                            <Plus className="w-5 h-5" />
+                                            Nova Escala
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setNewMusicData({ nome: '', artista: '', link: '' });
+                                                setShowMusicModal(true);
+                                            }}
+                                            className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
+                                        >
+                                            <Plus className="w-5 h-5" />
+                                            Nova Música
+                                        </button>
+                                    </div>
+
+                                    {/* Cards de estatísticas */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div 
+                                            onClick={() => setShowMusiciansModal(true)}
+                                            className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-md hover:scale-105 transition-all"
+                                        >
+                                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Músicos Ativos</p>
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                                                    {louvorMembers.length}
+                                                </p>
+                                                <Music className="w-8 h-8 text-purple-500" />
+                                            </div>
+                                        </div>
+                                        <div 
+                                            onClick={() => setShowMusicListModal(true)}
+                                            className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-md hover:scale-105 transition-all"
+                                        >
+                                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Músicas Cadastradas</p>
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-3xl font-bold text-gray-900 dark:text-white">{playlistMusicas.length}</p>
+                                                <Music className="w-8 h-8 text-green-500" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Próximas escalas */}
+                                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                                            <Calendar className="w-5 h-5 text-purple-600" />
+                                            Próximas escalas ({louvorSchedules.length})
+                                        </h3>
+                                        {louvorSchedules.length === 0 ? (
+                                            <div className="text-center py-12">
+                                                <Calendar className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                                                <p className="text-gray-500 dark:text-gray-400 mb-1">Nenhuma escala criada ainda.</p>
+                                                <p className="text-sm text-gray-400 dark:text-gray-500">Clique em "Nova Escala" para criar a primeira.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-3">
+                                                {louvorSchedules.slice(0, 5).map((escala) => (
+                                                    <div
+                                                        key={escala.id}
+                                                        className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                                    >
+                                                        <div className="flex-1">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">
+                                                                {format(parseISO(escala.data), "d 'de' MMMM", { locale: ptBR })}
+                                                            </p>
+                                                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                                                {escala.horario} • {escala.categoria}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setScheduleToEdit(escala);
+                                                                    setNewScheduleData({
+                                                                        data: escala.data,
+                                                                        horario: escala.horario || '',
+                                                                        categoria: escala.categoria || 'culto',
+                                                                        descricao: escala.descricao || '',
+                                                                        local: escala.local || '',
+                                                                        observacoes: escala.observacoes || '',
+                                                                        membros_ids: escala.membros_ids || []
+                                                                    });
+                                                                    setShowEditScheduleModal(true);
+                                                                }}
+                                                                className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
+                                                            >
+                                                                <Edit className="w-4 h-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDeleteSchedule(escala.id)}
+                                                                className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                                                            >
+                                                                <X className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Equipe de Louvor */}
+                                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Equipe de Louvor</h3>
+                                        <div className="space-y-2">
+                                            {(() => {
+                                                const louvorMemberIds = new Set();
+                                                louvorSchedules.forEach(escala => {
+                                                    escala.membros_ids?.forEach(id => louvorMemberIds.add(id));
+                                                });
+                                                
+                                                if (louvorMemberIds.size === 0) {
+                                                    return (
+                                                        <p className="text-center text-gray-500 dark:text-gray-400 py-8">
+                                                            Nenhum músico escalado ainda
+                                                        </p>
+                                                    );
+                                                }
+                                                
+                                                return Array.from(louvorMemberIds).map((memberId) => {
+                                                    const member = scheduleMembers.find(m => m.id === memberId);
+                                                    if (!member) return null;
+                                                    
+                                                    return (
+                                                        <div
+                                                            key={memberId}
+                                                            className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+                                                        >
+                                                            <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center text-white font-bold">
+                                                                <Music className="w-5 h-5" />
+                                                            </div>
+                                                            <p className="font-medium text-gray-900 dark:text-white">{member.nome}</p>
+                                                        </div>
+                                                    );
+                                                });
+                                            })()}
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
+                                        <Music className="w-6 h-6 mr-2 text-purple-600" />
+                                        Ministério de Louvor
+                                    </h2>
+                                    <p className="text-gray-600 dark:text-gray-400 mb-4">
+                                        Ministério dedicado a conduzir a congregação em adoração através da música.
                                     </p>
+                                    <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                                        <p className="text-sm text-gray-700 dark:text-gray-300">
+                                            Confira as músicas que estamos cantando na aba "Playlist Zoe" 🎵
+                                        </p>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
                     )}
 
@@ -1383,8 +1706,8 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         <div className="flex-1">
                                             <h4 className="font-semibold text-gray-900 dark:text-white">{currentMember?.nome}</h4>
                                             <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                {currentMember?.funcoes && currentMember.funcoes.length > 0
-                                                    ? currentMember.funcoes.join(', ')
+                                                {currentMember?.funcoes && localMember.funcoes.length > 0
+                                                    ? localMember.funcoes.join(', ')
                                                     : currentMember?.funcao || 'Membro'
                                                 }
                                             </p>
@@ -1394,10 +1717,10 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                 // Garantir que funcoes seja sempre um array
                                                 let funcoesArray = [];
 
-                                                if (Array.isArray(currentMember?.funcoes) && currentMember.funcoes.length > 0) {
-                                                    funcoesArray = [...currentMember.funcoes];
+                                                if (Array.isArray(currentMember?.funcoes) && localMember.funcoes.length > 0) {
+                                                    funcoesArray = [...localMember.funcoes];
                                                 } else if (currentMember?.funcao) {
-                                                    funcoesArray = [currentMember.funcao];
+                                                    funcoesArray = [localMember.funcao];
                                                 } else {
                                                     funcoesArray = ['membro'];
                                                 }
@@ -1430,7 +1753,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             <p className="text-sm text-gray-600 dark:text-gray-400">Data de Nascimento</p>
                                             <p className="font-medium text-gray-900 dark:text-white">
                                                 {currentMember?.nascimento
-                                                    ? format(parseISO(currentMember.nascimento), "dd/MM/yyyy", { locale: ptBR })
+                                                    ? format(parseISO(localMember.nascimento), "dd/MM/yyyy", { locale: ptBR })
                                                     : 'Não informado'
                                                 }
                                             </p>
@@ -1439,7 +1762,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             <p className="text-sm text-gray-600 dark:text-gray-400">Idade</p>
                                             <p className="font-medium text-gray-900 dark:text-white">
                                                 {currentMember?.nascimento
-                                                    ? `${calculateAge(currentMember.nascimento)} anos`
+                                                    ? `${calculateAge(localMember.nascimento)} anos`
                                                     : 'Não informado'
                                                 }
                                             </p>
@@ -1503,7 +1826,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     <div
                                         className="flex items-center justify-between cursor-pointer p-4"
                                         onClick={() => {
-                                            const familyId = myFamily?.nome || currentMember.familia;
+                                            const familyId = myFamily?.nome || localMember.familia;
                                             setExpandedFamilies(prev => ({
                                                 ...prev,
                                                 [familyId]: !prev[familyId]
@@ -1516,7 +1839,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             </div>
                                             <div>
                                                 <h3 className="font-bold text-gray-900 dark:text-white text-base md:text-lg">
-                                                    {myFamily?.nome || currentMember.familia}
+                                                    {myFamily?.nome || localMember.familia}
                                                 </h3>
                                                 <p className="text-xs text-gray-500 dark:text-gray-400">
                                                     {myFamily ? `${myFamily.membros.length} ${myFamily.membros.length === 1 ? 'membro' : 'membros'}` : 'Minha família'}
@@ -1543,7 +1866,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             >
                                                 <Edit className="w-5 h-5" />
                                             </button>
-                                            {expandedFamilies[myFamily?.nome || currentMember.familia] ? (
+                                            {expandedFamilies[myFamily?.nome || localMember.familia] ? (
                                                 <ChevronRight className="w-6 h-6 text-gray-500 dark:text-gray-400 transform rotate-90 transition-transform" />
                                             ) : (
                                                 <ChevronRight className="w-6 h-6 text-gray-500 dark:text-gray-400 transition-transform" />
@@ -1551,7 +1874,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         </div>
                                     </div>
 
-                                    {expandedFamilies[myFamily?.nome || currentMember.familia] && (
+                                    {expandedFamilies[myFamily?.nome || localMember.familia] && (
                                         <div className="space-y-3 p-4 pt-0 border-t border-gray-200 dark:border-gray-700">
                                             {myFamily ? (
                                                 // Mostrar membros da família criada
@@ -1582,10 +1905,10 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                         </div>
                                                         <div>
                                                             <h4 className="font-medium text-gray-900 dark:text-white text-sm">
-                                                                {currentMember.nome} (Você)
+                                                                {localMember.nome} (Você)
                                                             </h4>
                                                             <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                                                                <span>{currentMember.funcao || 'Membro'}</span>
+                                                                <span>{localMember.funcao || 'Membro'}</span>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1630,7 +1953,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         genero: newMemberData.genero,
                                         funcoes: newMemberData.funcoes,
                                         status: 'ativo',
-                                        familia: currentMember.familia || currentMember.nome,
+                                        familia: localMember.familia || localMember.nome,
                                         senha: 'senha123'
                                     };
 
@@ -1653,12 +1976,12 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     } else {
                                         // Criar família se não existir
                                         setMyFamily({
-                                            nome: currentMember.familia || currentMember.nome,
+                                            nome: localMember.familia || localMember.nome,
                                             descricao: '',
                                             membros: [
                                                 {
-                                                    nome: currentMember.nome,
-                                                    funcao: currentMember.funcao || 'Membro',
+                                                    nome: localMember.nome,
+                                                    funcao: localMember.funcao || 'Membro',
                                                     isCurrentUser: true
                                                 },
                                                 {
@@ -1851,11 +2174,11 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     // Criar família com o membro atual e membros selecionados
                                     const familyMembers = [
                                         {
-                                            id: currentMember.id,
-                                            nome: currentMember.nome,
-                                            funcao: currentMember.funcao || 'Membro',
-                                            funcoes: currentMember.funcoes || [],
-                                            idade: currentMember.idade,
+                                            id: localMember.id,
+                                            nome: localMember.nome,
+                                            funcao: localMember.funcao || 'Membro',
+                                            funcoes: localMember.funcoes || [],
+                                            idade: localMember.idade,
                                             isCurrentUser: true
                                         },
                                         ...selectedMembers
@@ -2132,7 +2455,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                         <div>
                                                             <p className="font-medium text-gray-900 dark:text-white">
                                                                 {membro.nome}
-                                                                {membro.id === currentMember.id && (
+                                                                {membro.id === localMember.id && (
                                                                     <span className="ml-2 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">
                                                                         Você
                                                                     </span>
@@ -2143,7 +2466,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                             </p>
                                                         </div>
                                                     </div>
-                                                    {membro.id !== currentMember.id && (
+                                                    {membro.id !== localMember.id && (
                                                         <button
                                                             type="button"
                                                             onClick={async () => {
@@ -2347,9 +2670,9 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
                                 try {
                                     console.log('Iniciando atualização de perfil...', {
-                                        id: currentMember.id,
+                                        id: localMember.id,
                                         dados: editProfileData,
-                                        funcoesAtuais: currentMember.funcoes
+                                        funcoesAtuais: localMember.funcoes
                                     });
 
                                     // Validar se há pelo menos uma função selecionada
@@ -2361,7 +2684,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     console.log('Funções que serão salvas:', editProfileData.funcoes);
 
                                     // Atualizar perfil no Supabase
-                                    const updatedMember = await updateMember(currentMember.id, {
+                                    const updatedMember = await updateMember(localMember.id, {
                                         nome: editProfileData.nome,
                                         telefone: editProfileData.telefone || null,
                                         nascimento: editProfileData.nascimento || null,
@@ -2740,6 +3063,458 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </button>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal de Lista de Músicas */}
+                {showMusicListModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <Music className="w-6 h-6 text-green-500" />
+                                    Músicas Cadastradas ({playlistMusicas.length})
+                                </h3>
+                                <button
+                                    onClick={() => setShowMusicListModal(false)}
+                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                                >
+                                    <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                                </button>
+                            </div>
+                            
+                            <div className="space-y-3">
+                                {playlistMusicas.length === 0 ? (
+                                    <div className="text-center py-12">
+                                        <Music className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                                        <p className="text-gray-500 dark:text-gray-400">Nenhuma música cadastrada ainda</p>
+                                    </div>
+                                ) : (
+                                    playlistMusicas.map((musica, index) => (
+                                        <div 
+                                            key={musica.id} 
+                                            className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg border border-green-200 dark:border-green-800"
+                                        >
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="text-sm font-bold text-green-700 dark:text-green-400">
+                                                            #{index + 1}
+                                                        </span>
+                                                        <h4 className="font-bold text-gray-900 dark:text-white">
+                                                            {musica.titulo}
+                                                        </h4>
+                                                    </div>
+                                                    {musica.artista && (
+                                                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                                                            {musica.artista}
+                                                        </p>
+                                                    )}
+                                                    {musica.duracao && (
+                                                        <p className="text-xs text-gray-500 dark:text-gray-500">
+                                                            Duração: {musica.duracao}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                {musica.link && (
+                                                    <button
+                                                        onClick={() => {
+                                                            let link = musica.link;
+                                                            if (link.includes('youtu.be/')) {
+                                                                const videoId = link.split('youtu.be/')[1].split('?')[0];
+                                                                link = `https://www.youtube.com/watch?v=${videoId}`;
+                                                            }
+                                                            window.open(link, '_blank', 'noopener,noreferrer');
+                                                        }}
+                                                        className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 flex items-center gap-2 whitespace-nowrap"
+                                                    >
+                                                        <Music className="w-4 h-4" />
+                                                        Ouvir
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                            
+                            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                <button
+                                    onClick={() => setShowMusicListModal(false)}
+                                    className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+                                >
+                                    Fechar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal de Músicos Ativos */}
+                {showMusiciansModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <Music className="w-6 h-6 text-purple-500" />
+                                    Músicos Ativos
+                                </h3>
+                                <button
+                                    onClick={() => setShowMusiciansModal(false)}
+                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                                >
+                                    <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                                </button>
+                            </div>
+                            
+                            <div className="space-y-2">
+                                {louvorMembers.length === 0 ? (
+                                    <div className="text-center py-12">
+                                        <Users className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                                        <p className="text-gray-500 dark:text-gray-400">Nenhum músico cadastrado ainda</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                                            Total de {louvorMembers.length} {louvorMembers.length === 1 ? 'músico' : 'músicos'} na equipe
+                                        </p>
+                                        {louvorMembers.map((member) => {
+                                            // Contar quantas escalas esse membro tem
+                                            const escalasCount = louvorSchedules.filter(escala => 
+                                                escala.membros_ids?.includes(member.id)
+                                            ).length;
+                                            
+                                            return (
+                                                <div
+                                                    key={member.id}
+                                                    className="flex items-center gap-3 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800"
+                                                >
+                                                    <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                                                        {member.nome.charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="font-bold text-gray-900 dark:text-white">
+                                                            {member.nome}
+                                                            {member.id === localMember?.id && (
+                                                                <span className="ml-2 text-xs bg-purple-600 text-white px-2 py-1 rounded-full">
+                                                                    Você
+                                                                </span>
+                                                            )}
+                                                        </p>
+                                                        {member.telefone && (
+                                                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                                                {member.telefone}
+                                                            </p>
+                                                        )}
+                                                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                            {member.funcoes?.join(', ') || 'Louvor'}
+                                                        </p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-xs text-gray-500 dark:text-gray-500">
+                                                            {escalasCount} {escalasCount === 1 ? 'escala' : 'escalas'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </>
+                                )}
+                            </div>
+                            
+                            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                <button
+                                    onClick={() => setShowMusiciansModal(false)}
+                                    className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+                                >
+                                    Fechar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal de Criar Escala de Louvor */}
+                {showCreateScheduleModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                            <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Nova Escala de Louvor</h3>
+                            <form onSubmit={(e) => {
+                                e.preventDefault();
+                                handleCreateSchedule();
+                            }} className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                            Data *
+                                        </label>
+                                        <input
+                                            type="date"
+                                            required
+                                            value={newScheduleData.data}
+                                            onChange={(e) => setNewScheduleData({ ...newScheduleData, data: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                            Horário
+                                        </label>
+                                        <input
+                                            type="time"
+                                            value={newScheduleData.horario}
+                                            onChange={(e) => setNewScheduleData({ ...newScheduleData, horario: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Categoria
+                                    </label>
+                                    <select
+                                        value={newScheduleData.categoria}
+                                        onChange={(e) => setNewScheduleData({ ...newScheduleData, categoria: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    >
+                                        <option value="culto">Culto</option>
+                                        <option value="ensaio">Ensaio</option>
+                                        <option value="evento">Evento</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Descrição
+                                    </label>
+                                    <textarea
+                                        value={newScheduleData.descricao}
+                                        onChange={(e) => setNewScheduleData({ ...newScheduleData, descricao: e.target.value })}
+                                        rows="2"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        placeholder="Detalhes sobre esta escala..."
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Local
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={newScheduleData.local}
+                                        onChange={(e) => setNewScheduleData({ ...newScheduleData, local: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        placeholder="Local do culto/evento"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Observações
+                                    </label>
+                                    <textarea
+                                        value={newScheduleData.observacoes}
+                                        onChange={(e) => setNewScheduleData({ ...newScheduleData, observacoes: e.target.value })}
+                                        rows="2"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        placeholder="Observações importantes..."
+                                    />
+                                </div>
+
+                                <div className="flex justify-end space-x-2 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowCreateScheduleModal(false)}
+                                        className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                                    >
+                                        Criar Escala
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal de Editar Escala de Louvor */}
+                {showEditScheduleModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                            <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Editar Escala de Louvor</h3>
+                            <form onSubmit={(e) => {
+                                e.preventDefault();
+                                handleUpdateSchedule();
+                            }} className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                            Data *
+                                        </label>
+                                        <input
+                                            type="date"
+                                            required
+                                            value={newScheduleData.data}
+                                            onChange={(e) => setNewScheduleData({ ...newScheduleData, data: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                            Horário
+                                        </label>
+                                        <input
+                                            type="time"
+                                            value={newScheduleData.horario}
+                                            onChange={(e) => setNewScheduleData({ ...newScheduleData, horario: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Categoria
+                                    </label>
+                                    <select
+                                        value={newScheduleData.categoria}
+                                        onChange={(e) => setNewScheduleData({ ...newScheduleData, categoria: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    >
+                                        <option value="culto">Culto</option>
+                                        <option value="ensaio">Ensaio</option>
+                                        <option value="evento">Evento</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Descrição
+                                    </label>
+                                    <textarea
+                                        value={newScheduleData.descricao}
+                                        onChange={(e) => setNewScheduleData({ ...newScheduleData, descricao: e.target.value })}
+                                        rows="2"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        placeholder="Detalhes sobre esta escala..."
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Local
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={newScheduleData.local}
+                                        onChange={(e) => setNewScheduleData({ ...newScheduleData, local: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        placeholder="Local do culto/evento"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Observações
+                                    </label>
+                                    <textarea
+                                        value={newScheduleData.observacoes}
+                                        onChange={(e) => setNewScheduleData({ ...newScheduleData, observacoes: e.target.value })}
+                                        rows="2"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        placeholder="Observações importantes..."
+                                    />
+                                </div>
+
+                                <div className="flex justify-end space-x-2 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowEditScheduleModal(false)}
+                                        className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                    >
+                                        Salvar Alterações
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal de adicionar música */}
+                {showMusicModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
+                        <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg max-w-md w-full">
+                            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Adicionar Música</h3>
+                            <form onSubmit={handleSubmitMusic} className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Nome da Música *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={newMusicData.nome}
+                                        onChange={(e) => setNewMusicData({ ...newMusicData, nome: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        placeholder="Ex: Bondade de Deus"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Artista
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={newMusicData.artista}
+                                        onChange={(e) => setNewMusicData({ ...newMusicData, artista: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        placeholder="Ex: Isaías Saad"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Link do YouTube
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={newMusicData.link}
+                                        onChange={(e) => setNewMusicData({ ...newMusicData, link: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        placeholder="https://www.youtube.com/watch?v=..."
+                                    />
+                                </div>
+
+                                <div className="flex justify-end space-x-2 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowMusicModal(false)}
+                                        className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                                    >
+                                        Adicionar Música
+                                    </button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 )}

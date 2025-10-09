@@ -522,6 +522,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
 
     // Função para obter iniciais
     const getInitials = (name) => {
+        if (!name) return 'M';
         return name
             .split(' ')
             .map(word => word[0])
@@ -2044,7 +2045,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                         Músicos escalados:
                                                     </span>
                                                     <div className="mt-1 flex flex-wrap gap-2">
-                                                        {escala.musicos.map((musico, mIndex) => (
+                                                        {escala.musicos.filter(m => m && m.nome).map((musico, mIndex) => (
                                                             <span
                                                                 key={mIndex}
                                                                 className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${isProxima
@@ -4620,7 +4621,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                             <div className="flex items-center justify-between mb-6">
                                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                     <Music className="w-7 h-7 text-purple-600" />
-                                    Músicos Ativos ({members.filter(m => m.funcao === 'músico' || m.funcao === 'líder de louvor' || m.funcao === 'louvor').length})
+                                    Músicos Ativos ({members.filter(m => {
+                                        if (!m || !m.nome) return false;
+                                        const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+                                        return funcoes.some(f => f === 'músico' || f === 'líder de louvor' || f === 'louvor' || f === 'lider de louvor');
+                                    }).length})
                                 </h2>
                                 <button
                                     onClick={() => setShowMusicosModal(false)}
@@ -4630,16 +4635,26 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 </button>
                             </div>
 
-                            {members.filter(m => m.funcao === 'músico' || m.funcao === 'líder de louvor' || m.funcao === 'louvor').length === 0 ? (
+                            {members.filter(m => {
+                                if (!m || !m.nome) return false;
+                                const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+                                return funcoes.some(f => f === 'músico' || f === 'líder de louvor' || f === 'louvor' || f === 'lider de louvor');
+                            }).length === 0 ? (
                                 <div className="text-center py-12">
                                     <Music className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
                                     <p className="text-gray-500 dark:text-gray-400">Nenhum músico cadastrado ainda.</p>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {members.filter(m => m.funcao === 'músico' || m.funcao === 'líder de louvor' || m.funcao === 'louvor').map((musico, index) => {
+                                    {members.filter(m => {
+                                        if (!m || !m.nome) return false;
+                                        const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+                                        return funcoes.some(f => f === 'músico' || f === 'líder de louvor' || f === 'louvor' || f === 'lider de louvor');
+                                    }).map((musico, index) => {
                                         const age = calculateAge(musico.nascimento);
                                         const initials = getInitials(musico.nome);
+                                        const funcoes = musico.funcoes || (musico.funcao ? [musico.funcao] : []);
+                                        const isLider = funcoes.includes('líder de louvor') || funcoes.includes('lider de louvor');
 
                                         return (
                                             <div key={index} className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800 hover:shadow-md transition-shadow">
@@ -4649,15 +4664,15 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                     </div>
                                                     <div className="flex-1">
                                                         <h4 className="font-semibold text-gray-900 dark:text-white">{musico.nome}</h4>
-                                                        <p className="text-sm text-gray-600 dark:text-gray-400 capitalize">
-                                                            {musico.funcao}
+                                                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                                                            {funcoes.join(', ')}
                                                         </p>
                                                     </div>
-                                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${musico.funcao === 'líder de louvor'
+                                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${isLider
                                                             ? 'bg-purple-600 text-white'
                                                             : 'bg-purple-100 dark:bg-purple-800 text-purple-800 dark:text-purple-200'
                                                         }`}>
-                                                        {musico.funcao === 'líder de louvor' ? 'Líder' : 'Membro'}
+                                                        {isLider ? 'Líder' : 'Membro'}
                                                     </span>
                                                 </div>
                                                 <div className="space-y-1 text-sm">
@@ -4892,7 +4907,10 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white text-sm"
                                                             >
                                                                 <option value="">Selecione um músico</option>
-                                                                {members.filter(m => m.funcao === 'músico' || m.funcao === 'líder de louvor' || m.funcao === 'louvor').map((musico, index) => {
+                                                                {members.filter(m => {
+                                                                    const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+                                                                    return funcoes.some(f => f === 'músico' || f === 'líder de louvor' || f === 'louvor' || f === 'lider de louvor');
+                                                                }).map((musico, index) => {
                                                                     const id = musico.id || `musico-${index}`;
                                                                     return (
                                                                         <option key={id} value={id}>
