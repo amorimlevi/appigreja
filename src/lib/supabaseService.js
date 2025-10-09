@@ -195,6 +195,20 @@ export const updateFamily = async (id, familyData) => {
     return data
 }
 
+export const getFamilyByMemberId = async (memberId) => {
+    const { data, error } = await supabase
+        .from('families')
+        .select('*')
+        .contains('membros_ids', [memberId])
+        .single()
+    
+    if (error) {
+        if (error.code === 'PGRST116') return null
+        throw error
+    }
+    return data
+}
+
 // ========== EVENTOS ==========
 
 export const getEvents = async () => {
@@ -425,7 +439,134 @@ export const createAviso = async (avisoData) => {
         .single()
     
     if (error) throw error
+    
+    // Criar notificações para membros específicos baseado nos destinatários
+    if (data) {
+        const allMembers = await getMembers()
+        let targetMembers = []
+        
+        // Verificar se é para todos ou filtrar por função/flag
+        if (avisoData.destinatarios?.includes('todos')) {
+            targetMembers = allMembers
+        } else {
+            // Filtrar membros que têm pelo menos uma das funções selecionadas
+            targetMembers = allMembers.filter(member => {
+                const memberFuncoes = member.funcoes || []
+                return avisoData.destinatarios?.some(dest => 
+                    memberFuncoes.includes(dest)
+                )
+            })
+        }
+        
+        // Criar notificações apenas para membros filtrados
+        if (targetMembers.length > 0) {
+            const notifications = targetMembers.map(member => ({
+                aviso_id: data.id,
+                membro_id: member.id,
+                lido: false
+            }))
+            
+            await supabase
+                .from('aviso_notifications')
+                .insert(notifications)
+        }
+    }
+    
     return data
+}
+
+export const getUnreadAvisosCount = async (membroId) => {
+    const { count, error } = await supabase
+        .from('aviso_notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('membro_id', membroId)
+        .eq('lido', false)
+    
+    if (error) throw error
+    return count || 0
+}
+
+export const markAvisoAsRead = async (avisoId, membroId) => {
+    const { data, error } = await supabase
+        .from('aviso_notifications')
+        .update({ 
+            lido: true,
+            data_leitura: new Date().toISOString()
+        })
+        .eq('aviso_id', avisoId)
+        .eq('membro_id', membroId)
+    
+    if (error) throw error
+    return data
+}
+
+export const getAvisosWithReadStatus = async (membroId) => {
+    const { data, error } = await supabase
+        .from('avisos')
+        .select(`
+            *,
+            aviso_notifications!inner(lido, data_leitura)
+        `)
+        .eq('aviso_notifications.membro_id', membroId)
+        .order('data_envio', { ascending: false })
+    
+    if (error) throw error
+    return data
+}
+
+export const deleteAviso = async (avisoId) => {
+    const { error } = await supabase
+        .from('avisos')
+        .delete()
+        .eq('id', avisoId)
+    
+    if (error) throw error
+    // As notificações serão deletadas automaticamente devido ao ON DELETE CASCADE
+}
+
+// ========== PLAYLIST ZOE ==========
+
+export const getPlaylistMusicas = async () => {
+    const { data, error } = await supabase
+        .from('playlist_zoe')
+        .select('*')
+        .eq('ativa', true)
+        .order('ordem', { ascending: true })
+    
+    if (error) throw error
+    return data
+}
+
+export const createPlaylistMusica = async (musicaData) => {
+    const { data, error } = await supabase
+        .from('playlist_zoe')
+        .insert([musicaData])
+        .select()
+        .single()
+    
+    if (error) throw error
+    return data
+}
+
+export const updatePlaylistMusica = async (musicaId, updates) => {
+    const { data, error } = await supabase
+        .from('playlist_zoe')
+        .update(updates)
+        .eq('id', musicaId)
+        .select()
+        .single()
+    
+    if (error) throw error
+    return data
+}
+
+export const deletePlaylistMusica = async (musicaId) => {
+    const { error } = await supabase
+        .from('playlist_zoe')
+        .delete()
+        .eq('id', musicaId)
+    
+    if (error) throw error
 }
 
 // ========== PEDIDOS DE ORAÇÃO ==========

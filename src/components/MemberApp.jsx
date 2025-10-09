@@ -31,7 +31,7 @@ import {
 import { format, parseISO, isAfter, isBefore, startOfMonth, endOfMonth, isSameMonth, isToday, addDays, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatId } from '../utils/formatters';
-import { searchMembers, getEventFoods, updateEventFood, registerEventParticipant, unregisterEventParticipant, checkEventRegistration, updateMember, getMinistrySchedules, getMembers } from '../lib/supabaseService';
+import { searchMembers, getEventFoods, updateEventFood, registerEventParticipant, unregisterEventParticipant, checkEventRegistration, updateMember, getMinistrySchedules, getMembers, getFamilyByMemberId, getUnreadAvisosCount, markAvisoAsRead, getAvisosWithReadStatus, getPlaylistMusicas } from '../lib/supabaseService';
 
 const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLogout }) => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -48,19 +48,45 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
         return age;
     };
 
-    const menuItems = [
+    // Definir itens de menu padrão e por flag
+    const defaultMenuItems = [
         { id: 'home', label: 'Dashboard', icon: BarChart3 },
         { id: 'perfil', label: 'Família', icon: Users },
         { id: 'eventos', label: 'Eventos', icon: Calendar },
-        { id: 'aniversarios', label: 'Aniversários', icon: Gift },
         { id: 'avisos', label: 'Avisos', icon: Bell },
-        { id: 'diaconia', label: 'Diaconia', icon: Heart },
-        { id: 'louvor', label: 'Louvor', icon: Music },
         { id: 'playlistzoe', label: 'Playlist Zoe', icon: null },
-        { id: 'kids', label: 'Kids', icon: Baby },
-        { id: 'jovens', label: 'Jovens', icon: Sparkles },
         { id: 'configuracoes', label: 'Configurações', icon: Settings }
     ];
+
+    const flagMenuItems = {
+        'louvor': { id: 'louvor', label: 'Louvor', icon: Music },
+        'líder de louvor': { id: 'louvor', label: 'Louvor', icon: Music },
+        'diaconia': { id: 'diaconia', label: 'Diaconia', icon: Heart },
+        'lider da diaconia': { id: 'diaconia', label: 'Diaconia', icon: Heart },
+        'kids': { id: 'kids', label: 'Kids', icon: Baby },
+        'lider kids': { id: 'kids', label: 'Kids', icon: Baby },
+        'professor kids': { id: 'kids', label: 'Kids', icon: Baby },
+        'jovens': { id: 'jovens', label: 'Jovens', icon: Sparkles },
+        'jovem': { id: 'jovens', label: 'Jovens', icon: Sparkles },
+        'lider jovens': { id: 'jovens', label: 'Jovens', icon: Sparkles }
+    };
+
+    // Filtrar itens de menu baseado nas flags do membro
+    const menuItems = useMemo(() => {
+        const items = [...defaultMenuItems];
+        const memberFuncoes = currentMember?.funcoes || [];
+        const addedIds = new Set();
+        
+        // Adicionar itens de menu para cada flag que o membro possui (evitar duplicatas)
+        memberFuncoes.forEach(funcao => {
+            if (flagMenuItems[funcao] && !addedIds.has(flagMenuItems[funcao].id)) {
+                items.push(flagMenuItems[funcao]);
+                addedIds.add(flagMenuItems[funcao].id);
+            }
+        });
+        
+        return items;
+    }, [currentMember]);
     const [activeTab, setActiveTab] = useState('home');
     const [calendarDate, setCalendarDate] = useState(new Date());
     const [eventView, setEventView] = useState('calendar'); // 'calendar' ou 'list'
@@ -96,10 +122,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
         return localStorage.getItem('darkMode') === 'true' || false;
     });
     const [searchResults, setSearchResults] = useState([]);
-    const [playlistMusicas, setPlaylistMusicas] = useState(() => {
-        const saved = localStorage.getItem('playlistZoe');
-        return saved ? JSON.parse(saved) : [];
-    });
+    const [playlistMusicas, setPlaylistMusicas] = useState([]);
     const [showEditProfileModal, setShowEditProfileModal] = useState(false);
     const [editProfileData, setEditProfileData] = useState({
         nome: '',
@@ -116,6 +139,78 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     const [selectedSchedule, setSelectedSchedule] = useState(null);
     const [showScheduleModal, setShowScheduleModal] = useState(false);
     const [scheduleMembers, setScheduleMembers] = useState([]);
+    const [showSearchMemberModal, setShowSearchMemberModal] = useState(false);
+    const [memberSearchQuery, setMemberSearchQuery] = useState('');
+    const [memberSearchResults, setMemberSearchResults] = useState([]);
+    const [unreadAvisosCount, setUnreadAvisosCount] = useState(0);
+    const [filteredAvisos, setFilteredAvisos] = useState([]);
+    const [showRegisterOtherModal, setShowRegisterOtherModal] = useState(false);
+    const [registerOtherSearch, setRegisterOtherSearch] = useState('');
+    const [registerOtherResults, setRegisterOtherResults] = useState([]);
+
+    // Carregar família do membro ao montar o componente
+    useEffect(() => {
+        const loadFamily = async () => {
+            if (currentMember?.id) {
+                try {
+                    const family = await getFamilyByMemberId(currentMember.id);
+                    if (family) {
+                        // Carregar membros completos usando os IDs
+                        const allMembers = await getMembers();
+                        const familyMembers = allMembers.filter(m => 
+                            family.membros_ids?.includes(m.id)
+                        );
+                        
+                        setMyFamily({
+                            ...family,
+                            membros: familyMembers
+                        });
+                    }
+                } catch (error) {
+                    console.error('Erro ao carregar família:', error);
+                }
+            }
+        };
+        loadFamily();
+    }, [currentMember]);
+
+    // Carregar contador de avisos não lidos e avisos filtrados
+    useEffect(() => {
+        const loadAvisosData = async () => {
+            if (currentMember?.id) {
+                try {
+                    // Carregar contador de não lidos
+                    const count = await getUnreadAvisosCount(currentMember.id);
+                    setUnreadAvisosCount(count);
+                    
+                    // Carregar apenas avisos que este membro pode ver
+                    const avisosDoMembro = await getAvisosWithReadStatus(currentMember.id);
+                    setFilteredAvisos(avisosDoMembro || []);
+                } catch (error) {
+                    console.error('Erro ao carregar avisos:', error);
+                }
+            }
+        };
+        loadAvisosData();
+        
+        // Atualizar a cada 30 segundos
+        const interval = setInterval(loadAvisosData, 30000);
+        return () => clearInterval(interval);
+    }, [currentMember, activeTab]);
+
+    // Carregar playlist Zoe
+    useEffect(() => {
+        const loadPlaylist = async () => {
+            try {
+                const musicas = await getPlaylistMusicas();
+                setPlaylistMusicas(musicas || []);
+            } catch (error) {
+                console.error('Erro ao carregar playlist:', error);
+                setPlaylistMusicas([]);
+            }
+        };
+        loadPlaylist();
+    }, []);
 
     // Carregar membros quando abrir o modal de escala
     useEffect(() => {
@@ -224,8 +319,8 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
     // Avisos recentes (últimos 5)
     const recentAvisos = useMemo(() => {
-        return avisos.slice(0, 5);
-    }, [avisos]);
+        return filteredAvisos.slice(0, 5);
+    }, [filteredAvisos]);
 
     // Função para selecionar evento e buscar comidas
     const handleSelectEvent = async (event) => {
@@ -315,6 +410,42 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
         } catch (error) {
             console.error('Erro ao confirmar seleção de comidas:', error);
             alert('Erro ao confirmar seleção. Tente novamente.');
+        }
+    };
+
+    // Buscar membros da família para inscrição de outros
+    const handleRegisterOtherSearch = (query) => {
+        setRegisterOtherSearch(query);
+        
+        if (!myFamily || !myFamily.membros) {
+            setRegisterOtherResults([]);
+            return;
+        }
+
+        if (query.trim().length >= 2) {
+            const filtered = myFamily.membros.filter(member => 
+                member.nome.toLowerCase().includes(query.toLowerCase()) &&
+                member.id !== currentMember.id // Excluir o próprio usuário
+            );
+            setRegisterOtherResults(filtered);
+        } else {
+            // Se não houver busca, mostrar todos da família exceto o próprio usuário
+            const familyMembers = myFamily.membros.filter(member => member.id !== currentMember.id);
+            setRegisterOtherResults(familyMembers);
+        }
+    };
+
+    // Inscrever outra pessoa no evento
+    const handleRegisterOther = async (member) => {
+        try {
+            await registerEventParticipant(selectedEvent.id, member.id);
+            alert(`${member.nome} foi inscrito(a) no evento com sucesso!`);
+            setShowRegisterOtherModal(false);
+            setRegisterOtherSearch('');
+            setRegisterOtherResults([]);
+        } catch (error) {
+            console.error('Erro ao inscrever pessoa:', error);
+            alert('Erro ao inscrever pessoa. Tente novamente.');
         }
     };
 
@@ -447,8 +578,8 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 </div>
                             )}
 
-                            {/* Botão de inscrição */}
-                            <div className="mt-6">
+                            {/* Botões de inscrição */}
+                            <div className="mt-6 space-y-3">
                                 <button
                                     onClick={handleEventRegistration}
                                     className={`w-full px-6 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center ${isRegistered
@@ -473,6 +604,17 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         ✓ Você está inscrito neste evento
                                     </p>
                                 )}
+                                
+                                <button
+                                    onClick={() => {
+                                        setShowRegisterOtherModal(true);
+                                        handleRegisterOtherSearch('');
+                                    }}
+                                    className="w-full px-6 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white border border-blue-700"
+                                >
+                                    <Users className="h-5 w-5 mr-2" />
+                                    Inscrever Familiar
+                                </button>
                             </div>
 
                             {hasFood && (
@@ -617,11 +759,16 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     setActiveTab(item.id);
                                                     setSidebarOpen(false);
                                                 }}
-                                                className={`flex flex-col items-center justify-center p-4 rounded-2xl transition-all ${isActive
+                                                className={`relative flex flex-col items-center justify-center p-4 rounded-2xl transition-all ${isActive
                                                         ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-lg scale-105'
                                                         : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:scale-105'
                                                     }`}
                                             >
+                                                {item.id === 'avisos' && unreadAvisosCount > 0 && (
+                                                    <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+                                                        {unreadAvisosCount}
+                                                    </span>
+                                                )}
                                                 {item.id === 'playlistzoe' ? (
                                                     <span className="w-7 h-7 mb-2 flex items-center justify-center font-bold text-2xl">Z</span>
                                                 ) : (
@@ -881,19 +1028,61 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                         <div className="space-y-4">
                             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
                                 <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Avisos</h2>
-                                {avisos.length > 0 ? (
+                                {filteredAvisos.length > 0 ? (
                                     <div className="space-y-3">
-                                        {avisos.map(aviso => (
-                                            <div key={aviso.id} className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                                <h3 className="font-semibold text-gray-900 dark:text-white">{aviso.titulo}</h3>
-                                                <p className="text-gray-600 dark:text-gray-400 mt-2">{aviso.mensagem}</p>
-                                                {aviso.destinatarios && (
+                                        {filteredAvisos.map(aviso => {
+                                            const notification = aviso.aviso_notifications?.[0];
+                                            const isUnread = notification && !notification.lido;
+                                            
+                                            return (
+                                                <div 
+                                                    key={aviso.id} 
+                                                    className={`p-4 rounded-lg border cursor-pointer transition-colors ${
+                                                        isUnread 
+                                                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/30' 
+                                                            : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                    }`}
+                                                    onClick={async () => {
+                                                        try {
+                                                            if (isUnread) {
+                                                                await markAvisoAsRead(aviso.id, currentMember.id);
+                                                                // Atualizar lista de avisos
+                                                                const avisosDoMembro = await getAvisosWithReadStatus(currentMember.id);
+                                                                setFilteredAvisos(avisosDoMembro || []);
+                                                                // Atualizar contador
+                                                                const newCount = await getUnreadAvisosCount(currentMember.id);
+                                                                setUnreadAvisosCount(newCount);
+                                                            }
+                                                        } catch (error) {
+                                                            console.error('Erro ao marcar aviso como lido:', error);
+                                                        }
+                                                    }}
+                                                >
+                                                    <div className="flex items-start justify-between">
+                                                        <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                                                            {isUnread && (
+                                                                <span className="w-2 h-2 bg-blue-600 rounded-full"></span>
+                                                            )}
+                                                            {aviso.titulo}
+                                                        </h3>
+                                                        {isUnread && (
+                                                            <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full">
+                                                                Novo
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-gray-600 dark:text-gray-400 mt-2">{aviso.mensagem}</p>
+                                                <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                                                    {format(parseISO(aviso.data_envio), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                                </p>
+                                                {aviso.destinatarios && aviso.destinatarios.length > 0 && (
                                                     <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
-                                                        Para: {aviso.destinatarios.join(', ')}
+                                                    Para: {aviso.destinatarios.join(', ')}
                                                     </p>
-                                                )}
-                                            </div>
-                                        ))}
+                                                    )}
+                                                    </div>
+                                                    );
+                                        })}
                                     </div>
                                 ) : (
                                     <p className="text-gray-500 dark:text-gray-400">Nenhum aviso disponível</p>
@@ -1054,18 +1243,31 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             <div key={musica.id} className="p-4 bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 rounded-lg border-l-4 border-red-500">
                                                 <div className="flex items-center justify-between gap-3">
                                                     <div className="flex-1">
-                                                        <h4 className="font-semibold text-gray-900 dark:text-white">{musica.nome}</h4>
-                                                        <p className="text-sm text-gray-600 dark:text-gray-400">{musica.artista}</p>
+                                                        <h4 className="font-semibold text-gray-900 dark:text-white">{musica.titulo}</h4>
+                                                        {musica.artista && (
+                                                            <p className="text-sm text-gray-600 dark:text-gray-400">{musica.artista}</p>
+                                                        )}
+                                                        {musica.duracao && (
+                                                            <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">{musica.duracao}</p>
+                                                        )}
                                                     </div>
-                                                    <a
-                                                        href={musica.link}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 flex items-center gap-2"
-                                                    >
-                                                        <Music className="w-4 h-4" />
-                                                        Ouvir
-                                                    </a>
+                                                    {musica.link && (
+                                                        <button
+                                                            onClick={() => {
+                                                                // Converter youtu.be para youtube.com se necessário
+                                                                let link = musica.link;
+                                                                if (link.includes('youtu.be/')) {
+                                                                    const videoId = link.split('youtu.be/')[1].split('?')[0];
+                                                                    link = `https://www.youtube.com/watch?v=${videoId}`;
+                                                                }
+                                                                window.open(link, '_blank', 'noopener,noreferrer');
+                                                            }}
+                                                            className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 flex items-center gap-2"
+                                                        >
+                                                            <Music className="w-4 h-4" />
+                                                            Ouvir
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
                                         ))
@@ -1901,6 +2103,93 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     />
                                 </div>
 
+                                {/* Lista de Membros */}
+                                <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Membros da Família
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowSearchMemberModal(true);
+                                            }}
+                                            className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                        >
+                                            <Plus className="w-4 h-4" />
+                                            Adicionar Membro
+                                        </button>
+                                    </div>
+                                    <div className="space-y-2 max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-2">
+                                        {myFamily?.membros && myFamily.membros.length > 0 ? (
+                                            myFamily.membros.map((membro) => (
+                                                <div
+                                                    key={membro.id}
+                                                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <User className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                                                        <div>
+                                                            <p className="font-medium text-gray-900 dark:text-white">
+                                                                {membro.nome}
+                                                                {membro.id === currentMember.id && (
+                                                                    <span className="ml-2 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">
+                                                                        Você
+                                                                    </span>
+                                                                )}
+                                                            </p>
+                                                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                                                {membro.funcoes?.join(', ') || 'Membro'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    {membro.id !== currentMember.id && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={async () => {
+                                                                if (confirm(`Deseja remover ${membro.nome} da família?`)) {
+                                                                    try {
+                                                                        const newMembrosIds = editFamilyData.membrosIds.filter(id => id !== membro.id);
+                                                                        setEditFamilyData({
+                                                                            ...editFamilyData,
+                                                                            membrosIds: newMembrosIds
+                                                                        });
+                                                                        
+                                                                        // Atualizar no banco
+                                                                        const { updateFamily } = await import('../lib/supabaseService');
+                                                                        await updateFamily(editFamilyData.id, {
+                                                                            membros_ids: newMembrosIds
+                                                                        });
+                                                                        
+                                                                        // Atualizar estado local
+                                                                        setMyFamily({
+                                                                            ...myFamily,
+                                                                            membros: myFamily.membros.filter(m => m.id !== membro.id)
+                                                                        });
+                                                                        
+                                                                        alert('Membro removido com sucesso!');
+                                                                    } catch (error) {
+                                                                        console.error('Erro ao remover membro:', error);
+                                                                        alert('Erro ao remover membro.');
+                                                                    }
+                                                                }
+                                                            }}
+                                                            className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                                                            title="Remover membro"
+                                                        >
+                                                            <X className="w-5 h-5" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <p className="text-center text-gray-500 dark:text-gray-400 py-4">
+                                                Nenhum membro na família ainda.
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+
                                 <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
                                     <button
                                         type="button"
@@ -1919,6 +2208,130 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </button>
                                 </div>
                             </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal de Buscar e Adicionar Membro Existente */}
+                {showSearchMemberModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[110] overflow-y-auto p-4">
+                        <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
+                            <h3 className="text-base md:text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+                                Adicionar Membro à Família
+                            </h3>
+
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+                                    Buscar Membro
+                                </label>
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                                    <input
+                                        type="text"
+                                        value={memberSearchQuery}
+                                        onChange={async (e) => {
+                                            setMemberSearchQuery(e.target.value);
+                                            if (e.target.value.trim().length >= 2) {
+                                                try {
+                                                    const results = await searchMembers(e.target.value.trim());
+                                                    // Filtrar membros que já estão na família
+                                                    const filtered = results.filter(m => 
+                                                        !myFamily?.membros?.some(fm => fm.id === m.id)
+                                                    );
+                                                    setMemberSearchResults(filtered);
+                                                } catch (error) {
+                                                    console.error('Erro ao buscar membros:', error);
+                                                    setMemberSearchResults([]);
+                                                }
+                                            } else {
+                                                setMemberSearchResults([]);
+                                            }
+                                        }}
+                                        className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white"
+                                        placeholder="Digite o nome do membro..."
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Resultados da busca */}
+                            <div className="space-y-2 max-h-96 overflow-y-auto mb-4">
+                                {memberSearchQuery.trim().length >= 2 && memberSearchResults.length === 0 && (
+                                    <p className="text-center text-gray-500 dark:text-gray-400 py-4">
+                                        Nenhum membro encontrado
+                                    </p>
+                                )}
+                                {memberSearchResults.map((membro) => (
+                                    <div
+                                        key={membro.id}
+                                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <User className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                                            <div>
+                                                <p className="font-medium text-gray-900 dark:text-white">
+                                                    {membro.nome}
+                                                </p>
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                                    {membro.funcoes?.join(', ') || 'Membro'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={async () => {
+                                                try {
+                                                    // Adicionar membro à família
+                                                    const newMembrosIds = [...(editFamilyData.membrosIds || []), membro.id];
+                                                    
+                                                    // Atualizar no banco
+                                                    const { updateFamily } = await import('../lib/supabaseService');
+                                                    await updateFamily(editFamilyData.id, {
+                                                        membros_ids: newMembrosIds
+                                                    });
+                                                    
+                                                    // Atualizar estados locais
+                                                    setEditFamilyData({
+                                                        ...editFamilyData,
+                                                        membrosIds: newMembrosIds
+                                                    });
+                                                    
+                                                    setMyFamily({
+                                                        ...myFamily,
+                                                        membros: [...(myFamily.membros || []), membro]
+                                                    });
+                                                    
+                                                    // Limpar busca e fechar modal
+                                                    setMemberSearchQuery('');
+                                                    setMemberSearchResults([]);
+                                                    setShowSearchMemberModal(false);
+                                                    
+                                                    alert(`${membro.nome} foi adicionado à família!`);
+                                                } catch (error) {
+                                                    console.error('Erro ao adicionar membro:', error);
+                                                    alert('Erro ao adicionar membro à família.');
+                                                }
+                                            }}
+                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                                        >
+                                            Adicionar
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowSearchMemberModal(false);
+                                        setMemberSearchQuery('');
+                                        setMemberSearchResults([]);
+                                    }}
+                                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                >
+                                    Fechar
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -2098,6 +2511,67 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
                 {/* Modal de Detalhes do Evento */}
                 {showEventDetailsModal && renderEventDetails()}
+
+                {/* Modal de Inscrever Familiar */}
+                {showRegisterOtherModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full shadow-2xl">
+                            <div className="p-6">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Inscrever Familiar</h2>
+                                    <button
+                                        onClick={() => {
+                                            setShowRegisterOtherModal(false);
+                                            setRegisterOtherSearch('');
+                                            setRegisterOtherResults([]);
+                                        }}
+                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                                    >
+                                        <X className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                                    </button>
+                                </div>
+
+                                {(!myFamily || !myFamily.membros || myFamily.membros.length <= 1) ? (
+                                    <p className="text-center text-gray-500 dark:text-gray-400 py-8">
+                                        Você não possui outros membros cadastrados na sua família.
+                                    </p>
+                                ) : (
+                                    <>
+                                        <div className="mb-4">
+                                            <input
+                                                type="text"
+                                                value={registerOtherSearch}
+                                                onChange={(e) => handleRegisterOtherSearch(e.target.value)}
+                                                placeholder="Buscar familiar por nome..."
+                                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                            />
+                                        </div>
+
+                                        <div className="max-h-96 overflow-y-auto space-y-2">
+                                            {registerOtherResults.length === 0 && registerOtherSearch.length >= 2 && (
+                                                <p className="text-center text-gray-500 dark:text-gray-400 py-4">
+                                                    Nenhum familiar encontrado
+                                                </p>
+                                            )}
+                                            {registerOtherResults.map((member) => (
+                                                <div
+                                                    key={member.id}
+                                                    onClick={() => handleRegisterOther(member)}
+                                                    className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer transition-colors"
+                                                >
+                                                    <p className="font-medium text-gray-900 dark:text-white">{member.nome}</p>
+                                                    {member.email && (
+                                                        <p className="text-sm text-gray-600 dark:text-gray-400">{member.email}</p>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Modal de Detalhes da Escala */}
                 {showScheduleModal && selectedSchedule && (

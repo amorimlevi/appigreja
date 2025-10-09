@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     Menu,
     X,
@@ -40,7 +40,7 @@ import { format, isAfter, isBefore, startOfWeek, endOfWeek, addDays, subDays, di
 import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { formatId } from '../utils/formatters';
-import { getEventFoods, getEventParticipants, deleteEventFood, createMinistrySchedule, getMinistrySchedules, updateMinistrySchedule, deleteMinistrySchedule } from '../lib/supabaseService';
+import { getEventFoods, getEventParticipants, deleteEventFood, createMinistrySchedule, getMinistrySchedules, updateMinistrySchedule, deleteMinistrySchedule, createAviso, getAvisos, deleteAviso, getPlaylistMusicas, createPlaylistMusica, updatePlaylistMusica, deletePlaylistMusica } from '../lib/supabaseService';
 
 const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], families = [], onAddEvent, onEditEvent, onDeleteEvent, onAddMember, onEditMember, onDeleteMember, onAddFamily, onEditFamily, onLogout }) => {
     console.log('ChurchAdminDashboard renderizando - members:', members.length, 'events:', events.length, 'families:', families.length)
@@ -116,16 +116,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         artista: '',
         link: ''
     });
-    const [playlistMusicas, setPlaylistMusicas] = useState(() => {
-        const saved = localStorage.getItem('playlistZoe');
-        return saved ? JSON.parse(saved) : [
-            { id: 1, nome: 'Bondade de Deus', artista: 'Isaías Saad', link: 'https://www.youtube.com/watch?v=xg7pRPTDkd4' },
-            { id: 2, nome: 'Que Se Abram os Céus', artista: 'Gabriela Rocha', link: 'https://www.youtube.com/watch?v=wLU9bPrGdL8' },
-            { id: 3, nome: 'Reckless Love', artista: 'Thalles Roberto', link: 'https://www.youtube.com/watch?v=Sc6SSHuZvQE' },
-            { id: 4, nome: 'Há Poder', artista: 'Gabriela Rocha', link: 'https://www.youtube.com/watch?v=x57zvpAy4B4' },
-            { id: 5, nome: 'O Céu Vai Reagir', artista: 'Sarah Farias', link: 'https://www.youtube.com/watch?v=bSZxeLnyiaU' }
-        ];
-    });
+    const [playlistMusicas, setPlaylistMusicas] = useState([]);
     const [showEscalaModal, setShowEscalaModal] = useState(false);
     const [showEscalaOptionsModal, setShowEscalaOptionsModal] = useState(false);
     const [showEditEscalaModal, setShowEditEscalaModal] = useState(false);
@@ -189,10 +180,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         mensagem: '',
         destinatarios: ['todos']
     });
-    const [avisos, setAvisos] = useState(() => {
-        const saved = localStorage.getItem('avisos');
-        return saved ? JSON.parse(saved) : [];
-    });
+    const [avisos, setAvisos] = useState([]);
     const [showOficinaModal, setShowOficinaModal] = useState(false);
     const [newOficinaData, setNewOficinaData] = useState({
         nome: '',
@@ -235,6 +223,32 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         }
         localStorage.setItem('darkMode', darkMode.toString());
     }, [darkMode]);
+
+    // Carregar avisos do Supabase
+    useEffect(() => {
+        const loadAvisos = async () => {
+            try {
+                const avisosData = await getAvisos();
+                setAvisos(avisosData);
+            } catch (error) {
+                console.error('Erro ao carregar avisos:', error);
+            }
+        };
+        loadAvisos();
+    }, []);
+
+    // Carregar playlist Zoe do Supabase
+    useEffect(() => {
+        const loadPlaylist = async () => {
+            try {
+                const musicas = await getPlaylistMusicas();
+                setPlaylistMusicas(musicas || []);
+            } catch (error) {
+                console.error('Erro ao carregar playlist:', error);
+            }
+        };
+        loadPlaylist();
+    }, []);
 
     // Carregar escalas de diaconia do Supabase quando mudar para a aba diaconia
     React.useEffect(() => {
@@ -2492,7 +2506,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-500">
                                                 <span className="flex items-center gap-1">
                                                     <Clock className="w-3 h-3" />
-                                                    {format(new Date(aviso.data), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                                    {aviso.data_envio ? format(new Date(aviso.data_envio), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'Data não disponível'}
                                                 </span>
                                                 <span className="flex items-center gap-1">
                                                     <Users className="w-3 h-3" />
@@ -2501,11 +2515,16 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             </div>
                                         </div>
                                         <button
-                                            onClick={() => {
+                                            onClick={async () => {
                                                 if (confirm('Deseja excluir este aviso?')) {
-                                                    const updatedAvisos = avisos.filter(a => a.id !== aviso.id);
-                                                    setAvisos(updatedAvisos);
-                                                    localStorage.setItem('avisos', JSON.stringify(updatedAvisos));
+                                                    try {
+                                                        await deleteAviso(aviso.id);
+                                                        const updatedAvisos = avisos.filter(a => a.id !== aviso.id);
+                                                        setAvisos(updatedAvisos);
+                                                    } catch (error) {
+                                                        console.error('Erro ao excluir aviso:', error);
+                                                        alert('Erro ao excluir aviso');
+                                                    }
                                                 }
                                             }}
                                             className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
@@ -2527,25 +2546,43 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         setShowMusicModal(true);
     };
 
-    const handleSubmitMusic = (e) => {
+    const handleSubmitMusic = async (e) => {
         e.preventDefault();
-        const newMusic = {
-            id: Date.now(),
-            nome: newMusicData.nome,
-            artista: newMusicData.artista,
-            link: newMusicData.link
-        };
-        const updatedPlaylist = [...playlistMusicas, newMusic];
-        setPlaylistMusicas(updatedPlaylist);
-        localStorage.setItem('playlistZoe', JSON.stringify(updatedPlaylist));
-        setShowMusicModal(false);
-        setNewMusicData({ nome: '', artista: '', link: '' });
+        try {
+            const maxOrdem = playlistMusicas.length > 0 
+                ? Math.max(...playlistMusicas.map(m => m.ordem || 0))
+                : 0;
+
+            const musicaData = {
+                titulo: newMusicData.nome,
+                artista: newMusicData.artista,
+                link: newMusicData.link,
+                ordem: maxOrdem + 1,
+                ativa: true
+            };
+
+            await createPlaylistMusica(musicaData);
+            const musicas = await getPlaylistMusicas();
+            setPlaylistMusicas(musicas || []);
+            setShowMusicModal(false);
+            setNewMusicData({ nome: '', artista: '', link: '' });
+        } catch (error) {
+            console.error('Erro ao adicionar música:', error);
+            alert('Erro ao adicionar música');
+        }
     };
 
-    const handleDeleteMusic = (id) => {
-        const updatedPlaylist = playlistMusicas.filter(m => m.id !== id);
-        setPlaylistMusicas(updatedPlaylist);
-        localStorage.setItem('playlistZoe', JSON.stringify(updatedPlaylist));
+    const handleDeleteMusic = async (id) => {
+        if (confirm('Deseja realmente excluir esta música?')) {
+            try {
+                await deletePlaylistMusica(id);
+                const musicas = await getPlaylistMusicas();
+                setPlaylistMusicas(musicas || []);
+            } catch (error) {
+                console.error('Erro ao deletar música:', error);
+                alert('Erro ao deletar música');
+            }
+        }
     };
 
     const renderPlaylistZoe = () => {
@@ -2578,19 +2615,32 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 <div key={musica.id} className="p-4 bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 rounded-lg border-l-4 border-red-500 hover:shadow-md transition-shadow">
                                     <div className="flex items-center justify-between gap-3">
                                         <div className="flex-1">
-                                            <h4 className="font-semibold text-gray-900 dark:text-white">{musica.nome}</h4>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">{musica.artista}</p>
+                                            <h4 className="font-semibold text-gray-900 dark:text-white">{musica.titulo}</h4>
+                                            {musica.artista && (
+                                                <p className="text-sm text-gray-600 dark:text-gray-400">{musica.artista}</p>
+                                            )}
+                                            {musica.duracao && (
+                                                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">{musica.duracao}</p>
+                                            )}
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <a
-                                                href={musica.link}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 flex items-center gap-2"
-                                            >
-                                                <Music className="w-4 h-4" />
-                                                Ouvir
-                                            </a>
+                                            {musica.link && (
+                                                <button
+                                                    onClick={() => {
+                                                        // Converter youtu.be para youtube.com se necessário
+                                                        let link = musica.link;
+                                                        if (link.includes('youtu.be/')) {
+                                                            const videoId = link.split('youtu.be/')[1].split('?')[0];
+                                                            link = `https://www.youtube.com/watch?v=${videoId}`;
+                                                        }
+                                                        window.open(link, '_blank', 'noopener,noreferrer');
+                                                    }}
+                                                    className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 flex items-center gap-2"
+                                                >
+                                                    <Music className="w-4 h-4" />
+                                                    Ouvir
+                                                </button>
+                                            )}
                                             <button
                                                 onClick={() => handleDeleteMusic(musica.id)}
                                                 className="p-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center justify-center"
@@ -6039,20 +6089,33 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 </button>
                             </div>
 
-                            <form onSubmit={(e) => {
+                            <form onSubmit={async (e) => {
                                 e.preventDefault();
-                                const novoAviso = {
-                                    id: Date.now(),
-                                    titulo: newAvisoData.titulo,
-                                    mensagem: newAvisoData.mensagem,
-                                    destinatarios: newAvisoData.destinatarios,
-                                    data: new Date().toISOString()
-                                };
-                                const updatedAvisos = [...avisos, novoAviso];
-                                setAvisos(updatedAvisos);
-                                localStorage.setItem('avisos', JSON.stringify(updatedAvisos));
-                                setShowAvisoModal(false);
-                                setNewAvisoData({ titulo: '', mensagem: '', destinatarios: ['todos'] });
+                                try {
+                                    // Criar aviso no Supabase
+                                    const novoAviso = await createAviso({
+                                        titulo: newAvisoData.titulo,
+                                        mensagem: newAvisoData.mensagem,
+                                        destinatarios: newAvisoData.destinatarios,
+                                        data_envio: new Date().toISOString()
+                                    });
+                                    
+                                    // Atualizar estado local
+                                    const updatedAvisos = [...avisos, novoAviso];
+                                    setAvisos(updatedAvisos);
+                                    
+                                    setShowAvisoModal(false);
+                                    setNewAvisoData({ titulo: '', mensagem: '', destinatarios: ['todos'] });
+                                    
+                                    // Mensagem personalizada baseada nos destinatários
+                                    const destMsg = newAvisoData.destinatarios.includes('todos') 
+                                        ? 'todos os membros' 
+                                        : newAvisoData.destinatarios.join(', ');
+                                    alert(`Aviso criado e enviado para: ${destMsg}!`);
+                                } catch (error) {
+                                    console.error('Erro ao criar aviso:', error);
+                                    alert('Erro ao criar aviso. Tente novamente.');
+                                }
                             }}>
                                 <div className="space-y-4">
                                     <div>
