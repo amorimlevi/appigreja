@@ -103,6 +103,7 @@ export const getMinistrySchedules = async (ministerio, dataInicio = null, dataFi
                 musicos:escalas_louvor_musicos(
                     id,
                     instrumento,
+                    membro_id,
                     membro:members(*)
                 )
             `)
@@ -118,14 +119,19 @@ export const getMinistrySchedules = async (ministerio, dataInicio = null, dataFi
         
         const { data, error } = await query
         
-        if (error) throw error
+        if (error) {
+            console.error('Erro ao buscar escalas de louvor:', error)
+            throw error
+        }
+        
+        console.log('Escalas de louvor carregadas:', data)
         
         return data.map(escala => ({
             ...escala,
-            musicos: escala.musicos.map(m => ({
+            musicos: escala.musicos?.map(m => ({
                 ...m.membro,
                 instrumento: m.instrumento
-            }))
+            })) || []
         }))
     }
     

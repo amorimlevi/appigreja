@@ -172,12 +172,15 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     });
     const [newScheduleData, setNewScheduleData] = useState({
         data: '',
-        horario: '',
+        horario: '19:00',
         categoria: 'culto',
         descricao: '',
         local: '',
         observacoes: '',
-        membros_ids: []
+        membros_ids: [],
+        musicas: [],
+        instrumentos: {},
+        newMusicaTemp: ''
     });
     const [showMusicModal, setShowMusicModal] = useState(false);
     const [newMusicData, setNewMusicData] = useState({
@@ -188,6 +191,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     const [showMusicListModal, setShowMusicListModal] = useState(false);
     const [showMusiciansModal, setShowMusiciansModal] = useState(false);
     const [louvorMembers, setLouvorMembers] = useState([]);
+    const [diaconiaMembers, setDiaconiaMembers] = useState([]);
 
     // Recarregar dados do membro a cada 10 segundos
     useEffect(() => {
@@ -324,20 +328,50 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
             if (['diaconia', 'louvor', 'kids', 'jovens'].includes(activeTab)) {
                 // Verificar se o membro tem a flag do ministério
                 const memberRoles = currentMember?.funcoes || [];
-                if (!memberRoles.includes(activeTab)) {
-                    console.log(`Membro não tem permissão para ver escalas de ${activeTab}`);
+                let hasPermission = false;
+                
+                if (activeTab === 'louvor') {
+                    hasPermission = memberRoles.some(role => 
+                        role.toLowerCase().includes('louvor')
+                    );
+                } else if (activeTab === 'diaconia') {
+                    hasPermission = memberRoles.some(role => 
+                        role.toLowerCase().includes('diaconia') || role.toLowerCase().includes('diácono')
+                    );
+                } else if (activeTab === 'kids') {
+                    hasPermission = memberRoles.some(role => 
+                        role.toLowerCase().includes('kids')
+                    );
+                } else if (activeTab === 'jovens') {
+                    hasPermission = memberRoles.some(role => 
+                        role.toLowerCase().includes('jovens') || role.toLowerCase().includes('jovem')
+                    );
+                }
+                
+                if (!hasPermission) {
+                    console.log(`Membro não tem permissão para ver escalas de ${activeTab}. Funções: ${memberRoles.join(', ')}`);
                     return;
                 }
 
                 setLoadingSchedules(true);
                 try {
                     const schedules = await getMinistrySchedules(activeTab);
+                    console.log(`Escalas carregadas para ${activeTab}:`, schedules);
 
                     switch (activeTab) {
                         case 'diaconia':
                             setDiaconiaSchedules(schedules);
+                            // Carregar todos os membros com flag diaconia
+                            const allMembersDiaconia = await getMembers();
+                            const membrosDiaconia = allMembersDiaconia.filter(m => 
+                                m.funcoes?.includes('diaconia') || 
+                                m.funcoes?.includes('líder da diaconia') ||
+                                m.funcoes?.includes('lider da diaconia')
+                            );
+                            setDiaconiaMembers(membrosDiaconia);
                             break;
                         case 'louvor':
+                            console.log('Definindo louvorSchedules:', schedules);
                             setLouvorSchedules(schedules);
                             // Carregar todos os membros com flag louvor
                             const allMembers = await getMembers();
@@ -346,6 +380,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 m.funcoes?.includes('líder de louvor') ||
                                 m.funcoes?.includes('lider de louvor')
                             );
+                            console.log('Músicos de louvor:', musicosLouvor);
                             setLouvorMembers(musicosLouvor);
                             break;
                         case 'kids':
@@ -793,13 +828,32 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
     // Verificar se é líder de louvor
     const isLiderLouvor = localMember?.funcoes?.includes('líder de louvor') || localMember?.funcoes?.includes('lider de louvor');
+    
+    // Verificar se é líder de diaconia
+    const isLiderDiaconia = localMember?.funcoes?.includes('lider da diaconia') || localMember?.funcoes?.includes('líder da diaconia');
 
     // Função para criar escala
     const handleCreateSchedule = async () => {
         try {
+            // Converter instrumentos em array de músicos
+            const musicos = Object.entries(newScheduleData.instrumentos || {})
+                .filter(([_, musicoId]) => musicoId)
+                .map(([instrumento, musicoId]) => ({
+                    id: musicoId,
+                    instrumento: instrumento
+                }));
+            
+            // Preparar dados para enviar (remover campos que não existem na tabela)
+            const { instrumentos, newMusicaTemp, categoria, descricao, local, membros_ids, ...scheduleDataToSend } = newScheduleData;
+            
             await createMinistrySchedule({
-                ...newScheduleData,
-                ministerio: 'louvor'
+                data: newScheduleData.data,
+                horario: newScheduleData.horario,
+                tipo: categoria,
+                observacoes: newScheduleData.observacoes,
+                musicas: newScheduleData.musicas || [],
+                ministerio: 'louvor',
+                musicos: musicos
             });
             
             // Recarregar escalas
@@ -809,12 +863,15 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
             // Resetar form e fechar modal
             setNewScheduleData({
                 data: '',
-                horario: '',
+                horario: '19:00',
                 categoria: 'culto',
                 descricao: '',
                 local: '',
                 observacoes: '',
-                membros_ids: []
+                membros_ids: [],
+                musicas: [],
+                instrumentos: {},
+                newMusicaTemp: ''
             });
             setShowCreateScheduleModal(false);
             alert('Escala criada com sucesso!');
@@ -827,7 +884,26 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     // Função para atualizar escala
     const handleUpdateSchedule = async () => {
         try {
-            await updateMinistrySchedule(scheduleToEdit.id, newScheduleData);
+            // Converter instrumentos em array de músicos
+            const musicos = Object.entries(newScheduleData.instrumentos || {})
+                .filter(([_, musicoId]) => musicoId)
+                .map(([instrumento, musicoId]) => ({
+                    id: musicoId,
+                    instrumento: instrumento
+                }));
+            
+            // Preparar dados para enviar (remover campos que não existem na tabela)
+            const { instrumentos, newMusicaTemp, categoria, descricao, local, membros_ids, ...scheduleDataToSend } = newScheduleData;
+            
+            await updateMinistrySchedule(scheduleToEdit.id, {
+                data: newScheduleData.data,
+                horario: newScheduleData.horario,
+                tipo: categoria,
+                observacoes: newScheduleData.observacoes,
+                musicas: newScheduleData.musicas || [],
+                ministerio: 'louvor',
+                musicos: musicos
+            });
             
             // Recarregar escalas
             const escalas = await getMinistrySchedules('louvor');
@@ -847,7 +923,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
         if (!confirm('Deseja realmente deletar esta escala?')) return;
         
         try {
-            await deleteMinistrySchedule(id);
+            await deleteMinistrySchedule(id, 'louvor');
             
             // Recarregar escalas
             const escalas = await getMinistrySchedules('louvor');
@@ -1444,101 +1520,252 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                     {/* Diaconia */}
                     {activeTab === 'diaconia' && (
                         <div className="space-y-4">
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-                                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-                                    <Heart className="w-6 h-6 mr-2 text-purple-600" />
-                                    Escalas de Diaconia
-                                </h2>
-
-                                {loadingSchedules ? (
-                                    <div className="flex justify-center items-center py-8">
-                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                            {isLiderDiaconia ? (
+                                <>
+                                    {/* Botão de ação */}
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={() => {
+                                                setScheduleToEdit(null);
+                                                setNewScheduleData({
+                                                    data: format(new Date(), 'yyyy-MM-dd'),
+                                                    horario: '19:00',
+                                                    categoria: 'culto',
+                                                    observacoes: '',
+                                                    membros_ids: []
+                                                });
+                                                setShowCreateScheduleModal(true);
+                                            }}
+                                            className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
+                                        >
+                                            <Plus className="w-5 h-5" />
+                                            Montar escala
+                                        </button>
                                     </div>
-                                ) : diaconiaSchedules.length === 0 ? (
-                                    <div className="text-center py-8">
-                                        <Heart className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
-                                        <p className="text-gray-500 dark:text-gray-400">Nenhuma escala cadastrada ainda</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        {diaconiaSchedules.map((escala) => {
-                                            const escalaMembros = escala.membros_ids || [];
-                                            const isEscalado = escalaMembros.includes(currentMember?.id);
-                                            const categoria = escala.categoria || 'culto';
 
-                                            return (
-                                                <div
-                                                    key={escala.id}
-                                                    onClick={() => {
-                                                        console.log('Escala clicada:', escala);
-                                                        console.log('Categoria da escala:', escala.categoria);
-                                                        setSelectedSchedule(escala);
-                                                        setShowScheduleModal(true);
-                                                    }}
-                                                    className={`p-5 rounded-xl border-2 shadow-sm hover:shadow-md transition-all cursor-pointer ${
-                                                        isEscalado
-                                                            ? 'border-purple-400 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 dark:border-purple-600'
-                                                            : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'
-                                                    }`}
-                                                >
-                                                    {/* Cabeçalho com data e categoria */}
-                                                    <div className="flex items-start justify-between mb-3">
-                                                        <div className="flex-1">
-                                                            <h3 className="text-base font-bold text-gray-900 dark:text-white capitalize mb-2">
-                                                                {format(parseISO(escala.data), "EEEE, d 'de' MMMM", { locale: ptBR })}
-                                                            </h3>
-                                                            <div className="flex items-center gap-2 flex-wrap">
-                                                                <span className={`inline-flex items-center px-3 py-1 text-xs font-bold rounded-full ${
-                                                                    categoria === 'culto' 
-                                                                        ? 'bg-purple-600 text-white' 
-                                                                        : 'bg-orange-600 text-white'
-                                                                }`}>
-                                                                    {categoria.charAt(0).toUpperCase() + categoria.slice(1)}
-                                                                </span>
-                                                                {escala.horario && (
-                                                                    <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
-                                                                        <Clock className="w-3 h-3" />
+                                    {/* Card de estatísticas */}
+                                    <div className="grid grid-cols-1 gap-4">
+                                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Diáconos</p>
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                                                    {diaconiaMembers.length}
+                                                </p>
+                                                <Heart className="w-8 h-8 text-purple-500" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Próximas escalas */}
+                                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                                            <Calendar className="w-5 h-5 text-purple-600" />
+                                            Escalas de Diaconia ({diaconiaSchedules?.length || 0})
+                                        </h3>
+                                        {!diaconiaSchedules || diaconiaSchedules.length === 0 ? (
+                                            <div className="text-center py-12">
+                                                <Calendar className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                                                <p className="text-gray-500 dark:text-gray-400 mb-1">Nenhuma escala criada ainda.</p>
+                                                <p className="text-sm text-gray-400 dark:text-gray-500">Clique em "Montar escala" para criar a primeira.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-4">
+                                                {diaconiaSchedules.slice(0, 5).map((escala) => {
+                                                    const capitalizeFirstLetter = (str) => str.charAt(0).toUpperCase() + str.slice(1);
+                                                    const membrosEscalados = escala.membros_ids || [];
+                                                    
+                                                    return (
+                                                        <div
+                                                            key={escala.id}
+                                                            className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all"
+                                                            onClick={() => {
+                                                                setScheduleToEdit(escala);
+                                                                setNewScheduleData({
+                                                                    data: escala.data,
+                                                                    horario: escala.horario || '',
+                                                                    categoria: escala.tipo || escala.categoria || 'culto',
+                                                                    observacoes: escala.observacoes || '',
+                                                                    membros_ids: escala.membros_ids || []
+                                                                });
+                                                                setShowEditScheduleModal(true);
+                                                            }}
+                                                        >
+                                                            <div className="flex items-center justify-between mb-3">
+                                                                <p className="font-semibold text-gray-900 dark:text-white">
+                                                                    {capitalizeFirstLetter(format(parseISO(escala.data), "EEEE - dd/MM/yyyy", { locale: ptBR }))}
+                                                                </p>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="px-3 py-1 bg-purple-500 text-white text-xs font-medium rounded">
+                                                                        {capitalizeFirstLetter(escala.tipo || escala.categoria || 'Culto')}
+                                                                    </span>
+                                                                    <span className="px-3 py-1 bg-gray-400 text-white text-xs font-medium rounded">
                                                                         {escala.horario}
                                                                     </span>
-                                                                )}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Observações */}
+                                                            {escala.observacoes && (
+                                                                <div className="flex items-center gap-2 mb-3 text-sm text-gray-600 dark:text-gray-400">
+                                                                    <span>💡 {escala.observacoes}</span>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Diáconos escalados */}
+                                                            {membrosEscalados.length > 0 && (
+                                                                <div>
+                                                                    <div className="flex items-center gap-2 mb-2 text-sm text-gray-600 dark:text-gray-400">
+                                                                        <Users className="w-4 h-4" />
+                                                                        <span>Diáconos escalados ({membrosEscalados.length}):</span>
+                                                                    </div>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {membrosEscalados.map((membroId) => {
+                                                                            const membro = diaconiaMembers.find(m => m.id === membroId);
+                                                                            if (!membro) return null;
+                                                                            
+                                                                            return (
+                                                                                <div key={membroId} className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-full">
+                                                                                    <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold">
+                                                                                        {membro.nome?.charAt(0) || 'D'}
+                                                                                    </div>
+                                                                                    <span className="text-xs font-medium text-purple-700 dark:text-purple-300">
+                                                                                        {membro.nome?.split(' ')[0] || 'Diácono'}
+                                                                                    </span>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Lista de Diáconos */}
+                                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                                            <Users className="w-5 h-5 text-purple-600" />
+                                            Lista de Diáconos ({diaconiaMembers.length})
+                                        </h3>
+                                        <div className="space-y-3">
+                                            {diaconiaMembers.length === 0 ? (
+                                                <p className="text-center text-gray-500 dark:text-gray-400 py-8">
+                                                    Nenhum diácono cadastrado ainda
+                                                </p>
+                                            ) : (
+                                                diaconiaMembers.map((membro) => {
+                                                    const idade = membro.idade || calculateAge(membro.nascimento);
+                                                    
+                                                    return (
+                                                        <div
+                                                            key={membro.id}
+                                                            className="flex items-center justify-between gap-3 p-4 bg-purple-50 dark:bg-purple-900/10 rounded-lg border border-purple-100 dark:border-purple-800"
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                                                                    {membro.nome?.charAt(0)?.toUpperCase() || 'D'}
+                                                                </div>
+                                                                <div>
+                                                                    <p className="font-semibold text-gray-900 dark:text-white uppercase">
+                                                                        {membro.nome || 'Sem nome'}
+                                                                    </p>
+                                                                    {membro.telefone ? (
+                                                                        <p className="text-sm text-gray-600 dark:text-gray-400">{membro.telefone}</p>
+                                                                    ) : (
+                                                                        <p className="text-sm text-gray-500 dark:text-gray-500 italic">Sem telefone</p>
+                                                                    )}
+                                                                    {idade && (
+                                                                        <p className="text-xs text-gray-500 dark:text-gray-500">{idade} anos</p>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-center">
+                                                                <p className="text-2xl font-bold text-gray-900 dark:text-white">0</p>
                                                             </div>
                                                         </div>
-                                                        {isEscalado && (
-                                                            <span className="px-3 py-1.5 bg-purple-600 text-white text-xs font-bold rounded-full whitespace-nowrap ml-2">
-                                                                ✓ Você está escalado
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Descrição */}
-                                                    {escala.descricao && (
-                                                        <p className="text-sm text-gray-700 dark:text-gray-300 mb-3 pl-1">
-                                                            {escala.descricao}
-                                                        </p>
-                                                    )}
-
-                                                    {/* Local */}
-                                                    {escala.local && (
-                                                        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
-                                                            <MapPin className="w-4 h-4 flex-shrink-0" />
-                                                            <span>{escala.local}</span>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Observações */}
-                                                    {escala.observacoes && (
-                                                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                                                            <p className="text-xs text-gray-600 dark:text-gray-400 italic">
-                                                                💡 {escala.observacoes}
-                                                            </p>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
+                                                    );
+                                                })
+                                            )}
+                                        </div>
                                     </div>
-                                )}
-                            </div>
+                                </>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                                        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
+                                            <Heart className="w-6 h-6 mr-2 text-purple-600" />
+                                            Ministério de Diaconia
+                                        </h2>
+                                        <p className="text-gray-600 dark:text-gray-400 mb-4">
+                                            Ministério dedicado ao serviço e cuidado da igreja.
+                                        </p>
+                                    </div>
+
+                                    {/* Escalas para membros normais */}
+                                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                                            <Calendar className="w-5 h-5 text-purple-600" />
+                                            Escalas de Diaconia ({diaconiaSchedules?.length || 0})
+                                        </h3>
+                                        {!diaconiaSchedules || diaconiaSchedules.length === 0 ? (
+                                            <div className="text-center py-12">
+                                                <Calendar className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                                                <p className="text-gray-500 dark:text-gray-400 mb-1">Nenhuma escala criada ainda.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-4">
+                                                {diaconiaSchedules.slice(0, 5).map((escala) => {
+                                                    const capitalizeFirstLetter = (str) => str.charAt(0).toUpperCase() + str.slice(1);
+                                                    const membrosEscalados = escala.membros_ids || [];
+                                                    const isEscalado = membrosEscalados.includes(localMember?.id);
+                                                    
+                                                    return (
+                                                        <div
+                                                            key={escala.id}
+                                                            className={`p-4 rounded-lg border ${
+                                                                isEscalado 
+                                                                    ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700' 
+                                                                    : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-center justify-between mb-3">
+                                                                <p className="font-semibold text-gray-900 dark:text-white">
+                                                                    {capitalizeFirstLetter(format(parseISO(escala.data), "EEEE - dd/MM/yyyy", { locale: ptBR }))}
+                                                                </p>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="px-3 py-1 bg-purple-500 text-white text-xs font-medium rounded">
+                                                                        {capitalizeFirstLetter(escala.tipo || escala.categoria || 'Culto')}
+                                                                    </span>
+                                                                    <span className="px-3 py-1 bg-gray-400 text-white text-xs font-medium rounded">
+                                                                        {escala.horario}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+
+                                                            {isEscalado && (
+                                                                <div className="mb-3">
+                                                                    <span className="px-3 py-1 bg-purple-600 text-white text-xs font-bold rounded-full">
+                                                                        ✓ Você está escalado
+                                                                    </span>
+                                                                </div>
+                                                            )}
+
+                                                            {escala.observacoes && (
+                                                                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                                                    <span>💡 {escala.observacoes}</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -1577,7 +1804,13 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Músicos Ativos</p>
                                             <div className="flex items-center justify-between">
                                                 <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                                                    {louvorMembers.length}
+                                                    {(() => {
+                                                        const musicosUnicos = new Set();
+                                                        louvorSchedules.forEach(escala => {
+                                                            escala.musicos?.forEach(m => musicosUnicos.add(m.id));
+                                                        });
+                                                        return musicosUnicos.size || louvorMembers.length;
+                                                    })()}
                                                 </p>
                                                 <Music className="w-8 h-8 text-purple-500" />
                                             </div>
@@ -1598,57 +1831,89 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                                             <Calendar className="w-5 h-5 text-purple-600" />
-                                            Próximas escalas ({louvorSchedules.length})
+                                            Próximas escalas ({louvorSchedules?.length || 0})
                                         </h3>
-                                        {louvorSchedules.length === 0 ? (
+                                        {!louvorSchedules || louvorSchedules.length === 0 ? (
                                             <div className="text-center py-12">
                                                 <Calendar className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
                                                 <p className="text-gray-500 dark:text-gray-400 mb-1">Nenhuma escala criada ainda.</p>
                                                 <p className="text-sm text-gray-400 dark:text-gray-500">Clique em "Nova Escala" para criar a primeira.</p>
                                             </div>
                                         ) : (
-                                            <div className="space-y-3">
-                                                {louvorSchedules.slice(0, 5).map((escala) => (
-                                                    <div
-                                                        key={escala.id}
-                                                        className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                                    >
-                                                        <div className="flex-1">
-                                                            <p className="font-semibold text-gray-900 dark:text-white">
-                                                                {format(parseISO(escala.data), "d 'de' MMMM", { locale: ptBR })}
-                                                            </p>
-                                                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                                {escala.horario} • {escala.categoria}
-                                                            </p>
+                                            <div className="space-y-4">
+                                                {louvorSchedules.slice(0, 5).map((escala) => {
+                                                    const totalMusicas = escala.musicas ? escala.musicas.length : 0;
+                                                    const capitalizeFirstLetter = (str) => str.charAt(0).toUpperCase() + str.slice(1);
+                                                    
+                                                    return (
+                                                        <div
+                                                            key={escala.id}
+                                                            className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all"
+                                                            onClick={() => {
+                                                                // Preparar dados para edição
+                                                                const instrumentos = {};
+                                                                escala.musicos?.forEach(musico => {
+                                                                    instrumentos[musico.instrumento] = musico.id;
+                                                                });
+                                                                
+                                                                setScheduleToEdit(escala);
+                                                                setNewScheduleData({
+                                                                    data: escala.data,
+                                                                    horario: escala.horario || '',
+                                                                    categoria: escala.tipo || escala.categoria || 'culto',
+                                                                    observacoes: escala.observacoes || '',
+                                                                    musicas: escala.musicas || [],
+                                                                    instrumentos: instrumentos
+                                                                });
+                                                                setShowEditScheduleModal(true);
+                                                            }}
+                                                        >
+                                                            <div className="flex items-center justify-between mb-3">
+                                                                <p className="font-semibold text-gray-900 dark:text-white">
+                                                                    {capitalizeFirstLetter(format(parseISO(escala.data), "EEEE - dd/MM/yyyy", { locale: ptBR }))}
+                                                                </p>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="px-3 py-1 bg-green-500 text-white text-xs font-medium rounded">
+                                                                        {capitalizeFirstLetter(escala.tipo || escala.categoria || 'Culto')}
+                                                                    </span>
+                                                                    <span className="px-3 py-1 bg-gray-400 text-white text-xs font-medium rounded">
+                                                                        {escala.horario}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Músicas */}
+                                                            {totalMusicas > 0 && (
+                                                                <div className="flex items-center gap-2 mb-3 text-sm text-gray-600 dark:text-gray-400">
+                                                                    <Music className="w-4 h-4" />
+                                                                    <span>{totalMusicas} música{totalMusicas !== 1 ? 's' : ''}</span>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Músicos escalados */}
+                                                            {escala.musicos && escala.musicos.length > 0 && (
+                                                                <div>
+                                                                    <div className="flex items-center gap-2 mb-2 text-sm text-gray-600 dark:text-gray-400">
+                                                                        <Users className="w-4 h-4" />
+                                                                        <span>Músicos escalados:</span>
+                                                                    </div>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {escala.musicos.map((musico, idx) => (
+                                                                            <div key={idx} className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-full">
+                                                                                <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold">
+                                                                                    {musico.nome?.charAt(0) || 'M'}
+                                                                                </div>
+                                                                                <span className="text-xs font-medium text-purple-700 dark:text-purple-300">
+                                                                                    {musico.nome?.split(' ')[0] || 'Músico'} - {musico.instrumento}
+                                                                                </span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <button
-                                                                onClick={() => {
-                                                                    setScheduleToEdit(escala);
-                                                                    setNewScheduleData({
-                                                                        data: escala.data,
-                                                                        horario: escala.horario || '',
-                                                                        categoria: escala.categoria || 'culto',
-                                                                        descricao: escala.descricao || '',
-                                                                        local: escala.local || '',
-                                                                        observacoes: escala.observacoes || '',
-                                                                        membros_ids: escala.membros_ids || []
-                                                                    });
-                                                                    setShowEditScheduleModal(true);
-                                                                }}
-                                                                className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
-                                                            >
-                                                                <Edit className="w-4 h-4" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleDeleteSchedule(escala.id)}
-                                                                className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
-                                                            >
-                                                                <X className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
                                         )}
                                     </div>
@@ -1658,12 +1923,21 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Equipe de Louvor</h3>
                                         <div className="space-y-2">
                                             {(() => {
-                                                const louvorMemberIds = new Set();
+                                                const louvorMusicosMap = new Map();
                                                 louvorSchedules.forEach(escala => {
-                                                    escala.membros_ids?.forEach(id => louvorMemberIds.add(id));
+                                                    escala.musicos?.forEach(musico => {
+                                                        if (!louvorMusicosMap.has(musico.id)) {
+                                                            louvorMusicosMap.set(musico.id, {
+                                                                ...musico,
+                                                                instrumentos: new Set([musico.instrumento])
+                                                            });
+                                                        } else {
+                                                            louvorMusicosMap.get(musico.id).instrumentos.add(musico.instrumento);
+                                                        }
+                                                    });
                                                 });
                                                 
-                                                if (louvorMemberIds.size === 0) {
+                                                if (louvorMusicosMap.size === 0) {
                                                     return (
                                                         <p className="text-center text-gray-500 dark:text-gray-400 py-8">
                                                             Nenhum músico escalado ainda
@@ -1671,19 +1945,25 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     );
                                                 }
                                                 
-                                                return Array.from(louvorMemberIds).map((memberId) => {
-                                                    const member = scheduleMembers.find(m => m.id === memberId);
-                                                    if (!member) return null;
-                                                    
+                                                return Array.from(louvorMusicosMap.values()).map((musico) => {
                                                     return (
                                                         <div
-                                                            key={memberId}
-                                                            className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+                                                            key={musico.id}
+                                                            className="flex items-center justify-between gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
                                                         >
-                                                            <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center text-white font-bold">
-                                                                <Music className="w-5 h-5" />
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center text-white font-bold">
+                                                                    <Music className="w-5 h-5" />
+                                                                </div>
+                                                                <p className="font-medium text-gray-900 dark:text-white">{musico.nome}</p>
                                                             </div>
-                                                            <p className="font-medium text-gray-900 dark:text-white">{member.nome}</p>
+                                                            <div className="flex flex-wrap gap-1 justify-end">
+                                                                {Array.from(musico.instrumentos).map(inst => (
+                                                                    <span key={inst} className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs rounded-full">
+                                                                        {inst}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
                                                         </div>
                                                     );
                                                 });
@@ -1692,18 +1972,110 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </div>
                                 </>
                             ) : (
-                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-                                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-                                        <Music className="w-6 h-6 mr-2 text-purple-600" />
-                                        Ministério de Louvor
-                                    </h2>
-                                    <p className="text-gray-600 dark:text-gray-400 mb-4">
-                                        Ministério dedicado a conduzir a congregação em adoração através da música.
-                                    </p>
-                                    <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-                                        <p className="text-sm text-gray-700 dark:text-gray-300">
-                                            Confira as músicas que estamos cantando na aba "Playlist Zoe" 🎵
+                                <div className="space-y-4">
+                                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                                        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
+                                            <Music className="w-6 h-6 mr-2 text-purple-600" />
+                                            Ministério de Louvor
+                                        </h2>
+                                        <p className="text-gray-600 dark:text-gray-400 mb-4">
+                                            Ministério dedicado a conduzir a congregação em adoração através da música.
                                         </p>
+                                        <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">
+                                                Confira as músicas que estamos cantando na aba "Playlist Zoe" 🎵
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Próximas escalas para membros normais */}
+                                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                                            <Calendar className="w-5 h-5 text-purple-600" />
+                                            Próximas escalas ({louvorSchedules?.length || 0})
+                                        </h3>
+                                        {!louvorSchedules || louvorSchedules.length === 0 ? (
+                                            <div className="text-center py-12">
+                                                <Calendar className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                                                <p className="text-gray-500 dark:text-gray-400 mb-1">Nenhuma escala criada ainda.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-4">
+                                                {louvorSchedules.slice(0, 5).map((escala) => {
+                                                    const totalMusicas = escala.musicas ? escala.musicas.length : 0;
+                                                    const capitalizeFirstLetter = (str) => str.charAt(0).toUpperCase() + str.slice(1);
+                                                    
+                                                    return (
+                                                        <div
+                                                            key={escala.id}
+                                                            className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all"
+                                                            onClick={() => {
+                                                                // Preparar dados para edição
+                                                                const instrumentos = {};
+                                                                escala.musicos?.forEach(musico => {
+                                                                    instrumentos[musico.instrumento] = musico.id;
+                                                                });
+                                                                
+                                                                setScheduleToEdit(escala);
+                                                                setNewScheduleData({
+                                                                    data: escala.data,
+                                                                    horario: escala.horario || '',
+                                                                    categoria: escala.tipo || escala.categoria || 'culto',
+                                                                    observacoes: escala.observacoes || '',
+                                                                    musicas: escala.musicas || [],
+                                                                    instrumentos: instrumentos
+                                                                });
+                                                                setShowEditScheduleModal(true);
+                                                            }}
+                                                        >
+                                                            <div className="flex items-center justify-between mb-3">
+                                                                <p className="font-semibold text-gray-900 dark:text-white">
+                                                                    {capitalizeFirstLetter(format(parseISO(escala.data), "EEEE - dd/MM/yyyy", { locale: ptBR }))}
+                                                                </p>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="px-3 py-1 bg-green-500 text-white text-xs font-medium rounded">
+                                                                        {capitalizeFirstLetter(escala.tipo || escala.categoria || 'Culto')}
+                                                                    </span>
+                                                                    <span className="px-3 py-1 bg-gray-400 text-white text-xs font-medium rounded">
+                                                                        {escala.horario}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Músicas */}
+                                                            {totalMusicas > 0 && (
+                                                                <div className="flex items-center gap-2 mb-3 text-sm text-gray-600 dark:text-gray-400">
+                                                                    <Music className="w-4 h-4" />
+                                                                    <span>{totalMusicas} música{totalMusicas !== 1 ? 's' : ''}</span>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Músicos escalados */}
+                                                            {escala.musicos && escala.musicos.length > 0 && (
+                                                                <div>
+                                                                    <div className="flex items-center gap-2 mb-2 text-sm text-gray-600 dark:text-gray-400">
+                                                                        <Users className="w-4 h-4" />
+                                                                        <span>Músicos escalados:</span>
+                                                                    </div>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {escala.musicos.map((musico, idx) => (
+                                                                            <div key={idx} className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-full">
+                                                                                <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold">
+                                                                                    {musico.nome?.charAt(0) || 'M'}
+                                                                                </div>
+                                                                                <span className="text-xs font-medium text-purple-700 dark:text-purple-300">
+                                                                                    {musico.nome?.split(' ')[0] || 'Músico'} - {musico.instrumento}
+                                                                                </span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             )}
@@ -3247,68 +3619,140 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
                                     {/* Local */}
                                     {selectedSchedule.local && (
-                                        <div>
-                                            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                                                Local
+                                    <div>
+                                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                    Local
+                                    </h3>
+                                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                                    <MapPin className="w-4 h-4" />
+                                    <span>{selectedSchedule.local}</span>
+                                    </div>
+                                    </div>
+                                    )}
+
+                                    {/* Músicas */}
+                                    {selectedSchedule.musicas && selectedSchedule.musicas.length > 0 && (
+                                        <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4">
+                                            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                                                Músicas ({selectedSchedule.musicas.length})
                                             </h3>
-                                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-                                                <MapPin className="w-4 h-4" />
-                                                <span>{selectedSchedule.local}</span>
+                                            <div className="space-y-2">
+                                                {selectedSchedule.musicas.map((musica, index) => (
+                                                    <div key={index} className="flex items-center gap-3 p-2 bg-white dark:bg-gray-800 rounded-lg">
+                                                        <div className="h-8 w-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                                                            <Music className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                                        </div>
+                                                        <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                                            {musica}
+                                                        </p>
+                                                    </div>
+                                                ))}
                                             </div>
                                         </div>
                                     )}
 
-                                    {/* Membros Escalados */}
+                                    {/* Músicos Escalados (para louvor) ou Membros Escalados (para diaconia) */}
                                     <div>
-                                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
-                                            <Users className="w-4 h-4" />
-                                            Membros Escalados ({(selectedSchedule.membros_ids || []).length})
-                                        </h3>
-                                        <div className="space-y-2 max-h-48 overflow-y-auto">
-                                            {(selectedSchedule.membros_ids || []).length === 0 ? (
-                                                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                                                    Nenhum membro escalado
-                                                </p>
-                                            ) : scheduleMembers.length === 0 ? (
-                                                <div className="flex justify-center items-center py-8">
-                                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                                        {selectedSchedule.musicos && selectedSchedule.musicos.length > 0 ? (
+                                            <>
+                                                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                                                    <Music className="w-4 h-4" />
+                                                    Músicos Escalados ({selectedSchedule.musicos.length})
+                                                </h3>
+                                                <div className="space-y-2 max-h-48 overflow-y-auto">
+                                                    {selectedSchedule.musicos.map((musico, index) => (
+                                                        <div
+                                                            key={index}
+                                                            className={`flex items-center justify-between gap-3 p-3 rounded-lg ${
+                                                                musico.id === currentMember?.id
+                                                                    ? 'bg-purple-100 dark:bg-purple-900/30 border-2 border-purple-300 dark:border-purple-700'
+                                                                    : 'bg-gray-50 dark:bg-gray-700/50'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold ${
+                                                                    musico.id === currentMember?.id
+                                                                        ? 'bg-purple-600'
+                                                                        : 'bg-gray-500'
+                                                                }`}>
+                                                                    {musico.nome?.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                                                                </div>
+                                                                <div>
+                                                                    <p className="font-medium text-gray-900 dark:text-white">
+                                                                        {musico.nome}
+                                                                        {musico.id === currentMember?.id && (
+                                                                            <span className="ml-2 text-xs text-purple-600 dark:text-purple-400 font-bold">
+                                                                                (Você)
+                                                                            </span>
+                                                                        )}
+                                                                    </p>
+                                                                    {musico.telefone && (
+                                                                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                                                                            {musico.telefone}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-medium rounded-full">
+                                                                {musico.instrumento}
+                                                            </span>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                            ) : (
-                                                scheduleMembers.map((member, index) => (
-                                                    <div
-                                                        key={index}
-                                                        className={`flex items-center gap-3 p-3 rounded-lg ${
-                                                            member.id === currentMember?.id
-                                                                ? 'bg-purple-100 dark:bg-purple-900/30 border-2 border-purple-300 dark:border-purple-700'
-                                                                : 'bg-gray-50 dark:bg-gray-700/50'
-                                                        }`}
-                                                    >
-                                                        <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold ${
-                                                            member.id === currentMember?.id
-                                                                ? 'bg-purple-600'
-                                                                : 'bg-gray-500'
-                                                        }`}>
-                                                            {member.nome?.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                                                    <Users className="w-4 h-4" />
+                                                    Membros Escalados ({(selectedSchedule.membros_ids || []).length})
+                                                </h3>
+                                                <div className="space-y-2 max-h-48 overflow-y-auto">
+                                                    {(selectedSchedule.membros_ids || []).length === 0 ? (
+                                                        <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                                                            Nenhum membro escalado
+                                                        </p>
+                                                    ) : scheduleMembers.length === 0 ? (
+                                                        <div className="flex justify-center items-center py-8">
+                                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
                                                         </div>
-                                                        <div className="flex-1">
-                                                            <p className="font-medium text-gray-900 dark:text-white">
-                                                                {member.nome}
-                                                                {member.id === currentMember?.id && (
-                                                                    <span className="ml-2 text-xs text-purple-600 dark:text-purple-400 font-bold">
-                                                                        (Você)
-                                                                    </span>
-                                                                )}
-                                                            </p>
-                                                            {member.telefone && (
-                                                                <p className="text-sm text-gray-500 dark:text-gray-400">
-                                                                    {member.telefone}
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                ))
-                                            )}
-                                        </div>
+                                                    ) : (
+                                                        scheduleMembers.map((member, index) => (
+                                                            <div
+                                                                key={index}
+                                                                className={`flex items-center gap-3 p-3 rounded-lg ${
+                                                                    member.id === currentMember?.id
+                                                                        ? 'bg-purple-100 dark:bg-purple-900/30 border-2 border-purple-300 dark:border-purple-700'
+                                                                        : 'bg-gray-50 dark:bg-gray-700/50'
+                                                                }`}
+                                                            >
+                                                                <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold ${
+                                                                    member.id === currentMember?.id
+                                                                        ? 'bg-purple-600'
+                                                                        : 'bg-gray-500'
+                                                                }`}>
+                                                                    {member.nome?.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                                                                </div>
+                                                                <div className="flex-1">
+                                                                    <p className="font-medium text-gray-900 dark:text-white">
+                                                                        {member.nome}
+                                                                        {member.id === currentMember?.id && (
+                                                                            <span className="ml-2 text-xs text-purple-600 dark:text-purple-400 font-bold">
+                                                                                (Você)
+                                                                            </span>
+                                                                        )}
+                                                                    </p>
+                                                                    {member.telefone && (
+                                                                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                                                                            {member.telefone}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
 
                                     {/* Observações */}
@@ -3326,16 +3770,60 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
                                 {/* Rodapé */}
                                 <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                                    <button
-                                        onClick={() => {
-                                            setShowScheduleModal(false);
-                                            setSelectedSchedule(null);
-                                            setScheduleMembers([]);
-                                        }}
-                                        className="w-full px-4 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium transition-colors"
-                                    >
-                                        Fechar
-                                    </button>
+                                    {selectedSchedule.musicos ? (
+                                        <div className="flex gap-3">
+                                            <button
+                                                onClick={() => {
+                                                    setScheduleToEdit(selectedSchedule);
+                                                    const instrumentos = {};
+                                                    if (selectedSchedule.musicos) {
+                                                        selectedSchedule.musicos.forEach(musico => {
+                                                            instrumentos[musico.instrumento] = musico.id;
+                                                        });
+                                                    }
+                                                    setNewScheduleData({
+                                                        data: selectedSchedule.data,
+                                                        horario: selectedSchedule.horario || '19:00',
+                                                        categoria: selectedSchedule.tipo || selectedSchedule.categoria || 'culto',
+                                                        descricao: selectedSchedule.descricao || '',
+                                                        local: selectedSchedule.local || '',
+                                                        observacoes: selectedSchedule.observacoes || '',
+                                                        membros_ids: selectedSchedule.membros_ids || [],
+                                                        musicas: selectedSchedule.musicas || [],
+                                                        instrumentos: instrumentos,
+                                                        newMusicaTemp: ''
+                                                    });
+                                                    setShowScheduleModal(false);
+                                                    setShowEditScheduleModal(true);
+                                                }}
+                                                className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <Edit className="w-4 h-4" />
+                                                Editar Escala
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setShowScheduleModal(false);
+                                                    setSelectedSchedule(null);
+                                                    setScheduleMembers([]);
+                                                }}
+                                                className="px-6 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium transition-colors"
+                                            >
+                                                Fechar
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={() => {
+                                                setShowScheduleModal(false);
+                                                setSelectedSchedule(null);
+                                                setScheduleMembers([]);
+                                            }}
+                                            className="w-full px-4 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium transition-colors"
+                                        >
+                                            Fechar
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -3514,92 +4002,177 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 {showCreateScheduleModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                            <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Nova Escala de Louvor</h3>
+                            <h3 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Nova Escala de Louvor</h3>
                             <form onSubmit={(e) => {
                                 e.preventDefault();
                                 handleCreateSchedule();
                             }} className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Tipo de Evento
+                                    </label>
+                                    <select
+                                        value={newScheduleData.categoria}
+                                        onChange={(e) => setNewScheduleData({ ...newScheduleData, categoria: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        required
+                                    >
+                                        <option value="culto">Culto</option>
+                                        <option value="ensaio">Ensaio</option>
+                                    </select>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                                            Data *
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            {newScheduleData.categoria === 'culto' ? 'Data do Culto' : 'Data do Ensaio'}
                                         </label>
                                         <input
                                             type="date"
                                             required
                                             value={newScheduleData.data}
                                             onChange={(e) => setNewScheduleData({ ...newScheduleData, data: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                                            Horário
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            {newScheduleData.categoria === 'culto' ? 'Horário do Culto' : 'Horário do Ensaio'}
                                         </label>
                                         <input
                                             type="time"
+                                            required
                                             value={newScheduleData.horario}
                                             onChange={(e) => setNewScheduleData({ ...newScheduleData, horario: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
                                         />
                                     </div>
                                 </div>
 
-                                <div>
-                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                                        Categoria
-                                    </label>
-                                    <select
-                                        value={newScheduleData.categoria}
-                                        onChange={(e) => setNewScheduleData({ ...newScheduleData, categoria: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                    >
-                                        <option value="culto">Culto</option>
-                                        <option value="ensaio">Ensaio</option>
-                                        <option value="evento">Evento</option>
-                                    </select>
+                                {/* Músicas */}
+                                <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                                    <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
+                                        Músicas ({(newScheduleData.musicas || []).length}/5)
+                                    </h3>
+                                    
+                                    <div className="flex gap-2 mb-4">
+                                        <input
+                                            type="text"
+                                            value={newScheduleData.newMusicaTemp || ''}
+                                            onChange={(e) => setNewScheduleData({ ...newScheduleData, newMusicaTemp: e.target.value })}
+                                            onKeyPress={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const musicas = newScheduleData.musicas || [];
+                                                    if (newScheduleData.newMusicaTemp?.trim() && musicas.length < 5) {
+                                                        setNewScheduleData({
+                                                            ...newScheduleData,
+                                                            musicas: [...musicas, newScheduleData.newMusicaTemp.trim()],
+                                                            newMusicaTemp: ''
+                                                        });
+                                                    }
+                                                }
+                                            }}
+                                            placeholder="Nome da música..."
+                                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white placeholder-gray-400"
+                                            disabled={(newScheduleData.musicas || []).length >= 5}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const musicas = newScheduleData.musicas || [];
+                                                if (newScheduleData.newMusicaTemp?.trim() && musicas.length < 5) {
+                                                    setNewScheduleData({
+                                                        ...newScheduleData,
+                                                        musicas: [...musicas, newScheduleData.newMusicaTemp.trim()],
+                                                        newMusicaTemp: ''
+                                                    });
+                                                }
+                                            }}
+                                            disabled={!newScheduleData.newMusicaTemp?.trim() || (newScheduleData.musicas || []).length >= 5}
+                                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                                        >
+                                            <Plus className="w-5 h-5" />
+                                        </button>
+                                    </div>
+
+                                    {(newScheduleData.musicas || []).length > 0 && (
+                                        <div className="space-y-2">
+                                            {newScheduleData.musicas.map((musica, idx) => (
+                                                <div key={idx} className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="h-8 w-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                                                            <Music className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                                        </div>
+                                                        <p className="text-sm font-medium text-gray-900 dark:text-white">{musica}</p>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setNewScheduleData({
+                                                                ...newScheduleData,
+                                                                musicas: newScheduleData.musicas.filter((_, i) => i !== idx)
+                                                            });
+                                                        }}
+                                                        className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div>
-                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                                        Descrição
-                                    </label>
-                                    <textarea
-                                        value={newScheduleData.descricao}
-                                        onChange={(e) => setNewScheduleData({ ...newScheduleData, descricao: e.target.value })}
-                                        rows="2"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                        placeholder="Detalhes sobre esta escala..."
-                                    />
+                                {/* Instrumentos */}
+                                <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                                    <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
+                                        Instrumentos ({Object.values(newScheduleData.instrumentos || {}).filter(Boolean).length} escalados)
+                                    </h3>
+                                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                                        {['Voz 1', 'Voz 2', 'Voz 3', 'Teclado 1', 'Teclado 2', 'Guitarra', 'Contrabaixo', 'Violão', 'Bateria'].map((instrumento) => {
+                                            const instrumentos = newScheduleData.instrumentos || {};
+                                            const musicoId = instrumentos[instrumento];
+                                            const musico = musicoId ? louvorMembers.find(m => m.id === musicoId) : null;
+                                            
+                                            return (
+                                                <div key={instrumento} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <Music className="w-5 h-5 text-purple-600" />
+                                                            <span className="font-medium text-gray-900 dark:text-white">{instrumento}</span>
+                                                        </div>
+                                                        {musico && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const newInstrumentos = { ...instrumentos };
+                                                                    delete newInstrumentos[instrumento];
+                                                                    setNewScheduleData({ ...newScheduleData, instrumentos: newInstrumentos });
+                                                                }}
+                                                                className="text-red-600 hover:text-red-700"
+                                                            >
+                                                                <X className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    <div className="flex items-center gap-3 p-2 bg-purple-100 dark:bg-purple-900/30 rounded">
+                                                    <div className="h-8 w-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-semibold">
+                                                    {musico?.nome?.charAt(0) || 'M'}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                    <p className="text-sm font-medium text-gray-900 dark:text-white">{musico?.nome || 'Sem músico'}</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">{musico?.telefone || '-'}</p>
+                                                    </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
 
-                                <div>
-                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                                        Local
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={newScheduleData.local}
-                                        onChange={(e) => setNewScheduleData({ ...newScheduleData, local: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                        placeholder="Local do culto/evento"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                                        Observações
-                                    </label>
-                                    <textarea
-                                        value={newScheduleData.observacoes}
-                                        onChange={(e) => setNewScheduleData({ ...newScheduleData, observacoes: e.target.value })}
-                                        rows="2"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                        placeholder="Observações importantes..."
-                                    />
-                                </div>
-
-                                <div className="flex justify-end space-x-2 pt-4">
+                                <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700 mt-6">
                                     <button
                                         type="button"
                                         onClick={() => setShowCreateScheduleModal(false)}
@@ -3609,9 +4182,10 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </button>
                                     <button
                                         type="submit"
-                                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                                        disabled={Object.values(newScheduleData.instrumentos || {}).filter(Boolean).length === 0}
+                                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        Criar Escala
+                                        Criar Escala ({Object.values(newScheduleData.instrumentos || {}).filter(Boolean).length} {Object.values(newScheduleData.instrumentos || {}).filter(Boolean).length === 1 ? 'músico' : 'músicos'})
                                     </button>
                                 </div>
                             </form>
@@ -3623,105 +4197,229 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 {showEditScheduleModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                            <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Editar Escala de Louvor</h3>
+                            <h3 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Editar Escala de Louvor</h3>
                             <form onSubmit={(e) => {
                                 e.preventDefault();
                                 handleUpdateSchedule();
                             }} className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Tipo de Evento
+                                    </label>
+                                    <select
+                                        value={newScheduleData.categoria}
+                                        onChange={(e) => setNewScheduleData({ ...newScheduleData, categoria: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        required
+                                    >
+                                        <option value="culto">Culto</option>
+                                        <option value="ensaio">Ensaio</option>
+                                    </select>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                                            Data *
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            {newScheduleData.categoria === 'culto' ? 'Data do Culto' : 'Data do Ensaio'}
                                         </label>
                                         <input
                                             type="date"
                                             required
                                             value={newScheduleData.data}
                                             onChange={(e) => setNewScheduleData({ ...newScheduleData, data: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                                            Horário
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            {newScheduleData.categoria === 'culto' ? 'Horário do Culto' : 'Horário do Ensaio'}
                                         </label>
                                         <input
                                             type="time"
+                                            required
                                             value={newScheduleData.horario}
                                             onChange={(e) => setNewScheduleData({ ...newScheduleData, horario: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
                                         />
                                     </div>
                                 </div>
 
-                                <div>
-                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                                        Categoria
-                                    </label>
-                                    <select
-                                        value={newScheduleData.categoria}
-                                        onChange={(e) => setNewScheduleData({ ...newScheduleData, categoria: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                    >
-                                        <option value="culto">Culto</option>
-                                        <option value="ensaio">Ensaio</option>
-                                        <option value="evento">Evento</option>
-                                    </select>
+                                {/* Músicas */}
+                                <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                                    <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
+                                        Músicas ({(newScheduleData.musicas || []).length}/5)
+                                    </h3>
+                                    
+                                    <div className="flex gap-2 mb-4">
+                                        <input
+                                            type="text"
+                                            value={newScheduleData.newMusicaTemp || ''}
+                                            onChange={(e) => setNewScheduleData({ ...newScheduleData, newMusicaTemp: e.target.value })}
+                                            onKeyPress={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const musicas = newScheduleData.musicas || [];
+                                                    if (newScheduleData.newMusicaTemp?.trim() && musicas.length < 5) {
+                                                        setNewScheduleData({
+                                                            ...newScheduleData,
+                                                            musicas: [...musicas, newScheduleData.newMusicaTemp.trim()],
+                                                            newMusicaTemp: ''
+                                                        });
+                                                    }
+                                                }
+                                            }}
+                                            placeholder="Nome da música..."
+                                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white placeholder-gray-400"
+                                            disabled={(newScheduleData.musicas || []).length >= 5}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const musicas = newScheduleData.musicas || [];
+                                                if (newScheduleData.newMusicaTemp?.trim() && musicas.length < 5) {
+                                                    setNewScheduleData({
+                                                        ...newScheduleData,
+                                                        musicas: [...musicas, newScheduleData.newMusicaTemp.trim()],
+                                                        newMusicaTemp: ''
+                                                    });
+                                                }
+                                            }}
+                                            disabled={!newScheduleData.newMusicaTemp?.trim() || (newScheduleData.musicas || []).length >= 5}
+                                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                                        >
+                                            <Plus className="w-5 h-5" />
+                                        </button>
+                                    </div>
+
+                                    {(newScheduleData.musicas || []).length > 0 && (
+                                        <div className="space-y-2">
+                                            {newScheduleData.musicas.map((musica, idx) => (
+                                                <div key={idx} className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="h-8 w-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                                                            <Music className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                                        </div>
+                                                        <p className="text-sm font-medium text-gray-900 dark:text-white">{musica}</p>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setNewScheduleData({
+                                                                ...newScheduleData,
+                                                                musicas: newScheduleData.musicas.filter((_, i) => i !== idx)
+                                                            });
+                                                        }}
+                                                        className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div>
-                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                                        Descrição
-                                    </label>
-                                    <textarea
-                                        value={newScheduleData.descricao}
-                                        onChange={(e) => setNewScheduleData({ ...newScheduleData, descricao: e.target.value })}
-                                        rows="2"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                        placeholder="Detalhes sobre esta escala..."
-                                    />
+                                {/* Instrumentos */}
+                                <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                                    <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
+                                        Instrumentos ({Object.values(newScheduleData.instrumentos || {}).filter(Boolean).length} escalados)
+                                    </h3>
+                                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                                        {['Voz 1', 'Voz 2', 'Voz 3', 'Teclado 1', 'Teclado 2', 'Guitarra', 'Contrabaixo', 'Violão', 'Bateria'].map((instrumento) => {
+                                            const instrumentos = newScheduleData.instrumentos || {};
+                                            const musicoId = instrumentos[instrumento];
+                                            const musico = musicoId ? louvorMembers.find(m => m.id === musicoId) : null;
+                                            
+                                            return (
+                                                <div key={instrumento} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <Music className="w-5 h-5 text-purple-600" />
+                                                            <span className="font-medium text-gray-900 dark:text-white">{instrumento}</span>
+                                                        </div>
+                                                        {musico && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const newInstrumentos = { ...instrumentos };
+                                                                    delete newInstrumentos[instrumento];
+                                                                    setNewScheduleData({ ...newScheduleData, instrumentos: newInstrumentos });
+                                                                }}
+                                                                className="text-red-600 hover:text-red-700"
+                                                            >
+                                                                <X className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    {musico ? (
+                                                        <div className="flex items-center gap-3 p-2 bg-purple-100 dark:bg-purple-900/30 rounded">
+                                                            <div className="h-8 w-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-semibold">
+                                                                {musico.nome?.charAt(0) || 'M'}
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <p className="text-sm font-medium text-gray-900 dark:text-white">{musico.nome}</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400">{musico.telefone}</p>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <select
+                                                            value={musicoId || ''}
+                                                            onChange={(e) => {
+                                                                setNewScheduleData({
+                                                                    ...newScheduleData,
+                                                                    instrumentos: {
+                                                                        ...instrumentos,
+                                                                        [instrumento]: e.target.value || undefined
+                                                                    }
+                                                                });
+                                                            }}
+                                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white text-sm"
+                                                        >
+                                                            <option value="">Selecione um músico</option>
+                                                            {louvorMembers.map((musico) => (
+                                                                <option key={musico.id} value={musico.id}>
+                                                                    {musico.nome}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
 
-                                <div>
-                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                                        Local
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={newScheduleData.local}
-                                        onChange={(e) => setNewScheduleData({ ...newScheduleData, local: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                        placeholder="Local do culto/evento"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                                        Observações
-                                    </label>
-                                    <textarea
-                                        value={newScheduleData.observacoes}
-                                        onChange={(e) => setNewScheduleData({ ...newScheduleData, observacoes: e.target.value })}
-                                        rows="2"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                        placeholder="Observações importantes..."
-                                    />
-                                </div>
-
-                                <div className="flex justify-end space-x-2 pt-4">
+                                <div className="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700 mt-6">
                                     <button
                                         type="button"
-                                        onClick={() => setShowEditScheduleModal(false)}
-                                        className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                        onClick={() => {
+                                            if (confirm('Deseja realmente excluir esta escala?')) {
+                                                handleDeleteSchedule(scheduleToEdit?.id);
+                                                setShowEditScheduleModal(false);
+                                            }
+                                        }}
+                                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2"
                                     >
-                                        Cancelar
+                                        <Trash2 className="w-4 h-4" />
+                                        Excluir
                                     </button>
-                                    <button
-                                        type="submit"
-                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                                    >
-                                        Salvar Alterações
-                                    </button>
+                                    <div className="flex space-x-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowEditScheduleModal(false)}
+                                            className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={Object.values(newScheduleData.instrumentos || {}).filter(Boolean).length === 0}
+                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            Salvar Alterações ({Object.values(newScheduleData.instrumentos || {}).filter(Boolean).length} {Object.values(newScheduleData.instrumentos || {}).filter(Boolean).length === 1 ? 'músico' : 'músicos'})
+                                        </button>
+                                    </div>
                                 </div>
                             </form>
                         </div>

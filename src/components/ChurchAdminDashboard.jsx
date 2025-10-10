@@ -1,9 +1,8 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     Menu,
     X,
     Users,
-    User,
     Calendar,
     Settings,
     BarChart3,
@@ -41,7 +40,7 @@ import { format, isAfter, isBefore, startOfWeek, endOfWeek, addDays, subDays, di
 import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { formatId } from '../utils/formatters';
-import { getEventFoods, getEventParticipants, deleteEventFood, createMinistrySchedule, getMinistrySchedules, updateMinistrySchedule, deleteMinistrySchedule, createAviso, getAvisos, deleteAviso, getPlaylistMusicas, createPlaylistMusica, updatePlaylistMusica, deletePlaylistMusica, createWorkshop, getWorkshops, updateWorkshop, deleteWorkshop, registerWorkshopParticipant, unregisterWorkshopParticipant, checkWorkshopRegistration, getWorkshopRegistrations } from '../lib/supabaseService';
+import { getEventFoods, getEventParticipants, deleteEventFood, createMinistrySchedule, getMinistrySchedules, updateMinistrySchedule, deleteMinistrySchedule } from '../lib/supabaseService';
 
 const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], families = [], onAddEvent, onEditEvent, onDeleteEvent, onAddMember, onEditMember, onDeleteMember, onAddFamily, onEditFamily, onLogout }) => {
     console.log('ChurchAdminDashboard renderizando - members:', members.length, 'events:', events.length, 'families:', families.length)
@@ -117,7 +116,16 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         artista: '',
         link: ''
     });
-    const [playlistMusicas, setPlaylistMusicas] = useState([]);
+    const [playlistMusicas, setPlaylistMusicas] = useState(() => {
+        const saved = localStorage.getItem('playlistZoe');
+        return saved ? JSON.parse(saved) : [
+            { id: 1, nome: 'Bondade de Deus', artista: 'Isaías Saad', link: 'https://www.youtube.com/watch?v=xg7pRPTDkd4' },
+            { id: 2, nome: 'Que Se Abram os Céus', artista: 'Gabriela Rocha', link: 'https://www.youtube.com/watch?v=wLU9bPrGdL8' },
+            { id: 3, nome: 'Reckless Love', artista: 'Thalles Roberto', link: 'https://www.youtube.com/watch?v=Sc6SSHuZvQE' },
+            { id: 4, nome: 'Há Poder', artista: 'Gabriela Rocha', link: 'https://www.youtube.com/watch?v=x57zvpAy4B4' },
+            { id: 5, nome: 'O Céu Vai Reagir', artista: 'Sarah Farias', link: 'https://www.youtube.com/watch?v=bSZxeLnyiaU' }
+        ];
+    });
     const [showEscalaModal, setShowEscalaModal] = useState(false);
     const [showEscalaOptionsModal, setShowEscalaOptionsModal] = useState(false);
     const [showEditEscalaModal, setShowEditEscalaModal] = useState(false);
@@ -126,22 +134,18 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         categoria: 'culto',
         data: format(new Date(), 'yyyy-MM-dd'),
         horario: '19:00',
-        descricao: '',
-        local: '',
-        observacoes: '',
         diaconosSelecionados: []
     });
     const [editEscalaData, setEditEscalaData] = useState({
         categoria: 'culto',
         data: '',
         horario: '19:00',
-        descricao: '',
-        local: '',
-        observacoes: '',
         diaconosSelecionados: []
     });
-    const [escalas, setEscalas] = useState([]);
-    const [loadingEscalas, setLoadingEscalas] = useState(false);
+    const [escalas, setEscalas] = useState(() => {
+        const saved = localStorage.getItem('escalaDiaconia');
+        return saved ? JSON.parse(saved) : [];
+    });
     const [showMusicosModal, setShowMusicosModal] = useState(false);
     const [showEscalaLouvorModal, setShowEscalaLouvorModal] = useState(false);
     const [showViewEscalaModal, setShowViewEscalaModal] = useState(false);
@@ -154,10 +158,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         instrumentos: {}
     });
     const [newMusicaEscala, setNewMusicaEscala] = useState('');
-    const [escalasLouvor, setEscalasLouvor] = useState(() => {
-        const saved = localStorage.getItem('escalaLouvor');
-        return saved ? JSON.parse(saved) : [];
-    });
+    const [escalasLouvor, setEscalasLouvor] = useState([]);
     const [showMusicasCadastradasModal, setShowMusicasCadastradasModal] = useState(false);
     const [showProfessoresModal, setShowProfessoresModal] = useState(false);
     const [showCriancasModal, setShowCriancasModal] = useState(false);
@@ -165,32 +166,27 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
     const [showEscalaProfessoresModal, setShowEscalaProfessoresModal] = useState(false);
     const [showDetalhesEscalaProfessoresModal, setShowDetalhesEscalaProfessoresModal] = useState(false);
     const [selectedEscalaProfessores, setSelectedEscalaProfessores] = useState(null);
-    const [showEditarEscalaProfessoresModal, setShowEditarEscalaProfessoresModal] = useState(false);
     const [newEscalaProfessoresData, setNewEscalaProfessoresData] = useState({
         turmas: [],
         data: format(new Date(), 'yyyy-MM-dd'),
         horario: '09:00',
         professoresSelecionados: []
     });
-    const [editEscalaProfessoresData, setEditEscalaProfessoresData] = useState({
-        id: null,
-        turmas: [],
-        data: format(new Date(), 'yyyy-MM-dd'),
-        horario: '09:00',
-        professoresSelecionados: [],
-        observacoes: ''
+    const [escalasProfessores, setEscalasProfessores] = useState(() => {
+        const saved = localStorage.getItem('escalaProfessores');
+        return saved ? JSON.parse(saved) : [];
     });
-    const [escalasProfessores, setEscalasProfessores] = useState([]);
     const [showAvisoModal, setShowAvisoModal] = useState(false);
     const [newAvisoData, setNewAvisoData] = useState({
         titulo: '',
         mensagem: '',
         destinatarios: ['todos']
     });
-    const [avisos, setAvisos] = useState([]);
+    const [avisos, setAvisos] = useState(() => {
+        const saved = localStorage.getItem('avisos');
+        return saved ? JSON.parse(saved) : [];
+    });
     const [showOficinaModal, setShowOficinaModal] = useState(false);
-    const [showEditOficinaModal, setShowEditOficinaModal] = useState(false);
-    const [selectedOficina, setSelectedOficina] = useState(null);
     const [newOficinaData, setNewOficinaData] = useState({
         nome: '',
         descricao: '',
@@ -200,17 +196,10 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         vagas: '',
         permissaoInscricao: ['todos']
     });
-    const [editOficinaData, setEditOficinaData] = useState({
-        nome: '',
-        descricao: '',
-        data: '',
-        horario: '',
-        local: '',
-        vagas: '',
-        permissaoInscricao: []
+    const [oficinas, setOficinas] = useState(() => {
+        const saved = localStorage.getItem('oficinas');
+        return saved ? JSON.parse(saved) : [];
     });
-    const [oficinas, setOficinas] = useState([]);
-    const [oficinscritos, setOficinaInscritos] = useState([]);
     const [showEventDetailsModal, setShowEventDetailsModal] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [selectedFoods, setSelectedFoods] = useState([]);
@@ -240,113 +229,19 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         localStorage.setItem('darkMode', darkMode.toString());
     }, [darkMode]);
 
-    // Carregar avisos do Supabase
-    useEffect(() => {
-        const loadAvisos = async () => {
-            try {
-                const avisosData = await getAvisos();
-                setAvisos(avisosData);
-            } catch (error) {
-                console.error('Erro ao carregar avisos:', error);
-            }
-        };
-        loadAvisos();
-    }, []);
-
-    // Carregar playlist Zoe do Supabase
-    useEffect(() => {
-        const loadPlaylist = async () => {
-            try {
-                const musicas = await getPlaylistMusicas();
-                setPlaylistMusicas(musicas || []);
-            } catch (error) {
-                console.error('Erro ao carregar playlist:', error);
-            }
-        };
-        loadPlaylist();
-    }, []);
-
-    // Carregar escalas de diaconia do Supabase quando mudar para a aba diaconia
-    React.useEffect(() => {
-        const loadDiaconiaSchedules = async () => {
-            if (activeTab === 'diaconia') {
-                setLoadingEscalas(true);
-                try {
-                    const schedules = await getMinistrySchedules('diaconia');
-
-                    // Converter formato do Supabase para o formato local esperado
-                    const escalasFormatadas = schedules.map(schedule => ({
-                        id: schedule.id,
-                        categoria: schedule.categoria || 'culto',
-                        data: schedule.data,
-                        horario: schedule.horario,
-                        descricao: schedule.descricao,
-                        local: schedule.local,
-                        observacoes: schedule.observacoes,
-                        diaconos: members.filter(m => schedule.membros_ids?.includes(m.id)),
-                        membros_ids: schedule.membros_ids
-                    }));
-
-                    setEscalas(escalasFormatadas);
-                    // Atualizar localStorage para compatibilidade
-                    localStorage.setItem('escalaDiaconia', JSON.stringify(escalasFormatadas));
-                } catch (error) {
-                    console.error('Erro ao carregar escalas de diaconia:', error);
-                } finally {
-                    setLoadingEscalas(false);
-                }
-            }
-        };
-
-        loadDiaconiaSchedules();
-    }, [activeTab, members]);
-
+    // Carregar escalas de louvor do banco
     React.useEffect(() => {
         const loadLouvorSchedules = async () => {
-            if (activeTab === 'louvor') {
-                try {
-                    const escalas = await getMinistrySchedules('louvor');
-                    setEscalasLouvor(escalas);
-                } catch (error) {
-                    console.error('Erro ao carregar escalas de louvor:', error);
-                }
+            try {
+                const schedules = await getMinistrySchedules('louvor');
+                console.log('Escalas de louvor carregadas no admin:', schedules);
+                setEscalasLouvor(schedules);
+            } catch (error) {
+                console.error('Erro ao carregar escalas de louvor:', error);
             }
         };
 
         loadLouvorSchedules();
-    }, [activeTab]);
-
-    React.useEffect(() => {
-        const loadKidsSchedules = async () => {
-            if (activeTab === 'kids') {
-                try {
-                    const escalas = await getMinistrySchedules('kids');
-                    setEscalasProfessores(escalas || []);
-                } catch (error) {
-                    console.error('Erro ao carregar escalas de Kids:', error);
-                    setEscalasProfessores([]);
-                }
-            }
-        };
-
-        loadKidsSchedules();
-    }, [activeTab]);
-
-    // Carregar oficinas do Supabase
-    const loadOficinas = async () => {
-        try {
-            console.log('Carregando oficinas do Supabase...');
-            const workshopsData = await getWorkshops();
-            console.log('Oficinas carregadas:', workshopsData);
-            setOficinas(workshopsData || []);
-        } catch (error) {
-            console.error('Erro ao carregar oficinas:', error);
-            setOficinas([]);
-        }
-    };
-
-    useEffect(() => {
-        loadOficinas();
     }, []);
 
     const toggleDarkMode = () => {
@@ -401,7 +296,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             const isSelected = prev.membrosIds.includes(memberId);
             return {
                 ...prev,
-                membrosIds: isSelected
+                membrosIds: isSelected 
                     ? prev.membrosIds.filter(id => id !== memberId)
                     : [...prev.membrosIds, memberId]
             };
@@ -413,7 +308,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             const isSelected = prev.membrosIds.includes(memberId);
             return {
                 ...prev,
-                membrosIds: isSelected
+                membrosIds: isSelected 
                     ? prev.membrosIds.filter(id => id !== memberId)
                     : [...prev.membrosIds, memberId]
             };
@@ -438,13 +333,10 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
 
     const handleEditEscalaDiaconia = (escala) => {
         setEditEscalaData({
-            categoria: escala.categoria || 'culto',
+            categoria: escala.categoria,
             data: escala.data,
             horario: escala.horario,
-            descricao: escala.descricao || '',
-            local: escala.local || '',
-            observacoes: escala.observacoes || '',
-            diaconosSelecionados: escala.diaconos?.map(d => d.id) || escala.membros_ids || []
+            diaconosSelecionados: escala.diaconos.map(d => d.id)
         });
         setShowEscalaOptionsModal(false);
         setShowEditEscalaModal(true);
@@ -457,7 +349,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                 const diaconosSelecionados = members
                     .filter(m => editEscalaData.diaconosSelecionados.includes(m.id))
                     .map(m => ({ id: m.id, nome: m.nome }));
-
+                
                 return {
                     ...escala,
                     categoria: editEscalaData.categoria,
@@ -468,7 +360,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             }
             return escala;
         });
-
+        
         setEscalas(updatedEscalas);
         localStorage.setItem('escalaDiaconia', JSON.stringify(updatedEscalas));
         setShowEditEscalaModal(false);
@@ -481,25 +373,13 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         });
     };
 
-    const handleDeleteEscalaDiaconia = async (escalaId) => {
+    const handleDeleteEscalaDiaconia = (escalaId) => {
         if (confirm('Tem certeza que deseja deletar esta escala?')) {
-            try {
-                // Deletar do Supabase
-                await deleteMinistrySchedule(escalaId, 'diaconia');
-                
-                // Atualizar estado local
-                const updatedEscalas = escalas.filter(e => e.id !== escalaId);
-                setEscalas(updatedEscalas);
-                
-                // Manter localStorage como backup (opcional)
-                localStorage.setItem('escalaDiaconia', JSON.stringify(updatedEscalas));
-                
-                setShowEscalaOptionsModal(false);
-                setSelectedEscalaDiaconia(null);
-            } catch (error) {
-                console.error('Erro ao deletar escala:', error);
-                alert('Erro ao deletar escala. Tente novamente.');
-            }
+            const updatedEscalas = escalas.filter(e => e.id !== escalaId);
+            setEscalas(updatedEscalas);
+            localStorage.setItem('escalaDiaconia', JSON.stringify(updatedEscalas));
+            setShowEscalaOptionsModal(false);
+            setSelectedEscalaDiaconia(null);
         }
     };
 
@@ -556,8 +436,8 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         'louvor',
         'diaconia',
         'professor kids',
-
-
+        
+        
     ];
 
     // Função para parsear datas de eventos
@@ -586,7 +466,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
 
     // Função para obter iniciais
     const getInitials = (name) => {
-        if (!name) return 'M';
+        if (!name) return '??';
         return name
             .split(' ')
             .map(word => word[0])
@@ -660,7 +540,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             return idA - idB;
         });
     }, [members, genderFilter, ageFilter, roleFilter, searchTerm]);
-
+    
     // Membros individuais (sem família) para a view individual
     const individualMembers = useMemo(() => {
         return filteredMembers.filter(member => !member.familia || member.familia.trim() === '');
@@ -740,12 +620,12 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
     // Agrupar membros por família (usando dados do Supabase)
     const familyGroups = useMemo(() => {
         console.log('Calculando familyGroups - families:', families, 'members:', members);
-
+        
         return families.map(family => {
-            const familyMembers = members.filter(member =>
+            const familyMembers = members.filter(member => 
                 family.membros_ids && family.membros_ids.includes(member.id)
             );
-
+            
             return {
                 id: family.id,
                 nome: family.nome,
@@ -1096,20 +976,22 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700">
                 <button
                     onClick={() => setMemberView('individual')}
-                    className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 ${memberView === 'individual'
+                    className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 ${
+                        memberView === 'individual'
                             ? 'border-gray-900 dark:border-white text-gray-900 dark:text-white'
                             : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                        }`}
+                    }`}
                 >
                     <Users className="w-4 h-4 inline mr-2" />
                     Individual
                 </button>
                 <button
                     onClick={() => setMemberView('familias')}
-                    className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 ${memberView === 'familias'
+                    className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 ${
+                        memberView === 'familias'
                             ? 'border-gray-900 dark:border-white text-gray-900 dark:text-white'
                             : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                        }`}
+                    }`}
                 >
                     <Users className="w-4 h-4 inline mr-2" />
                     Famílias
@@ -1129,100 +1011,100 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                             return null;
                         })()}
                         {filteredMembers.map((member, index) => {
-                            const age = calculateAge(member.nascimento);
-                            const initials = getInitials(member.nome);
-                            const memberId = generateMemberId(member, index);
+                        const age = calculateAge(member.nascimento);
+                        const initials = getInitials(member.nome);
+                        const memberId = generateMemberId(member, index);
 
-                            return (
-                                <div key={memberId} className="card hover:shadow-lg transition-shadow">
-                                    <div className="flex items-start justify-between mb-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-14 w-14 rounded-full bg-gray-900 dark:bg-white flex items-center justify-center text-white dark:text-gray-900 font-semibold text-xl">
-                                                {initials}
-                                            </div>
-                                            <div>
-                                                <h3 className="font-semibold text-gray-900 dark:text-white text-base md:text-lg">{member.nome}</h3>
-                                                <p className="text-sm text-gray-500 dark:text-gray-400">ID: {member.id ? formatId(member.id) : memberId}</p>
-                                            </div>
+                        return (
+                            <div key={memberId} className="card hover:shadow-lg transition-shadow">
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-14 w-14 rounded-full bg-gray-900 dark:bg-white flex items-center justify-center text-white dark:text-gray-900 font-semibold text-xl">
+                                            {initials}
                                         </div>
-                                        <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${member.status === 'ativo'
+                                        <div>
+                                            <h3 className="font-semibold text-gray-900 dark:text-white text-base md:text-lg">{member.nome}</h3>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">ID: {member.id ? formatId(member.id) : memberId}</p>
+                                        </div>
+                                    </div>
+                                    <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${member.status === 'ativo'
                                             ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200'
                                             : 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-200'
-                                            }`}>
-                                            {member.status || 'ativo'}
-                                        </span>
-                                    </div>
-
-                                    <div className="space-y-2 mb-4">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-sm text-gray-500 dark:text-gray-400">Função:</span>
-                                            <div className="flex flex-wrap gap-1 justify-end">
-                                                {(member.funcoes && member.funcoes.length > 0 ? member.funcoes : ['membro']).map((funcao, idx) => {
-                                                    const funcaoLower = funcao.toLowerCase();
-                                                    const getFuncaoColor = () => {
-                                                        if (age !== null && age <= 12) return 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200';
-                                                        if (funcaoLower === 'pastor') return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
-                                                        if (funcaoLower === 'diácono' || funcaoLower === 'diacono' || funcaoLower === 'diaconia') return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-                                                        if (funcaoLower === 'louvor' || funcaoLower.includes('louvor')) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-                                                        if (funcaoLower === 'músico' || funcaoLower === 'musico') return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
-                                                        if (funcaoLower.includes('lider') || funcaoLower.includes('líder')) return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200';
-                                                        if (funcaoLower === 'jovem' || funcaoLower === 'jovens') return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
-                                                        if (funcaoLower.includes('kids') || funcaoLower.includes('criança')) return 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200';
-                                                        if (funcaoLower.includes('professor')) return 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200';
-                                                        if (funcaoLower === 'membro') return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
-                                                        return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200';
-                                                    };
-
-                                                    return (
-                                                        <span key={idx} className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getFuncaoColor()}`}>
-                                                            {age !== null && age <= 12 && idx === 0 ? 'Criança' : funcao.charAt(0).toUpperCase() + funcao.slice(1)}
-                                                        </span>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-
-                                        <div className="flex items-center justify-between text-sm">
-                                            <span className="text-sm text-gray-500 dark:text-gray-400">Gênero:</span>
-                                            <span className="text-gray-900 dark:text-white capitalize text-sm font-medium">{member.genero || 'N/A'}</span>
-                                        </div>
-
-                                        <div className="flex items-center justify-between text-sm">
-                                            <span className="text-sm text-gray-500 dark:text-gray-400">Idade:</span>
-                                            <span className="text-gray-900 dark:text-white text-sm font-medium">{age ? `${age} anos` : 'N/A'}</span>
-                                        </div>
-
-                                        {member.telefone && (
-                                            <div className="flex items-center justify-between text-sm">
-                                                <div className="flex items-center gap-2">
-                                                    <Phone className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                                                    <span className="text-sm text-gray-500 dark:text-gray-400">Telefone:</span>
-                                                </div>
-                                                <span className="text-gray-900 dark:text-white text-sm font-medium">{member.telefone}</span>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="flex gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
-                                        <button
-                                            onClick={() => handleEditMember(member)}
-                                            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                                        >
-                                            <Edit className="w-4 h-4" />
-                                            <span className="text-sm">Editar</span>
-                                        </button>
-                                        <button
-                                            onClick={() => handleDeleteMember(member)}
-                                            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                            <span className="text-sm">Deletar</span>
-                                        </button>
-                                    </div>
+                                        }`}>
+                                        {member.status || 'ativo'}
+                                    </span>
                                 </div>
-                            );
-                        })}
-                    </div>
+
+                                <div className="space-y-2 mb-4">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm text-gray-500 dark:text-gray-400">Função:</span>
+                                        <div className="flex flex-wrap gap-1 justify-end">
+                                            {(member.funcoes && member.funcoes.length > 0 ? member.funcoes : ['membro']).map((funcao, idx) => {
+                                                const funcaoLower = funcao.toLowerCase();
+                                                const getFuncaoColor = () => {
+                                                    if (age !== null && age <= 12) return 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200';
+                                                    if (funcaoLower === 'pastor') return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+                                                    if (funcaoLower === 'diácono' || funcaoLower === 'diacono' || funcaoLower === 'diaconia') return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+                                                    if (funcaoLower === 'louvor' || funcaoLower.includes('louvor')) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+                                                    if (funcaoLower === 'músico' || funcaoLower === 'musico') return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+                                                    if (funcaoLower.includes('lider') || funcaoLower.includes('líder')) return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200';
+                                                    if (funcaoLower === 'jovem' || funcaoLower === 'jovens') return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
+                                                    if (funcaoLower.includes('kids') || funcaoLower.includes('criança')) return 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200';
+                                                    if (funcaoLower.includes('professor')) return 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200';
+                                                    if (funcaoLower === 'membro') return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+                                                    return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200';
+                                                };
+                                                
+                                                return (
+                                                    <span key={idx} className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getFuncaoColor()}`}>
+                                                        {age !== null && age <= 12 && idx === 0 ? 'Criança' : funcao.charAt(0).toUpperCase() + funcao.slice(1)}
+                                                    </span>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="text-sm text-gray-500 dark:text-gray-400">Gênero:</span>
+                                        <span className="text-gray-900 dark:text-white capitalize text-sm font-medium">{member.genero || 'N/A'}</span>
+                                    </div>
+
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="text-sm text-gray-500 dark:text-gray-400">Idade:</span>
+                                        <span className="text-gray-900 dark:text-white text-sm font-medium">{age ? `${age} anos` : 'N/A'}</span>
+                                    </div>
+
+                                    {member.telefone && (
+                                        <div className="flex items-center justify-between text-sm">
+                                            <div className="flex items-center gap-2">
+                                                <Phone className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                                                <span className="text-sm text-gray-500 dark:text-gray-400">Telefone:</span>
+                                            </div>
+                                            <span className="text-gray-900 dark:text-white text-sm font-medium">{member.telefone}</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+                                    <button
+                                        onClick={() => handleEditMember(member)}
+                                        className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                                    >
+                                        <Edit className="w-4 h-4" />
+                                        <span className="text-sm">Editar</span>
+                                    </button>
+                                    <button
+                                        onClick={() => handleDeleteMember(member)}
+                                        className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                        <span className="text-sm">Deletar</span>
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
                 )
             ) : (
                 // Visualização de Famílias
@@ -1235,10 +1117,10 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         {familyGroups.map((family, index) => {
                             const isExpanded = expandedFamilies[family.id];
-
+                            
                             return (
                                 <div key={family.id} className="card hover:shadow-lg transition-shadow">
-                                    <div
+                                    <div 
                                         className="flex items-center justify-between cursor-pointer"
                                         onClick={() => {
                                             setExpandedFamilies(prev => ({
@@ -1284,7 +1166,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             {family.membros.map((member, memberIndex) => {
                                                 const age = calculateAge(member.nascimento);
                                                 const initials = getInitials(member.nome);
-
+                                                
                                                 return (
                                                     <div key={memberIndex} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                                                         <div className="flex items-center gap-3">
@@ -1319,7 +1201,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                                         if (funcaoLower === 'membro') return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
                                                                         return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200';
                                                                     };
-
+                                                                    
                                                                     return (
                                                                         <span key={idx} className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getFuncaoColor()}`}>
                                                                             {age !== null && age <= 12 && idx === 0 ? 'Criança' : funcao.charAt(0).toUpperCase() + funcao.slice(1)}
@@ -1420,9 +1302,9 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         {format(day, 'd')}
                                     </div>
                                     {dayEvents.map((event, idx) => (
-                                        <div
-                                            key={`${event.id}-${idx}`}
-                                            className={`calendar-event text-xs ${event.tipo === 'oficina' ? 'bg-purple-500' : ''}`}
+                                        <div 
+                                            key={`${event.id}-${idx}`} 
+                                            className={`calendar-event text-xs ${event.tipo === 'oficina' ? 'bg-purple-500' : ''}`} 
                                             title={event.nome}
                                         >
                                             {event.tipo === 'oficina' && '🎓 '}
@@ -1528,18 +1410,19 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 <p className="text-gray-500 dark:text-gray-400">Nenhum evento futuro agendado.</p>
                             ) : (
                                 futureEvents.map(event => (
-                                    <div
-                                        key={event.id}
-                                        className={`p-3 rounded-lg border-l-4 cursor-pointer transition-colors ${event.tipo === 'oficina'
-                                                ? 'bg-purple-50 border-purple-500 hover:bg-purple-100'
+                                    <div 
+                                        key={event.id} 
+                                        className={`p-3 rounded-lg border-l-4 cursor-pointer transition-colors ${
+                                            event.tipo === 'oficina' 
+                                                ? 'bg-purple-50 border-purple-500 hover:bg-purple-100' 
                                                 : 'bg-green-50 border-green-500 hover:bg-green-100'
-                                            }`}
+                                        }`}
                                         onClick={async () => {
                                             setSelectedEvent(event);
                                             setSelectedFoods([]);
                                             setShowParticipantsSection(false);
                                             setShowFoodsSection(false);
-
+                                            
                                             // Buscar alimentações do banco de dados
                                             if (event.alimentacao && event.id) {
                                                 try {
@@ -1552,7 +1435,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             } else {
                                                 setEventFoodsFromDB([]);
                                             }
-
+                                            
                                             // Buscar participantes do evento
                                             if (event.id) {
                                                 try {
@@ -1565,7 +1448,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             } else {
                                                 setEventParticipants([]);
                                             }
-
+                                            
                                             setShowEventDetailsModal(true);
                                         }}
                                     >
@@ -1798,50 +1681,46 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
     );
 
     const renderDiaconia = () => {
-        const necessitados = members.filter(m => m.status === 'necessitado' || m.observacoes?.toLowerCase().includes('ajuda'));
-        const diaconos = members.filter(m => {
-            const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
-            return funcoes.some(f => f === 'diácono' || f === 'diaconia' || f === 'líder da diaconia' || f === 'lider da diaconia');
-        });
-
-        return (
-            <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                    <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white"> Diaconia</h1>
-                    <button
-                        onClick={() => {
-                            setNewEscalaData({
-                                categoria: 'culto',
-                                data: format(new Date(), 'yyyy-MM-dd'),
-                                horario: '19:00',
-                                descricao: '',
-                                local: '',
-                                observacoes: '',
-                                diaconosSelecionados: []
-                            });
-                            setShowEscalaModal(true);
-                        }}
-                        className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Montar escala        </button>
+    const necessitados = members.filter(m => m.status === 'necessitado' || m.observacoes?.toLowerCase().includes('ajuda'));
+    const diaconos = members.filter(m => {
+        const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+        return funcoes.some(f => f === 'diácono' || f === 'diaconia' || f === 'líder da diaconia' || f === 'lider da diaconia');
+    });
+    
+    return (
+    <div className="space-y-6">
+    <div className="flex justify-between items-center">
+    <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white"> Diaconia</h1>
+    <button 
+        onClick={() => {
+            setNewEscalaData({
+                data: format(new Date(), 'yyyy-MM-dd'),
+                horario: '19:00',
+                diaconosSelecionados: []
+            });
+            setShowEscalaModal(true);
+        }}
+        className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+    <Plus className="w-4 h-4 mr-2" />
+Montar escala        </button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="card">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Diáconos</p>
-                                <p className="text-2xl font-bold text-gray-900 dark:text-white">{diaconos.length}</p>
-                            </div>
-                            <Users className="w-8 h-8 text-purple-500" />
-                        </div>
-                    </div>
+        <div className="card">
+        <div className="flex items-center justify-between">
+            <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Diáconos</p>
+        <p className="text-2xl font-bold text-gray-900 dark:text-white">{diaconos.length}</p>
+    </div>
+        <Users className="w-8 h-8 text-purple-500" />
+        </div>
+    </div>
 
-                </div>
+    </div>
 
-                <div className="card">
-                    <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center">
-                        <Users className="w-5 h-5 mr-2 text-purple-600" />
+    <div className="card">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center">
+                    <Users className="w-5 h-5 mr-2 text-purple-600" />
                         Lista de Diáconos ({diaconos.length})
                     </h3>
                     {diaconos.length === 0 ? (
@@ -1854,7 +1733,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                             {diaconos.map((diacono, index) => {
                                 const age = calculateAge(diacono.nascimento);
                                 const initials = getInitials(diacono.nome);
-
+                                
                                 return (
                                     <div key={diacono.id || index} className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
                                         <div className="flex items-center gap-3">
@@ -1897,33 +1776,37 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 const dataEscala = parseISO(escala.data);
                                 const isProxima = index === 0;
                                 const dataFormatada = format(dataEscala, "EEEE - dd/MM/yyyy", { locale: ptBR });
-
+                                
                                 return (
-                                    <div
-                                        key={escala.id}
+                                    <div 
+                                        key={escala.id} 
                                         onClick={() => {
                                             setSelectedEscalaDiaconia(escala);
                                             setShowEscalaOptionsModal(true);
                                         }}
-                                        className={`p-4 border-l-4 rounded-lg cursor-pointer hover:shadow-lg transition-shadow ${isProxima
-                                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                        className={`p-4 border-l-4 rounded-lg cursor-pointer hover:shadow-lg transition-shadow ${
+                                            isProxima 
+                                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
                                                 : 'border-gray-400 bg-gray-50 dark:bg-gray-700/50'
-                                            }`}
+                                        }`}
                                     >
                                         <div className="flex items-center justify-between mb-3">
-                                            <p className={`font-semibold capitalize ${isProxima ? 'text-blue-900 dark:text-blue-300' : 'text-gray-900 dark:text-gray-300'
-                                                }`}>
+                                            <p className={`font-semibold capitalize ${
+                                                isProxima ? 'text-blue-900 dark:text-blue-300' : 'text-gray-900 dark:text-gray-300'
+                                            }`}>
                                                 {dataFormatada}
                                             </p>
                                             <div className="flex items-center gap-2">
                                                 {escala.categoria && (
-                                                    <span className={`px-3 py-1 text-xs font-semibold rounded-full capitalize ${escala.categoria === 'culto' ? 'bg-purple-600 text-white' : 'bg-orange-600 text-white'
-                                                        }`}>
+                                                    <span className={`px-3 py-1 text-xs font-semibold rounded-full capitalize ${
+                                                        escala.categoria === 'culto' ? 'bg-purple-600 text-white' : 'bg-orange-600 text-white'
+                                                    }`}>
                                                         {escala.categoria}
                                                     </span>
                                                 )}
-                                                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${isProxima ? 'bg-blue-600 text-white' : 'bg-gray-400 text-white'
-                                                    }`}>
+                                                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                                                    isProxima ? 'bg-blue-600 text-white' : 'bg-gray-400 text-white'
+                                                }`}>
                                                     {escala.horario}
                                                 </span>
                                                 {isProxima && (
@@ -1933,21 +1816,24 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         </div>
                                         <div className="space-y-2">
                                             <div className="flex items-start gap-2">
-                                                <Users className={`w-4 h-4 mt-0.5 ${isProxima ? 'text-blue-600' : 'text-gray-600 dark:text-gray-400'
-                                                    }`} />
+                                                <Users className={`w-4 h-4 mt-0.5 ${
+                                                    isProxima ? 'text-blue-600' : 'text-gray-600 dark:text-gray-400'
+                                                }`} />
                                                 <div className="flex-1">
-                                                    <span className={`font-medium text-sm ${isProxima ? 'text-blue-800 dark:text-blue-400' : 'text-gray-700 dark:text-gray-400'
-                                                        }`}>
+                                                    <span className={`font-medium text-sm ${
+                                                        isProxima ? 'text-blue-800 dark:text-blue-400' : 'text-gray-700 dark:text-gray-400'
+                                                    }`}>
                                                         Diáconos escalados:
                                                     </span>
                                                     <div className="mt-1 flex flex-wrap gap-2">
                                                         {escala.diaconos.map((diacono, dIndex) => (
-                                                            <span
+                                                            <span 
                                                                 key={dIndex}
-                                                                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${isProxima
-                                                                        ? 'bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200'
+                                                                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
+                                                                    isProxima 
+                                                                        ? 'bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200' 
                                                                         : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
-                                                                    }`}
+                                                                }`}
                                                             >
                                                                 <div className="h-5 w-5 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs">
                                                                     {getInitials(diacono.nome)}
@@ -1966,8 +1852,8 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                     )}
                 </div>
 
-
-
+                
+                
 
             </div>
         );
@@ -1978,13 +1864,13 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
             return funcoes.some(f => f === 'músico' || f === 'líder de louvor' || f === 'louvor');
         });
-
+        
         return (
             <div className="space-y-6">
                 <div className="flex justify-between items-center gap-2">
                     <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Louvor</h1>
                     <div className="flex gap-2">
-                        <button
+                        <button 
                             onClick={() => {
                                 setNewEscalaLouvorData({
                                     tipo: 'culto',
@@ -1999,7 +1885,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                             <Plus className="w-4 h-4 mr-2" />
                             Nova Escala
                         </button>
-                        <button
+                        <button 
                             onClick={() => setShowMusicModal(true)}
                             className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
                             <Plus className="w-4 h-4 mr-2" />
@@ -2009,7 +1895,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div
+                    <div 
                         className="card cursor-pointer hover:shadow-lg transition-shadow"
                         onClick={() => setShowMusicosModal(true)}
                     >
@@ -2021,8 +1907,8 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                             <Music className="w-8 h-8 text-purple-500" />
                         </div>
                     </div>
-
-                    <div
+                    
+                    <div 
                         className="card cursor-pointer hover:shadow-lg transition-shadow"
                         onClick={() => setShowMusicasCadastradasModal(true)}
                     >
@@ -2034,7 +1920,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                             <Music className="w-8 h-8 text-green-500" />
                         </div>
                     </div>
-
+                    
                 </div>
 
                 <div className="card">
@@ -2055,31 +1941,35 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 const dataEscala = new Date(`${escala.data}T${escala.horario}`);
                                 const isProxima = dataEscala >= now && index === escalasLouvor.filter(e => new Date(`${e.data}T${e.horario}`) >= now).sort((a, b) => new Date(`${a.data}T${a.horario}`) - new Date(`${b.data}T${b.horario}`)).findIndex(e => e.id === escala.id) && escalasLouvor.filter(e => new Date(`${e.data}T${e.horario}`) >= now).sort((a, b) => new Date(`${a.data}T${a.horario}`) - new Date(`${b.data}T${b.horario}`)).findIndex(e => e.id === escala.id) === 0;
                                 const dataFormatada = format(parseISO(escala.data), "EEEE - dd/MM/yyyy", { locale: ptBR });
-
+                                
                                 return (
-                                    <div
-                                        key={escala.id}
+                                    <div 
+                                        key={escala.id} 
                                         onClick={() => {
                                             setSelectedEscala(escala);
                                             setShowViewEscalaModal(true);
                                         }}
-                                        className={`p-4 border-l-4 rounded-lg cursor-pointer hover:shadow-md transition-all ${isProxima
-                                                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                                        className={`p-4 border-l-4 rounded-lg cursor-pointer hover:shadow-md transition-all ${
+                                            isProxima 
+                                                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' 
                                                 : 'border-gray-400 bg-gray-50 dark:bg-gray-700/50'
-                                            }`}
+                                        }`}
                                     >
                                         <div className="flex items-center justify-between mb-3">
-                                            <p className={`font-semibold capitalize ${isProxima ? 'text-purple-900 dark:text-purple-300' : 'text-gray-900 dark:text-gray-300'
-                                                }`}>
+                                            <p className={`font-semibold capitalize ${
+                                                isProxima ? 'text-purple-900 dark:text-purple-300' : 'text-gray-900 dark:text-gray-300'
+                                            }`}>
                                                 {dataFormatada}
                                             </p>
                                             <div className="flex items-center gap-2">
-                                                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${escala.tipo === 'culto' ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'
-                                                    }`}>
+                                                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                                                    escala.tipo === 'culto' ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'
+                                                }`}>
                                                     {escala.tipo === 'culto' ? 'Culto' : 'Ensaio'}
                                                 </span>
-                                                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${isProxima ? 'bg-purple-600 text-white' : 'bg-gray-400 text-white'
-                                                    }`}>
+                                                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                                                    isProxima ? 'bg-purple-600 text-white' : 'bg-gray-400 text-white'
+                                                }`}>
                                                     {escala.horario}
                                                 </span>
                                                 {isProxima && (
@@ -2090,32 +1980,37 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         <div className="space-y-2">
                                             {escala.musicas && escala.musicas.length > 0 && (
                                                 <div className="flex items-start gap-2">
-                                                    <Music className={`w-4 h-4 mt-0.5 ${isProxima ? 'text-purple-600' : 'text-gray-600 dark:text-gray-400'
-                                                        }`} />
+                                                    <Music className={`w-4 h-4 mt-0.5 ${
+                                                        isProxima ? 'text-purple-600' : 'text-gray-600 dark:text-gray-400'
+                                                    }`} />
                                                     <div className="flex-1">
-                                                        <span className={`font-medium text-sm ${isProxima ? 'text-purple-800 dark:text-purple-400' : 'text-gray-700 dark:text-gray-400'
-                                                            }`}>
+                                                        <span className={`font-medium text-sm ${
+                                                            isProxima ? 'text-purple-800 dark:text-purple-400' : 'text-gray-700 dark:text-gray-400'
+                                                        }`}>
                                                             {escala.musicas.length} {escala.musicas.length === 1 ? 'música' : 'músicas'}
                                                         </span>
                                                     </div>
                                                 </div>
                                             )}
                                             <div className="flex items-start gap-2">
-                                                <Users className={`w-4 h-4 mt-0.5 ${isProxima ? 'text-purple-600' : 'text-gray-600 dark:text-gray-400'
-                                                    }`} />
+                                                <Users className={`w-4 h-4 mt-0.5 ${
+                                                    isProxima ? 'text-purple-600' : 'text-gray-600 dark:text-gray-400'
+                                                }`} />
                                                 <div className="flex-1">
-                                                    <span className={`font-medium text-sm ${isProxima ? 'text-purple-800 dark:text-purple-400' : 'text-gray-700 dark:text-gray-400'
-                                                        }`}>
+                                                    <span className={`font-medium text-sm ${
+                                                        isProxima ? 'text-purple-800 dark:text-purple-400' : 'text-gray-700 dark:text-gray-400'
+                                                    }`}>
                                                         Músicos escalados:
                                                     </span>
                                                     <div className="mt-1 flex flex-wrap gap-2">
-                                                        {escala.musicos.filter(m => m && m.nome).map((musico, mIndex) => (
-                                                            <span
+                                                        {escala.musicos.map((musico, mIndex) => (
+                                                            <span 
                                                                 key={mIndex}
-                                                                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${isProxima
-                                                                        ? 'bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-200'
+                                                                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
+                                                                    isProxima 
+                                                                        ? 'bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-200' 
                                                                         : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
-                                                                    }`}
+                                                                }`}
                                                             >
                                                                 <div className="h-5 w-5 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs">
                                                                     {getInitials(musico.nome)}
@@ -2167,17 +2062,17 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             const age = calculateAge(m.nascimento);
             return age !== null && age <= 12;
         });
-
+        
         const professores = members.filter(m => {
             const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
             return funcoes.some(f => f === 'professor kids' || f === 'lider kids');
         });
-
+        
         return (
             <div className="space-y-6">
                 <div className="flex justify-between items-center">
                     <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Kids</h1>
-                    <button
+                    <button 
                         onClick={() => setShowEscalaProfessoresModal(true)}
                         className="flex items-center px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700"
                     >
@@ -2187,7 +2082,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div
+                    <div 
                         className="card cursor-pointer hover:shadow-lg transition-shadow"
                         onClick={() => setShowCriancasModal(true)}
                     >
@@ -2199,8 +2094,8 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                             <Baby className="w-8 h-8 text-pink-500" />
                         </div>
                     </div>
-
-                    <div
+                    
+                    <div 
                         className="card cursor-pointer hover:shadow-lg transition-shadow"
                         onClick={() => setShowProfessoresModal(true)}
                     >
@@ -2212,11 +2107,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                             <Users className="w-8 h-8 text-blue-500" />
                         </div>
                     </div>
-
-
+                    
+                    
                 </div>
 
-
+                
 
                 <div className="card">
                     <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Crianças por Faixa Etária</h3>
@@ -2262,7 +2157,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                         <Calendar className="w-5 h-5 mr-2 text-pink-600" />
                         Próximas Escalas
                     </h3>
-                    {!escalasProfessores || escalasProfessores.length === 0 ? (
+                    {escalasProfessores.length === 0 ? (
                         <div className="text-center py-8">
                             <Calendar className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
                             <p className="text-gray-500 dark:text-gray-400">Nenhuma escala criada ainda.</p>
@@ -2273,10 +2168,9 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 .sort((a, b) => new Date(a.data) - new Date(b.data))
                                 .slice(0, 5)
                                 .map((escala, idx) => {
-                                    const turmasText = escala.descricao?.replace('Turmas: ', '') || '';
-                                    const hasPequenos = turmasText.includes('Pequenos');
-                                    const hasGrandes = turmasText.includes('Grandes');
-
+                                    const hasPequenos = escala.turmas?.includes('Pequenos');
+                                    const hasGrandes = escala.turmas?.includes('Grandes');
+                                    
                                     let cardClasses = "p-4 rounded-lg border ";
                                     if (hasPequenos && hasGrandes) {
                                         cardClasses += "bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-blue-300 dark:border-blue-700";
@@ -2287,56 +2181,57 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                     } else {
                                         cardClasses += "bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 border-pink-200 dark:border-pink-800";
                                     }
-
+                                    
                                     return (
-                                        <div
-                                            key={idx}
-                                            className={`${cardClasses} cursor-pointer hover:shadow-lg transition-shadow`}
-                                            onClick={() => {
-                                                setSelectedEscalaProfessores(escala);
-                                                setShowDetalhesEscalaProfessoresModal(true);
-                                            }}
-                                        >
-                                            <div className="flex items-center justify-between mb-2">
-                                                <div className="flex items-center gap-2">
-                                                    <Calendar className="w-5 h-5 text-pink-600" />
-                                                    <div>
-                                                        <span className="font-medium text-gray-900 dark:text-white">
-                                                            {format(parseISO(escala.data), "dd/MM/yyyy", { locale: ptBR })} - {escala.horario}
-                                                        </span>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                            {format(parseISO(escala.data), "EEEE", { locale: ptBR })}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            {escala.descricao && escala.descricao.includes('Turmas:') && (
-                                                <div className="mb-2">
-                                                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Turmas:</p>
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {escala.descricao.replace('Turmas: ', '').split(', ').map((turma, i) => (
-                                                            <span key={i} className={`text-xs px-2 py-0.5 text-white rounded-full ${turma === 'Pequenos' ? 'bg-blue-500' : 'bg-purple-600'
-                                                                }`}>
-                                                                {turma}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                            <div className="mt-3">
-                                                <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Professores escalados:</p>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {(escala.membros_ids || escala.professoresSelecionados || []).map((profId, i) => {
-                                                        const prof = members.find(m => m.id === profId);
-                                                        return prof ? (
-                                                            <span key={i} className="text-xs px-2 py-1 bg-pink-600 text-white rounded-full">
-                                                                {prof.nome}
-                                                            </span>
-                                                        ) : null;
-                                                    })}
+                                    <div 
+                                        key={idx} 
+                                        className={`${cardClasses} cursor-pointer hover:shadow-lg transition-shadow`}
+                                        onClick={() => {
+                                            setSelectedEscalaProfessores(escala);
+                                            setShowDetalhesEscalaProfessoresModal(true);
+                                        }}
+                                    >
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-2">
+                                                <Calendar className="w-5 h-5 text-pink-600" />
+                                                <div>
+                                                    <span className="font-medium text-gray-900 dark:text-white">
+                                                        {format(parseISO(escala.data), "dd/MM/yyyy", { locale: ptBR })} - {escala.horario}
+                                                    </span>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                        {format(parseISO(escala.data), "EEEE", { locale: ptBR })}
+                                                    </p>
                                                 </div>
                                             </div>
                                         </div>
+                                        {escala.turmas && escala.turmas.length > 0 && (
+                                            <div className="mb-2">
+                                                <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Turmas:</p>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {escala.turmas.map((turma, i) => (
+                                                        <span key={i} className={`text-xs px-2 py-0.5 text-white rounded-full ${
+                                                            turma === 'Pequenos' ? 'bg-blue-500' : 'bg-purple-600'
+                                                        }`}>
+                                                            {turma}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div className="mt-3">
+                                            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Professores escalados:</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {escala.professoresSelecionados.map((profId, i) => {
+                                                    const prof = members.find(m => m.id === profId);
+                                                    return prof ? (
+                                                        <span key={i} className="text-xs px-2 py-1 bg-pink-600 text-white rounded-full">
+                                                            {prof.nome}
+                                                        </span>
+                                                    ) : null;
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
                                     );
                                 })}
                         </div>
@@ -2352,12 +2247,12 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
             return (age !== null && age >= 13 && age <= 30) || funcoes.includes('jovem');
         });
-
+        
         return (
             <div className="space-y-6">
                 <div className="flex justify-between items-center">
                     <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Jovens</h1>
-                    <button
+                    <button 
                         onClick={() => setShowOficinaModal(true)}
                         className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                     >
@@ -2367,7 +2262,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div
+                    <div 
                         className="card cursor-pointer hover:shadow-lg transition-shadow"
                         onClick={() => setShowJovensModal(true)}
                     >
@@ -2381,7 +2276,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                     </div>
                 </div>
 
-
+                
 
                 <div className="card">
                     <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Jovens por Faixa Etária</h3>
@@ -2435,54 +2330,9 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                     ) : (
                         <div className="space-y-3">
                             {oficinas.map((oficina) => (
-                                <div
-                                    key={oficina.id}
-                                    className="p-4 border-l-4 border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
-                                    onClick={async () => {
-                                        setSelectedOficina(oficina);
-                                        
-                                        // Extrair data e horário do timestamp
-                                        let dataFormatada = oficina.data;
-                                        let horarioFormatado = oficina.horario || '19:00';
-                                        
-                                        if (oficina.data && oficina.data.includes('T')) {
-                                            const [dataPart, horaPart] = oficina.data.split('T');
-                                            dataFormatada = dataPart;
-                                            if (horaPart) {
-                                                horarioFormatado = horaPart.substring(0, 5);
-                                            }
-                                        }
-                                        
-                                        setEditOficinaData({
-                                            nome: oficina.nome,
-                                            descricao: oficina.descricao,
-                                            data: dataFormatada,
-                                            horario: horarioFormatado,
-                                            local: oficina.local,
-                                            vagas: oficina.vagas.toString(),
-                                            permissaoInscricao: oficina.permissao_inscricao || oficina.permissaoInscricao || ['todos']
-                                        });
-                                        
-                                        // Carregar inscritos da oficina
-                                        try {
-                                            const registrations = await getWorkshopRegistrations(oficina.id);
-                                            const inscritosComDados = await Promise.all(
-                                                registrations.map(async (reg) => {
-                                                    const membro = members.find(m => m.id === reg.membro_id);
-                                                    return {
-                                                        ...reg,
-                                                        membro
-                                                    };
-                                                })
-                                            );
-                                            setOficinaInscritos(inscritosComDados);
-                                        } catch (error) {
-                                            console.error('Erro ao carregar inscritos:', error);
-                                            setOficinaInscritos([]);
-                                        }
-                                        
-                                        setShowEditOficinaModal(true);
-                                    }}
+                                <div 
+                                    key={oficina.id} 
+                                    className="p-4 border-l-4 border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg"
                                 >
                                     <div className="flex items-start justify-between">
                                         <div className="flex-1">
@@ -2504,13 +2354,12 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             </div>
                                         </div>
                                         <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
+                                            onClick={() => {
                                                 if (confirm('Deseja excluir esta oficina?')) {
                                                     const updatedOficinas = oficinas.filter(o => o.id !== oficina.id);
                                                     setOficinas(updatedOficinas);
                                                     localStorage.setItem('oficinas', JSON.stringify(updatedOficinas));
-
+                                                    
                                                     // Também remover o evento correspondente
                                                     const updatedEvents = events.filter(e => e.oficinaId !== oficina.id);
                                                     setEvents(updatedEvents);
@@ -2535,12 +2384,12 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         const getDestinatariosCount = (destinatarios) => {
             // Se destinatarios é uma string (avisos antigos), converter para array
             const tipos = Array.isArray(destinatarios) ? destinatarios : [destinatarios];
-
+            
             if (tipos.includes('todos')) return members.length;
-
+            
             // Criar um Set para evitar contar o mesmo membro várias vezes
             const membrosUnicos = new Set();
-
+            
             tipos.forEach(tipo => {
                 if (tipo === 'criancas') {
                     members.filter(m => {
@@ -2565,7 +2414,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                     }).forEach(m => membrosUnicos.add(m.id));
                 }
             });
-
+            
             return membrosUnicos.size;
         };
 
@@ -2573,7 +2422,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             <div className="space-y-6">
                 <div className="flex justify-between items-center">
                     <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Avisos</h1>
-                    <button
+                    <button 
                         onClick={() => setShowAvisoModal(true)}
                         className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                     >
@@ -2592,8 +2441,8 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                     ) : (
                         <div className="space-y-3">
                             {avisos.slice().reverse().map((aviso) => (
-                                <div
-                                    key={aviso.id}
+                                <div 
+                                    key={aviso.id} 
                                     className="p-4 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20 rounded-lg"
                                 >
                                     <div className="flex items-start justify-between">
@@ -2618,7 +2467,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-500">
                                                 <span className="flex items-center gap-1">
                                                     <Clock className="w-3 h-3" />
-                                                    {aviso.data_envio ? format(new Date(aviso.data_envio), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'Data não disponível'}
+                                                    {format(new Date(aviso.data), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                                                 </span>
                                                 <span className="flex items-center gap-1">
                                                     <Users className="w-3 h-3" />
@@ -2627,16 +2476,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             </div>
                                         </div>
                                         <button
-                                            onClick={async () => {
+                                            onClick={() => {
                                                 if (confirm('Deseja excluir este aviso?')) {
-                                                    try {
-                                                        await deleteAviso(aviso.id);
-                                                        const updatedAvisos = avisos.filter(a => a.id !== aviso.id);
-                                                        setAvisos(updatedAvisos);
-                                                    } catch (error) {
-                                                        console.error('Erro ao excluir aviso:', error);
-                                                        alert('Erro ao excluir aviso');
-                                                    }
+                                                    const updatedAvisos = avisos.filter(a => a.id !== aviso.id);
+                                                    setAvisos(updatedAvisos);
+                                                    localStorage.setItem('avisos', JSON.stringify(updatedAvisos));
                                                 }
                                             }}
                                             className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
@@ -2658,43 +2502,25 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         setShowMusicModal(true);
     };
 
-    const handleSubmitMusic = async (e) => {
+    const handleSubmitMusic = (e) => {
         e.preventDefault();
-        try {
-            const maxOrdem = playlistMusicas.length > 0 
-                ? Math.max(...playlistMusicas.map(m => m.ordem || 0))
-                : 0;
-
-            const musicaData = {
-                titulo: newMusicData.nome,
-                artista: newMusicData.artista,
-                link: newMusicData.link,
-                ordem: maxOrdem + 1,
-                ativa: true
-            };
-
-            await createPlaylistMusica(musicaData);
-            const musicas = await getPlaylistMusicas();
-            setPlaylistMusicas(musicas || []);
-            setShowMusicModal(false);
-            setNewMusicData({ nome: '', artista: '', link: '' });
-        } catch (error) {
-            console.error('Erro ao adicionar música:', error);
-            alert('Erro ao adicionar música');
-        }
+        const newMusic = {
+            id: Date.now(),
+            nome: newMusicData.nome,
+            artista: newMusicData.artista,
+            link: newMusicData.link
+        };
+        const updatedPlaylist = [...playlistMusicas, newMusic];
+        setPlaylistMusicas(updatedPlaylist);
+        localStorage.setItem('playlistZoe', JSON.stringify(updatedPlaylist));
+        setShowMusicModal(false);
+        setNewMusicData({ nome: '', artista: '', link: '' });
     };
 
-    const handleDeleteMusic = async (id) => {
-        if (confirm('Deseja realmente excluir esta música?')) {
-            try {
-                await deletePlaylistMusica(id);
-                const musicas = await getPlaylistMusicas();
-                setPlaylistMusicas(musicas || []);
-            } catch (error) {
-                console.error('Erro ao deletar música:', error);
-                alert('Erro ao deletar música');
-            }
-        }
+    const handleDeleteMusic = (id) => {
+        const updatedPlaylist = playlistMusicas.filter(m => m.id !== id);
+        setPlaylistMusicas(updatedPlaylist);
+        localStorage.setItem('playlistZoe', JSON.stringify(updatedPlaylist));
     };
 
     const renderPlaylistZoe = () => {
@@ -2702,7 +2528,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             <div className="space-y-6">
                 <div className="flex justify-between items-center">
                     <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Playlist Zoe</h1>
-                    <button
+                    <button 
                         onClick={handleAddMusic}
                         className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
                     >
@@ -2727,32 +2553,19 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 <div key={musica.id} className="p-4 bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 rounded-lg border-l-4 border-red-500 hover:shadow-md transition-shadow">
                                     <div className="flex items-center justify-between gap-3">
                                         <div className="flex-1">
-                                            <h4 className="font-semibold text-gray-900 dark:text-white">{musica.titulo}</h4>
-                                            {musica.artista && (
-                                                <p className="text-sm text-gray-600 dark:text-gray-400">{musica.artista}</p>
-                                            )}
-                                            {musica.duracao && (
-                                                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">{musica.duracao}</p>
-                                            )}
+                                            <h4 className="font-semibold text-gray-900 dark:text-white">{musica.nome}</h4>
+                                            <p className="text-sm text-gray-600 dark:text-gray-400">{musica.artista}</p>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            {musica.link && (
-                                                <button
-                                                    onClick={() => {
-                                                        // Converter youtu.be para youtube.com se necessário
-                                                        let link = musica.link;
-                                                        if (link.includes('youtu.be/')) {
-                                                            const videoId = link.split('youtu.be/')[1].split('?')[0];
-                                                            link = `https://www.youtube.com/watch?v=${videoId}`;
-                                                        }
-                                                        window.open(link, '_blank', 'noopener,noreferrer');
-                                                    }}
-                                                    className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 flex items-center gap-2"
-                                                >
-                                                    <Music className="w-4 h-4" />
-                                                    Ouvir
-                                                </button>
-                                            )}
+                                            <a 
+                                                href={musica.link} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 flex items-center gap-2"
+                                            >
+                                                <Music className="w-4 h-4" />
+                                                Ouvir
+                                            </a>
                                             <button
                                                 onClick={() => handleDeleteMusic(musica.id)}
                                                 className="p-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center justify-center"
@@ -2774,7 +2587,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                             <p className="text-sm text-gray-600 dark:text-gray-400">Total de Músicas</p>
                             <p className="text-2xl font-bold text-gray-900 dark:text-white">{playlistMusicas.length}</p>
                         </div>
-
+                       
                         <div className="p-4 bg-gradient-to-r from-blue-100 to-cyan-100 dark:from-blue-900/30 dark:to-cyan-900/30 rounded-lg">
                             <p className="text-sm text-gray-600 dark:text-gray-400">Última Atualização</p>
                             <p className="text-lg font-bold text-gray-900 dark:text-white">Hoje</p>
@@ -2788,7 +2601,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                         <div>
                             <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Sobre a Playlist Zoe</h4>
                             <p className="text-sm text-gray-600 dark:text-gray-400">
-                                Esta playlist contém as músicas mais tocadas nos cultos e encontros da Igreja Zoe.
+                                Esta playlist contém as músicas mais tocadas nos cultos e encontros da Igreja Zoe. 
                                 Utilize os links para ouvir e ensaiar as músicas durante a semana.
                             </p>
                         </div>
@@ -2799,7 +2612,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
     };
 
     return (
-        <div className="flex flex-col md:flex-row h-screen bg-white dark:bg-gray-900 transition-colors" style={{
+        <div className="flex flex-col md:flex-row h-screen bg-white dark:bg-gray-900 transition-colors" style={{ 
             paddingTop: 'env(safe-area-inset-top, 0px)'
         }}>
             {/* Sidebar Desktop */}
@@ -2852,9 +2665,9 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                         className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-[60] transition-opacity"
                         onClick={() => setSidebarOpen(false)}
                     />
-                    <div
+                    <div 
                         className={`md:hidden fixed left-4 right-4 bg-white dark:bg-gray-800 rounded-3xl shadow-2xl z-[70] transform transition-all duration-300 ${sidebarOpen ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'
-                            }`}
+                        }`}
                         style={{
                             bottom: `calc(6rem + env(safe-area-inset-bottom, 0px))`
                         }}>
@@ -2875,8 +2688,8 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                 setSidebarOpen(false);
                                             }}
                                             className={`flex flex-col items-center justify-center p-4 rounded-2xl transition-all ${isActive
-                                                ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-lg scale-105'
-                                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:scale-105'
+                                                    ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-lg scale-105'
+                                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:scale-105'
                                                 }`}
                                         >
                                             {item.id === 'playlistzoe' ? (
@@ -2907,7 +2720,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             </button>
 
             {/* Main Content */}
-            <div className="flex-1 overflow-auto" style={{
+            <div className="flex-1 overflow-auto" style={{ 
                 height: '100%',
                 overflowY: 'scroll',
                 WebkitOverflowScrolling: 'touch',
@@ -2988,8 +2801,8 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         value={newMemberData.nascimento}
                                         onChange={(e) => {
                                             const idade = calculateAge(e.target.value);
-                                            setNewMemberData({
-                                                ...newMemberData,
+                                            setNewMemberData({ 
+                                                ...newMemberData, 
                                                 nascimento: e.target.value,
                                                 idade: idade !== null ? idade.toString() : ''
                                             });
@@ -3059,10 +2872,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                             }}
                                                             className="sr-only"
                                                         />
-                                                        <div className={`w-6 h-6 border-2 rounded flex items-center justify-center transition-all ${isChecked
-                                                                ? 'bg-gray-800 border-gray-800 dark:bg-white dark:border-white'
+                                                        <div className={`w-6 h-6 border-2 rounded flex items-center justify-center transition-all ${
+                                                            isChecked 
+                                                                ? 'bg-gray-800 border-gray-800 dark:bg-white dark:border-white' 
                                                                 : 'bg-white border-gray-400 dark:bg-gray-700 dark:border-gray-500'
-                                                            }`}>
+                                                        }`}>
                                                             {isChecked && (
                                                                 <X className="w-4 h-4 text-white dark:text-gray-800" strokeWidth={3} />
                                                             )}
@@ -3305,18 +3119,18 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                     Cancelar
                                 </button>
                                 <button
-                                    type="submit"
-                                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                                type="submit"
+                                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
                                 >
-                                    Adicionar Evento
+                                Adicionar Evento
                                 </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+                                </div>
+                                </form>
+                                </div>
+                                </div>
+                                )}
 
-            {/* Modal de Edição de Evento */}
+                                {/* Modal de Edição de Evento */}
             {showEditEventModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] overflow-y-auto p-4">
                     <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
@@ -3484,7 +3298,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                                     } else {
                                                                         console.log('Comida sem ID, apenas removendo da lista local');
                                                                     }
-
+                                                                    
                                                                     // Remover da lista local
                                                                     setEditEventData({
                                                                         ...editEventData,
@@ -3617,13 +3431,13 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             <ChevronDown className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                                         )}
                                     </button>
-
+                                    
                                     {showParticipantsSection && (
                                         <div className="mt-3 bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                                 {eventParticipants.map((participant) => (
-                                                    <div
-                                                        key={participant.id}
+                                                    <div 
+                                                        key={participant.id} 
                                                         className="flex items-center p-2 bg-white dark:bg-gray-700 rounded text-sm"
                                                     >
                                                         <CheckCircle className="w-4 h-4 mr-2 text-green-500" />
@@ -3666,10 +3480,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                 {eventFoodsFromDB.map((food) => (
                                                     <div key={food.id} className="flex items-center justify-between text-sm p-2 bg-white dark:bg-gray-700 rounded">
                                                         <span className="text-gray-700 dark:text-gray-300 font-medium">{food.nome}</span>
-                                                        <span className={`px-3 py-1 rounded ${food.member
-                                                                ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                                                        <span className={`px-3 py-1 rounded ${
+                                                            food.member 
+                                                                ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' 
                                                                 : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
-                                                            }`}>
+                                                        }`}>
                                                             {food.member ? food.member.nome : 'Aguardando'}
                                                         </span>
                                                     </div>
@@ -3705,7 +3520,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                     onClick={async () => {
                                         // Carregar alimentações do evento
                                         const foods = await getEventFoods(selectedEvent.id);
-
+                                        
                                         setEditEventData({
                                             nome: selectedEvent.nome,
                                             data: selectedEvent.data,
@@ -3878,8 +3693,8 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         value={editMemberData.nascimento}
                                         onChange={(e) => {
                                             const idade = calculateAge(e.target.value);
-                                            setEditMemberData({
-                                                ...editMemberData,
+                                            setEditMemberData({ 
+                                                ...editMemberData, 
                                                 nascimento: e.target.value,
                                                 idade: idade !== null ? idade.toString() : ''
                                             });
@@ -3950,10 +3765,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                             }}
                                                             className="sr-only"
                                                         />
-                                                        <div className={`w-6 h-6 border-2 rounded flex items-center justify-center transition-all ${isChecked
-                                                                ? 'bg-gray-800 border-gray-800 dark:bg-white dark:border-white'
+                                                        <div className={`w-6 h-6 border-2 rounded flex items-center justify-center transition-all ${
+                                                            isChecked 
+                                                                ? 'bg-gray-800 border-gray-800 dark:bg-white dark:border-white' 
                                                                 : 'bg-white border-gray-400 dark:bg-gray-700 dark:border-gray-500'
-                                                            }`}>
+                                                        }`}>
                                                             {isChecked && (
                                                                 <X className="w-4 h-4 text-white dark:text-gray-800" strokeWidth={3} />
                                                             )}
@@ -4075,7 +3891,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         id: generateFamilyId(newFamilyData)
                                     };
                                     await onAddFamily(familyWithId);
-
+                                    
                                     // Só fechar o modal se não houver erro
                                     setNewFamilyData({
                                         nome: '',
@@ -4138,7 +3954,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         Novo Membro
                                     </button>
                                 </div>
-
+                                
                                 {/* Campo de busca */}
                                 <div className="mb-3 relative">
                                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -4163,7 +3979,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         </div>
                                     ) : (
                                         (() => {
-                                            const filteredMembers = members.filter(member =>
+                                            const filteredMembers = members.filter(member => 
                                                 member.nome.toLowerCase().includes(familyMemberSearch.toLowerCase())
                                             );
 
@@ -4188,8 +4004,9 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                             <div
                                                                 key={memberId}
                                                                 onClick={() => toggleMemberInFamily(memberId)}
-                                                                className={`flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${isSelected ? 'bg-green-50 dark:bg-green-900/20' : ''
-                                                                    }`}
+                                                                className={`flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${
+                                                                    isSelected ? 'bg-green-50 dark:bg-green-900/20' : ''
+                                                                }`}
                                                             >
                                                                 <input
                                                                     type="checkbox"
@@ -4320,7 +4137,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                 if (!member) return null;
                                                 const age = calculateAge(member.nascimento);
                                                 const initials = getInitials(member.nome);
-
+                                                
                                                 return (
                                                     <div key={memberId} className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded border border-green-300 dark:border-green-700">
                                                         <div className="flex items-center gap-2">
@@ -4351,7 +4168,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         </div>
                                     </div>
                                 )}
-
+                                
                                 {/* Campo de busca */}
                                 <div className="mb-3 relative">
                                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -4376,7 +4193,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         </div>
                                     ) : (
                                         (() => {
-                                            const filteredMembers = members.filter(member =>
+                                            const filteredMembers = members.filter(member => 
                                                 member.nome.toLowerCase().includes(familyMemberSearch.toLowerCase())
                                             );
 
@@ -4401,8 +4218,9 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                             <div
                                                                 key={memberId}
                                                                 onClick={() => toggleMemberInEditFamily(memberId)}
-                                                                className={`flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${isSelected ? 'bg-green-50 dark:bg-green-900/20' : ''
-                                                                    }`}
+                                                                className={`flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${
+                                                                    isSelected ? 'bg-green-50 dark:bg-green-900/20' : ''
+                                                                }`}
                                                             >
                                                                 <input
                                                                     type="checkbox"
@@ -4499,66 +4317,23 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                     <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                         <div className="p-6">
                             <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Montar Escala de Diaconia</h2>
-                            <form onSubmit={async (e) => {
+                            <form onSubmit={(e) => {
                                 e.preventDefault();
-
-                                try {
-                                    // Obter IDs dos diáconos selecionados
-                                    const membrosIds = members
-                                        .filter(m => newEscalaData.diaconosSelecionados.includes(m.id || `diacono-${members.indexOf(m)}`))
-                                        .map(m => m.id)
-                                        .filter(id => id);
-
-                                    // Dados para salvar no Supabase
-                                    const scheduleData = {
-                                        ministerio: 'diaconia',
-                                        categoria: newEscalaData.categoria,
-                                        data: newEscalaData.data,
-                                        horario: newEscalaData.horario,
-                                        descricao: newEscalaData.descricao || null,
-                                        local: newEscalaData.local || null,
-                                        membros_ids: membrosIds,
-                                        observacoes: newEscalaData.observacoes || null
-                                    };
-
-                                    console.log('Dados a serem enviados:', scheduleData);
-                                    console.log('newEscalaData.categoria:', newEscalaData.categoria);
-
-                                    // Salvar no Supabase
-                                    const novaEscalaSupabase = await createMinistrySchedule(scheduleData);
-                                    console.log('Escala criada no Supabase:', novaEscalaSupabase);
-
-                                    // Atualizar estado local (mantendo compatibilidade com o código existente)
-                                    const novaEscala = {
-                                        id: novaEscalaSupabase.id,
-                                        categoria: newEscalaData.categoria,
-                                        data: newEscalaData.data,
-                                        horario: newEscalaData.horario,
-                                        diaconos: members.filter(m =>
-                                            newEscalaData.diaconosSelecionados.includes(m.id || `diacono-${members.indexOf(m)}`)
-                                        )
-                                    };
-                                    const novasEscalas = [...escalas, novaEscala];
-                                    setEscalas(novasEscalas);
-                                    localStorage.setItem('escalaDiaconia', JSON.stringify(novasEscalas));
-
-                                    alert('Escala criada com sucesso!');
-                                    setShowEscalaModal(false);
-                                    
-                                    // Resetar formulário
-                                    setNewEscalaData({
-                                        categoria: 'culto',
-                                        data: format(new Date(), 'yyyy-MM-dd'),
-                                        horario: '19:00',
-                                        descricao: '',
-                                        local: '',
-                                        observacoes: '',
-                                        diaconosSelecionados: []
-                                    });
-                                } catch (error) {
-                                    console.error('Erro ao criar escala:', error);
-                                    alert('Erro ao criar escala: ' + error.message);
-                                }
+                                // Salvar escala
+                                const novaEscala = {
+                                    id: Date.now(),
+                                    categoria: newEscalaData.categoria,
+                                    data: newEscalaData.data,
+                                    horario: newEscalaData.horario,
+                                    diaconos: members.filter(m => 
+                                        newEscalaData.diaconosSelecionados.includes(m.id || `diacono-${members.indexOf(m)}`)
+                                    )
+                                };
+                                const novasEscalas = [...escalas, novaEscala];
+                                setEscalas(novasEscalas);
+                                localStorage.setItem('escalaDiaconia', JSON.stringify(novasEscalas));
+                                console.log('Escala criada:', novaEscala);
+                                setShowEscalaModal(false);
                             }}>
                                 <div className="space-y-4">
                                     <div>
@@ -4567,10 +4342,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         </label>
                                         <select
                                             value={newEscalaData.categoria}
-                                            onChange={(e) => {
-                                                console.log('Categoria selecionada:', e.target.value);
-                                                setNewEscalaData({ ...newEscalaData, categoria: e.target.value });
-                                            }}
+                                            onChange={(e) => setNewEscalaData({ ...newEscalaData, categoria: e.target.value })}
                                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white"
                                             required
                                         >
@@ -4606,45 +4378,6 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         </div>
                                     </div>
 
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                            Descrição (opcional)
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={newEscalaData.descricao || ''}
-                                            onChange={(e) => setNewEscalaData({ ...newEscalaData, descricao: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white"
-                                            placeholder="Ex: Culto de celebração"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                            Local (opcional)
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={newEscalaData.local || ''}
-                                            onChange={(e) => setNewEscalaData({ ...newEscalaData, local: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white"
-                                            placeholder="Ex: Templo principal"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                            Observações (opcional)
-                                        </label>
-                                        <textarea
-                                            value={newEscalaData.observacoes || ''}
-                                            onChange={(e) => setNewEscalaData({ ...newEscalaData, observacoes: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white"
-                                            rows="2"
-                                            placeholder="Ex: Trazer uniforme"
-                                        />
-                                    </div>
-
                                     <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
                                         <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
                                             Selecione os Diáconos ({newEscalaData.diaconosSelecionados.length} selecionados)
@@ -4656,12 +4389,13 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             }).map((diacono, index) => {
                                                 const diaconoId = diacono.id || `diacono-${index}`;
                                                 const isSelected = newEscalaData.diaconosSelecionados.includes(diaconoId);
-
+                                                
                                                 return (
-                                                    <div
-                                                        key={index}
-                                                        className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'
-                                                            }`}
+                                                    <div 
+                                                        key={index} 
+                                                        className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
+                                                            isSelected ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'
+                                                        }`}
                                                         onClick={() => {
                                                             const newSelecionados = isSelected
                                                                 ? newEscalaData.diaconosSelecionados.filter(id => id !== diaconoId)
@@ -4681,7 +4415,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                         <input
                                                             type="checkbox"
                                                             checked={isSelected}
-                                                            onChange={() => { }}
+                                                            onChange={() => {}}
                                                             className="w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500"
                                                         />
                                                     </div>
@@ -4699,9 +4433,6 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                 categoria: 'culto',
                                                 data: format(new Date(), 'yyyy-MM-dd'),
                                                 horario: '19:00',
-                                                descricao: '',
-                                                local: '',
-                                                observacoes: '',
                                                 diaconosSelecionados: []
                                             });
                                             setShowEscalaModal(false);
@@ -4733,9 +4464,8 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                     <Music className="w-7 h-7 text-purple-600" />
                                     Músicos Ativos ({members.filter(m => {
-                                        if (!m || !m.nome) return false;
                                         const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
-                                        return funcoes.some(f => f === 'músico' || f === 'líder de louvor' || f === 'louvor' || f === 'lider de louvor');
+                                        return funcoes.some(f => f === 'músico' || f === 'líder de louvor' || f === 'louvor');
                                     }).length})
                                 </h2>
                                 <button
@@ -4747,9 +4477,8 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                             </div>
 
                             {members.filter(m => {
-                                if (!m || !m.nome) return false;
                                 const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
-                                return funcoes.some(f => f === 'músico' || f === 'líder de louvor' || f === 'louvor' || f === 'lider de louvor');
+                                return funcoes.some(f => f === 'músico' || f === 'líder de louvor' || f === 'louvor');
                             }).length === 0 ? (
                                 <div className="text-center py-12">
                                     <Music className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
@@ -4758,15 +4487,12 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {members.filter(m => {
-                                        if (!m || !m.nome) return false;
                                         const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
-                                        return funcoes.some(f => f === 'músico' || f === 'líder de louvor' || f === 'louvor' || f === 'lider de louvor');
+                                        return funcoes.some(f => f === 'músico' || f === 'líder de louvor' || f === 'louvor');
                                     }).map((musico, index) => {
                                         const age = calculateAge(musico.nascimento);
                                         const initials = getInitials(musico.nome);
-                                        const funcoes = musico.funcoes || (musico.funcao ? [musico.funcao] : []);
-                                        const isLider = funcoes.includes('líder de louvor') || funcoes.includes('lider de louvor');
-
+                                        
                                         return (
                                             <div key={index} className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800 hover:shadow-md transition-shadow">
                                                 <div className="flex items-center gap-3 mb-3">
@@ -4775,15 +4501,16 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                     </div>
                                                     <div className="flex-1">
                                                         <h4 className="font-semibold text-gray-900 dark:text-white">{musico.nome}</h4>
-                                                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                            {funcoes.join(', ')}
+                                                        <p className="text-sm text-gray-600 dark:text-gray-400 capitalize">
+                                                            {musico.funcao}
                                                         </p>
                                                     </div>
-                                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${isLider
-                                                            ? 'bg-purple-600 text-white'
+                                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                                        musico.funcao === 'líder de louvor' 
+                                                            ? 'bg-purple-600 text-white' 
                                                             : 'bg-purple-100 dark:bg-purple-800 text-purple-800 dark:text-purple-200'
-                                                        }`}>
-                                                        {isLider ? 'Líder' : 'Membro'}
+                                                    }`}>
+                                                        {musico.funcao === 'líder de louvor' ? 'Líder' : 'Membro'}
                                                     </span>
                                                 </div>
                                                 <div className="space-y-1 text-sm">
@@ -4815,51 +4542,50 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                         <div className="p-6">
-                            <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">
-                                {selectedEscala ? 'Editar Escala de Louvor' : 'Nova Escala de Louvor'}
-                            </h2>
+                            <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Nova Escala de Louvor</h2>
                             <form onSubmit={async (e) => {
                                 e.preventDefault();
+                                
                                 try {
+                                    // Preparar array de músicos para a tabela de junção
                                     const musicos = Object.entries(newEscalaLouvorData.instrumentos)
                                         .filter(([_, musicoId]) => musicoId)
-                                        .map(([instrumento, musicoId]) => {
-                                            const musico = members.find(m => String(m.id) === String(musicoId));
-                                            if (!musico) {
-                                                console.error('Músico não encontrado para ID:', musicoId);
-                                                return null;
-                                            }
-                                            return { 
-                                                id: musico.id,
-                                                nome: musico.nome,
-                                                instrumento 
-                                            };
-                                        })
-                                        .filter(m => m !== null);
-
+                                        .map(([instrumento, musicoId]) => ({
+                                            id: musicoId,
+                                            instrumento: instrumento
+                                        }));
+                                    
                                     if (selectedEscala) {
+                                        // Editar escala existente
                                         await updateMinistrySchedule(selectedEscala.id, {
-                                            tipo: newEscalaLouvorData.tipo,
+                                            ministerio: 'louvor',
                                             data: newEscalaLouvorData.data,
                                             horario: newEscalaLouvorData.horario,
+                                            tipo: newEscalaLouvorData.tipo,
                                             musicas: newEscalaLouvorData.musicas,
-                                            musicos: musicos,
-                                            ministerio: 'louvor'
+                                            musicos: musicos
                                         });
+                                        
+                                        alert('Escala atualizada com sucesso!');
                                     } else {
+                                        // Criar nova escala
                                         await createMinistrySchedule({
-                                            tipo: newEscalaLouvorData.tipo,
+                                            ministerio: 'louvor',
                                             data: newEscalaLouvorData.data,
                                             horario: newEscalaLouvorData.horario,
+                                            tipo: newEscalaLouvorData.tipo,
                                             musicas: newEscalaLouvorData.musicas,
-                                            musicos: musicos,
-                                            ministerio: 'louvor'
+                                            musicos: musicos
                                         });
+                                        
+                                        alert('Escala criada com sucesso!');
                                     }
-
-                                    const escalas = await getMinistrySchedules('louvor');
-                                    setEscalasLouvor(escalas);
-
+                                    
+                                    // Recarregar escalas
+                                    const schedules = await getMinistrySchedules('louvor');
+                                    setEscalasLouvor(schedules);
+                                    
+                                    // Resetar formulário
                                     setNewEscalaLouvorData({
                                         tipo: 'culto',
                                         data: format(new Date(), 'yyyy-MM-dd'),
@@ -4867,12 +4593,12 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         musicas: [],
                                         instrumentos: {}
                                     });
+                                    
                                     setSelectedEscala(null);
                                     setShowEscalaLouvorModal(false);
-                                    alert(selectedEscala ? 'Escala atualizada com sucesso!' : 'Escala criada com sucesso!');
                                 } catch (error) {
                                     console.error('Erro ao salvar escala:', error);
-                                    alert('Erro ao salvar escala: ' + error.message);
+                                    alert('Erro ao salvar escala');
                                 }
                             }}>
                                 <div className="space-y-4">
@@ -4922,7 +4648,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
                                             Músicas ({newEscalaLouvorData.musicas.length}/5)
                                         </h3>
-
+                                        
                                         <div className="flex gap-2 mb-4">
                                             <input
                                                 type="text"
@@ -4998,7 +4724,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             {['Voz 1', 'Voz 2', 'Voz 3', 'Teclado 1', 'Teclado 2', 'Guitarra', 'Contrabaixo', 'Violão', 'Bateria'].map((instrumento) => {
                                                 const musicoId = newEscalaLouvorData.instrumentos[instrumento];
                                                 const musico = musicoId ? members.find(m => (m.id || `musico-${members.indexOf(m)}`) === musicoId) : null;
-
+                                                
                                                 return (
                                                     <div key={instrumento} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                                                         <div className="flex items-center justify-between mb-2">
@@ -5020,7 +4746,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                                 </button>
                                                             )}
                                                         </div>
-
+                                                        
                                                         {musico ? (
                                                             <div className="flex items-center gap-3 p-2 bg-purple-100 dark:bg-purple-900/30 rounded">
                                                                 <div className="h-8 w-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-semibold">
@@ -5047,9 +4773,8 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                             >
                                                                 <option value="">Selecione um músico</option>
                                                                 {members.filter(m => {
-                                                                    if (!m || !m.nome) return false;
                                                                     const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
-                                                                    return funcoes.some(f => f === 'músico' || f === 'líder de louvor' || f === 'louvor' || f === 'lider de louvor');
+                                                                    return funcoes.some(f => f === 'músico' || f === 'líder de louvor' || f === 'louvor');
                                                                 }).map((musico, index) => {
                                                                     const id = musico.id || `musico-${index}`;
                                                                     return (
@@ -5074,8 +4799,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             if (selectedEscala && confirm('Deseja realmente excluir esta escala?')) {
                                                 try {
                                                     await deleteMinistrySchedule(selectedEscala.id, 'louvor');
-                                                    const escalas = await getMinistrySchedules('louvor');
-                                                    setEscalasLouvor(escalas);
+                                                    
+                                                    // Recarregar escalas
+                                                    const schedules = await getMinistrySchedules('louvor');
+                                                    setEscalasLouvor(schedules);
+                                                    
                                                     setNewEscalaLouvorData({
                                                         tipo: 'culto',
                                                         data: format(new Date(), 'yyyy-MM-dd'),
@@ -5085,10 +4813,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                     });
                                                     setSelectedEscala(null);
                                                     setShowEscalaLouvorModal(false);
+                                                    
                                                     alert('Escala excluída com sucesso!');
                                                 } catch (error) {
                                                     console.error('Erro ao excluir escala:', error);
-                                                    alert('Erro ao excluir escala: ' + error.message);
+                                                    alert('Erro ao excluir escala');
                                                 }
                                             }
                                         }}
@@ -5108,7 +4837,6 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                     musicas: [],
                                                     instrumentos: {}
                                                 });
-                                                setSelectedEscala(null);
                                                 setShowEscalaLouvorModal(false);
                                             }}
                                             className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
@@ -5210,9 +4938,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                 horario: selectedEscala.horario,
                                                 musicas: selectedEscala.musicas || [],
                                                 instrumentos: selectedEscala.musicos.reduce((acc, musico) => {
-                                                    if (musico && musico.instrumento && musico.id) {
-                                                        acc[musico.instrumento] = musico.id;
-                                                    }
+                                                    acc[musico.instrumento] = musico.id || `musico-${members.indexOf(musico)}`;
                                                     return acc;
                                                 }, {})
                                             });
@@ -5273,8 +4999,8 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                             ) : (
                                 <div className="space-y-3">
                                     {playlistMusicas.map((musica) => (
-                                        <div
-                                            key={musica.id}
+                                        <div 
+                                            key={musica.id} 
                                             className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg hover:shadow-md transition-shadow"
                                         >
                                             <div className="flex items-start justify-between gap-3">
@@ -5343,10 +5069,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                             <div className="flex items-center justify-between mb-6">
                                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                     <Users className="w-7 h-7 text-blue-600" />
-                                    Professores Kids ({members.filter(m => {
-                                        const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
-                                        return funcoes.includes('professor kids') || funcoes.includes('lider kids');
-                                    }).length})
+                                    Professores Kids ({members.filter(m => m.funcao === 'professor kids' || m.funcao === 'lider kids').length})
                                 </h2>
                                 <button
                                     onClick={() => setShowProfessoresModal(false)}
@@ -5356,25 +5079,19 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 </button>
                             </div>
 
-                            {members.filter(m => {
-                                const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
-                                return funcoes.includes('professor kids') || funcoes.includes('lider kids');
-                            }).length === 0 ? (
+                            {members.filter(m => m.funcao === 'professor kids' || m.funcao === 'lider kids').length === 0 ? (
                                 <div className="text-center py-12">
                                     <Users className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
                                     <p className="text-gray-500 dark:text-gray-400">Nenhum professor cadastrado ainda.</p>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {members.filter(m => {
-                                        const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
-                                        return funcoes.includes('professor kids') || funcoes.includes('lider kids');
-                                    }).map((professor, index) => {
+                                    {members.filter(m => m.funcao === 'professor kids' || m.funcao === 'lider kids').map((professor, index) => {
                                         const age = calculateAge(professor.nascimento);
-
+                                        
                                         return (
-                                            <div
-                                                key={professor.id || index}
+                                            <div 
+                                                key={professor.id || index} 
                                                 className="p-4 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-lg border border-blue-200 dark:border-blue-800 hover:shadow-md transition-shadow"
                                             >
                                                 <div className="flex items-start gap-3 mb-3">
@@ -5384,24 +5101,16 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                     <div className="flex-1">
                                                         <h4 className="font-semibold text-gray-900 dark:text-white">{professor.nome}</h4>
                                                         <p className="text-sm text-gray-600 dark:text-gray-400 capitalize">
-                                                            {(() => {
-                                                                const funcoes = professor.funcoes || (professor.funcao ? [professor.funcao] : []);
-                                                                return funcoes.join(', ');
-                                                            })()}
+                                                            {professor.funcao}
                                                         </p>
                                                     </div>
-                                                    {(() => {
-                                                        const funcoes = professor.funcoes || (professor.funcao ? [professor.funcao] : []);
-                                                        const isLider = funcoes.includes('lider kids');
-                                                        return (
-                                                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${isLider
-                                                                    ? 'bg-pink-600 text-white'
-                                                                    : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
-                                                                }`}>
-                                                                {isLider ? 'Líder' : 'Professor'}
-                                                            </span>
-                                                        );
-                                                    })()}
+                                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                                        professor.funcao === 'lider kids' 
+                                                            ? 'bg-pink-600 text-white' 
+                                                            : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
+                                                    }`}>
+                                                        {professor.funcao === 'lider kids' ? 'Líder' : 'Professor'}
+                                                    </span>
                                                 </div>
                                                 <div className="space-y-1 text-sm">
                                                     {professor.telefone && (
@@ -5463,10 +5172,10 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         return age !== null && age <= 12;
                                     }).map((crianca, index) => {
                                         const age = calculateAge(crianca.nascimento);
-
+                                        
                                         return (
-                                            <div
-                                                key={crianca.id || index}
+                                            <div 
+                                                key={crianca.id || index} 
                                                 className="p-4 bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 rounded-lg border border-pink-200 dark:border-pink-800 hover:shadow-md transition-shadow"
                                             >
                                                 <div className="flex items-start gap-3 mb-3">
@@ -5551,7 +5260,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         const age = calculateAge(jovem.nascimento);
                                         let categoria = '';
                                         let corCategoria = '';
-
+                                        
                                         if (age >= 13 && age <= 18) {
                                             categoria = 'Adolescente';
                                             corCategoria = 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200';
@@ -5562,10 +5271,10 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             categoria = 'Jovem Adulto';
                                             corCategoria = 'bg-purple-100 dark:bg-purple-800 text-purple-800 dark:text-purple-200';
                                         }
-
+                                        
                                         return (
-                                            <div
-                                                key={jovem.id || index}
+                                            <div 
+                                                key={jovem.id || index} 
                                                 className="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800 hover:shadow-md transition-shadow"
                                             >
                                                 <div className="flex items-start gap-3 mb-3">
@@ -5627,22 +5336,22 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                     Nova Escala de Professores
                                 </h2>
                                 <button
-                                    onClick={() => {
-                                        setShowEscalaProfessoresModal(false);
-                                        setNewEscalaProfessoresData({
-                                            turmas: [],
-                                            data: format(new Date(), 'yyyy-MM-dd'),
-                                            horario: '09:00',
-                                            professoresSelecionados: []
-                                        });
-                                    }}
+                                onClick={() => {
+                                setShowEscalaProfessoresModal(false);
+                                setNewEscalaProfessoresData({
+                                turmas: [],
+                                data: format(new Date(), 'yyyy-MM-dd'),
+                                horario: '09:00',
+                                    professoresSelecionados: []
+                                    });
+                                }}
                                     className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                                 >
                                     <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
                                 </button>
                             </div>
 
-                            <form onSubmit={async (e) => {
+                            <form onSubmit={(e) => {
                                 e.preventDefault();
                                 if (newEscalaProfessoresData.turmas.length === 0) {
                                     alert('Selecione pelo menos uma turma!');
@@ -5652,36 +5361,20 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                     alert('Selecione pelo menos um professor!');
                                     return;
                                 }
-                                try {
-                                    // Formatar dados para o formato correto da tabela ministry_schedules
-                                    const scheduleData = {
-                                        ministerio: 'kids',
-                                        data: newEscalaProfessoresData.data,
-                                        horario: newEscalaProfessoresData.horario,
-                                        descricao: `Turmas: ${newEscalaProfessoresData.turmas.join(', ')}`,
-                                        membros_ids: newEscalaProfessoresData.professoresSelecionados,
-                                        observacoes: null
-                                    };
-
-                                    await createMinistrySchedule(scheduleData);
-                                    
-                                    // Recarregar escalas
-                                    const escalas = await getMinistrySchedules('kids');
-                                    setEscalasProfessores(escalas);
-                                    
-                                    setShowEscalaProfessoresModal(false);
-                                    setNewEscalaProfessoresData({
-                                        turmas: [],
-                                        data: format(new Date(), 'yyyy-MM-dd'),
-                                        horario: '09:00',
-                                        professoresSelecionados: []
-                                    });
-                                    
-                                    alert('Escala criada com sucesso!');
-                                } catch (error) {
-                                    console.error('Erro ao criar escala:', error);
-                                    alert('Erro ao criar escala. Tente novamente.');
-                                }
+                                const novaEscala = {
+                                    id: Date.now(),
+                                    ...newEscalaProfessoresData
+                                };
+                                const novasEscalas = [...escalasProfessores, novaEscala];
+                                setEscalasProfessores(novasEscalas);
+                                localStorage.setItem('escalaProfessores', JSON.stringify(novasEscalas));
+                                setShowEscalaProfessoresModal(false);
+                                setNewEscalaProfessoresData({
+                                    turmas: [],
+                                    data: format(new Date(), 'yyyy-MM-dd'),
+                                    horario: '09:00',
+                                    professoresSelecionados: []
+                                });
                             }}>
                                 <div className="space-y-4">
                                     <div>
@@ -5692,7 +5385,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             {['Pequenos', 'Grandes'].map((turma) => {
                                                 const isSelected = newEscalaProfessoresData.turmas.includes(turma);
                                                 return (
-                                                    <div
+                                                    <div 
                                                         key={turma}
                                                         onClick={() => {
                                                             if (isSelected) {
@@ -5707,10 +5400,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                                 });
                                                             }
                                                         }}
-                                                        className={`p-4 rounded-lg border-2 cursor-pointer transition-all text-center ${isSelected
-                                                                ? 'border-pink-600 bg-pink-50 dark:bg-pink-900/30'
+                                                        className={`p-4 rounded-lg border-2 cursor-pointer transition-all text-center ${
+                                                            isSelected 
+                                                                ? 'border-pink-600 bg-pink-50 dark:bg-pink-900/30' 
                                                                 : 'border-gray-200 dark:border-gray-700 hover:border-pink-300 dark:hover:border-pink-700'
-                                                            }`}
+                                                        }`}
                                                     >
                                                         <div className="flex items-center justify-center gap-2">
                                                             <span className="font-medium text-gray-900 dark:text-white">{turma}</span>
@@ -5759,11 +5453,8 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
                                             Selecione os Professores ({newEscalaProfessoresData.professoresSelecionados.length} selecionados)
                                         </h3>
-
-                                        {members.filter(m => {
-                                            const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
-                                            return funcoes.includes('professor kids') || funcoes.includes('lider kids');
-                                        }).length === 0 ? (
+                                        
+                                        {members.filter(m => m.funcao === 'professor kids' || m.funcao === 'lider kids').length === 0 ? (
                                             <div className="text-center py-8 bg-gray-50 dark:bg-gray-700 rounded-lg">
                                                 <Users className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
                                                 <p className="text-gray-500 dark:text-gray-400">Nenhum professor cadastrado.</p>
@@ -5773,15 +5464,12 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             </div>
                                         ) : (
                                             <div className="space-y-2 max-h-96 overflow-y-auto">
-                                                {members.filter(m => {
-                                                    const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
-                                                    return funcoes.includes('professor kids') || funcoes.includes('lider kids');
-                                                }).map((professor) => {
+                                                {members.filter(m => m.funcao === 'professor kids' || m.funcao === 'lider kids').map((professor) => {
                                                     const isSelected = newEscalaProfessoresData.professoresSelecionados.includes(professor.id);
                                                     const age = calculateAge(professor.nascimento);
-
+                                                    
                                                     return (
-                                                        <div
+                                                        <div 
                                                             key={professor.id}
                                                             onClick={() => {
                                                                 if (isSelected) {
@@ -5796,10 +5484,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                                     });
                                                                 }
                                                             }}
-                                                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${isSelected
-                                                                    ? 'border-pink-600 bg-pink-50 dark:bg-pink-900/30'
+                                                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                                                                isSelected 
+                                                                    ? 'border-pink-600 bg-pink-50 dark:bg-pink-900/30' 
                                                                     : 'border-gray-200 dark:border-gray-700 hover:border-pink-300 dark:hover:border-pink-700'
-                                                                }`}
+                                                            }`}
                                                         >
                                                             <div className="flex items-center gap-3">
                                                                 <div className="h-10 w-10 rounded-full bg-pink-600 flex items-center justify-center text-white font-semibold">
@@ -5810,18 +5499,13 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                                         <h4 className="font-medium text-gray-900 dark:text-white">
                                                                             {professor.nome}
                                                                         </h4>
-                                                                        {(() => {
-                                                                            const funcoes = professor.funcoes || (professor.funcao ? [professor.funcao] : []);
-                                                                            const isLider = funcoes.includes('lider kids');
-                                                                            return (
-                                                                                <span className={`text-xs px-2 py-0.5 rounded-full ${isLider
-                                                                                        ? 'bg-pink-600 text-white'
-                                                                                        : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
-                                                                                    }`}>
-                                                                                    {isLider ? 'Líder' : 'Professor'}
-                                                                                </span>
-                                                                            );
-                                                                        })()}
+                                                                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                                                            professor.funcao === 'lider kids' 
+                                                                                ? 'bg-pink-600 text-white' 
+                                                                                : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
+                                                                        }`}>
+                                                                            {professor.funcao === 'lider kids' ? 'Líder' : 'Professor'}
+                                                                        </span>
                                                                     </div>
                                                                     <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 dark:text-gray-400">
                                                                         {professor.telefone && <span>{professor.telefone}</span>}
@@ -5919,18 +5603,19 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 </div>
 
                                 {/* Turmas */}
-                                {selectedEscalaProfessores.descricao && selectedEscalaProfessores.descricao.includes('Turmas:') && (
+                                {selectedEscalaProfessores.turmas && selectedEscalaProfessores.turmas.length > 0 && (
                                     <div>
                                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
                                             <Baby className="w-5 h-5 text-pink-600" />
                                             Turmas
                                         </h3>
                                         <div className="flex flex-wrap gap-3">
-                                            {selectedEscalaProfessores.descricao.replace('Turmas: ', '').split(', ').map((turma, i) => (
-                                                <div
-                                                    key={i}
-                                                    className={`px-6 py-3 rounded-lg text-white font-medium text-lg ${turma === 'Pequenos' ? 'bg-blue-500' : 'bg-purple-600'
-                                                        }`}
+                                            {selectedEscalaProfessores.turmas.map((turma, i) => (
+                                                <div 
+                                                    key={i} 
+                                                    className={`px-6 py-3 rounded-lg text-white font-medium text-lg ${
+                                                        turma === 'Pequenos' ? 'bg-blue-500' : 'bg-purple-600'
+                                                    }`}
                                                 >
                                                     {turma}
                                                 </div>
@@ -5943,17 +5628,17 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 <div>
                                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
                                         <Users className="w-5 h-5 text-pink-600" />
-                                        Professores Escalados ({(selectedEscalaProfessores.membros_ids || selectedEscalaProfessores.professoresSelecionados || []).length})
+                                        Professores Escalados ({selectedEscalaProfessores.professoresSelecionados.length})
                                     </h3>
                                     <div className="space-y-3">
-                                        {(selectedEscalaProfessores.membros_ids || selectedEscalaProfessores.professoresSelecionados || []).map((profId, i) => {
+                                        {selectedEscalaProfessores.professoresSelecionados.map((profId, i) => {
                                             const prof = members.find(m => m.id === profId);
                                             if (!prof) return null;
                                             const age = calculateAge(prof.nascimento);
-
+                                            
                                             return (
-                                                <div
-                                                    key={i}
+                                                <div 
+                                                    key={i} 
                                                     className="p-4 rounded-lg border-2 border-pink-200 dark:border-pink-800 bg-white dark:bg-gray-700"
                                                 >
                                                     <div className="flex items-center gap-3">
@@ -5965,10 +5650,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                                 <h4 className="font-semibold text-gray-900 dark:text-white text-lg">
                                                                     {prof.nome}
                                                                 </h4>
-                                                                <span className={`text-xs px-2 py-0.5 rounded-full ${prof.funcao === 'lider kids'
-                                                                        ? 'bg-pink-600 text-white'
+                                                                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                                                    prof.funcao === 'lider kids' 
+                                                                        ? 'bg-pink-600 text-white' 
                                                                         : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
-                                                                    }`}>
+                                                                }`}>
                                                                     {prof.funcao === 'lider kids' ? 'Líder' : 'Professor'}
                                                                 </span>
                                                             </div>
@@ -5990,30 +5676,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 </div>
                             </div>
 
-                            <div className="flex justify-between pt-6 border-t border-gray-200 dark:border-gray-700 mt-6">
-                                <button
-                                    onClick={() => {
-                                        // Extrair turmas da descrição
-                                        const turmas = selectedEscalaProfessores.descricao?.includes('Turmas:') 
-                                            ? selectedEscalaProfessores.descricao.replace('Turmas: ', '').split(', ')
-                                            : [];
-                                        
-                                        setEditEscalaProfessoresData({
-                                            id: selectedEscalaProfessores.id,
-                                            data: selectedEscalaProfessores.data,
-                                            horario: selectedEscalaProfessores.horario,
-                                            turmas: turmas,
-                                            professoresSelecionados: selectedEscalaProfessores.membros_ids || [],
-                                            observacoes: selectedEscalaProfessores.observacoes || ''
-                                        });
-                                        setShowDetalhesEscalaProfessoresModal(false);
-                                        setShowEditarEscalaProfessoresModal(true);
-                                    }}
-                                    className="px-6 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 flex items-center gap-2"
-                                >
-                                    <Edit className="w-4 h-4" />
-                                    Editar Escala
-                                </button>
+                            <div className="flex justify-end pt-6 border-t border-gray-200 dark:border-gray-700 mt-6">
                                 <button
                                     onClick={() => {
                                         setShowDetalhesEscalaProfessoresModal(false);
@@ -6024,285 +5687,6 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                     Fechar
                                 </button>
                             </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal: Editar Escala de Professores Kids */}
-            {showEditarEscalaProfessoresModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="p-6">
-                            <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                    <Calendar className="w-7 h-7 text-pink-600" />
-                                    Editar Escala de Professores
-                                </h2>
-                                <button
-                                    onClick={() => {
-                                        setShowEditarEscalaProfessoresModal(false);
-                                        setEditEscalaProfessoresData({
-                                            id: null,
-                                            turmas: [],
-                                            data: format(new Date(), 'yyyy-MM-dd'),
-                                            horario: '09:00',
-                                            professoresSelecionados: [],
-                                            observacoes: ''
-                                        });
-                                    }}
-                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                                >
-                                    <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
-                                </button>
-                            </div>
-
-                            <form onSubmit={async (e) => {
-                                e.preventDefault();
-                                if (editEscalaProfessoresData.turmas.length === 0) {
-                                    alert('Selecione pelo menos uma turma!');
-                                    return;
-                                }
-                                if (editEscalaProfessoresData.professoresSelecionados.length === 0) {
-                                    alert('Selecione pelo menos um professor!');
-                                    return;
-                                }
-                                try {
-                                    const scheduleData = {
-                                        ministerio: 'kids',
-                                        data: editEscalaProfessoresData.data,
-                                        horario: editEscalaProfessoresData.horario,
-                                        descricao: `Turmas: ${editEscalaProfessoresData.turmas.join(', ')}`,
-                                        membros_ids: editEscalaProfessoresData.professoresSelecionados,
-                                        observacoes: editEscalaProfessoresData.observacoes || null
-                                    };
-
-                                    await updateMinistrySchedule(editEscalaProfessoresData.id, scheduleData);
-                                    
-                                    const schedules = await getMinistrySchedules('kids');
-                                    setEscalasProfessores(schedules);
-                                    
-                                    setShowEditarEscalaProfessoresModal(false);
-                                    setEditEscalaProfessoresData({
-                                        id: null,
-                                        turmas: [],
-                                        data: format(new Date(), 'yyyy-MM-dd'),
-                                        horario: '09:00',
-                                        professoresSelecionados: [],
-                                        observacoes: ''
-                                    });
-                                    
-                                    alert('Escala atualizada com sucesso!');
-                                } catch (error) {
-                                    console.error('Erro ao atualizar escala:', error);
-                                    alert('Erro ao atualizar escala. Tente novamente.');
-                                }
-                            }}>
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                            Selecione as Turmas
-                                        </label>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            {['Pequenos', 'Grandes'].map(turma => (
-                                                <button
-                                                    key={turma}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (editEscalaProfessoresData.turmas.includes(turma)) {
-                                                            setEditEscalaProfessoresData({
-                                                                ...editEscalaProfessoresData,
-                                                                turmas: editEscalaProfessoresData.turmas.filter(t => t !== turma)
-                                                            });
-                                                        } else {
-                                                            setEditEscalaProfessoresData({
-                                                                ...editEscalaProfessoresData,
-                                                                turmas: [...editEscalaProfessoresData.turmas, turma]
-                                                            });
-                                                        }
-                                                    }}
-                                                    className={`p-4 rounded-lg border-2 font-medium transition-all ${
-                                                        editEscalaProfessoresData.turmas.includes(turma)
-                                                            ? 'border-pink-600 bg-pink-50 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300'
-                                                            : 'border-gray-300 dark:border-gray-600 hover:border-pink-300 dark:hover:border-pink-700 text-gray-700 dark:text-gray-300'
-                                                    }`}
-                                                >
-                                                    {turma}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                                Data
-                                            </label>
-                                            <input
-                                                type="date"
-                                                value={editEscalaProfessoresData.data}
-                                                onChange={(e) => setEditEscalaProfessoresData({ ...editEscalaProfessoresData, data: e.target.value })}
-                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 dark:bg-gray-700 dark:text-white"
-                                                required
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                                Horário
-                                            </label>
-                                            <input
-                                                type="time"
-                                                value={editEscalaProfessoresData.horario}
-                                                onChange={(e) => setEditEscalaProfessoresData({ ...editEscalaProfessoresData, horario: e.target.value })}
-                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 dark:bg-gray-700 dark:text-white"
-                                                required
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                                        <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
-                                            Selecione os Professores ({editEscalaProfessoresData.professoresSelecionados.length} selecionados)
-                                        </h3>
-
-                                        {members.filter(m => {
-                                            const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
-                                            return funcoes.includes('professor kids') || funcoes.includes('lider kids');
-                                        }).length === 0 ? (
-                                            <div className="text-center py-8 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                                                <Users className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
-                                                <p className="text-gray-500 dark:text-gray-400">Nenhum professor cadastrado.</p>
-                                            </div>
-                                        ) : (
-                                            <div className="space-y-2 max-h-96 overflow-y-auto">
-                                                {members.filter(m => {
-                                                    const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
-                                                    return funcoes.includes('professor kids') || funcoes.includes('lider kids');
-                                                }).map((professor) => {
-                                                    const isSelected = editEscalaProfessoresData.professoresSelecionados.includes(professor.id);
-                                                    const age = calculateAge(professor.nascimento);
-                                                    const funcoes = professor.funcoes || (professor.funcao ? [professor.funcao] : []);
-                                                    const isLider = funcoes.includes('lider kids');
-
-                                                    return (
-                                                        <div
-                                                            key={professor.id}
-                                                            onClick={() => {
-                                                                if (isSelected) {
-                                                                    setEditEscalaProfessoresData({
-                                                                        ...editEscalaProfessoresData,
-                                                                        professoresSelecionados: editEscalaProfessoresData.professoresSelecionados.filter(id => id !== professor.id)
-                                                                    });
-                                                                } else {
-                                                                    setEditEscalaProfessoresData({
-                                                                        ...editEscalaProfessoresData,
-                                                                        professoresSelecionados: [...editEscalaProfessoresData.professoresSelecionados, professor.id]
-                                                                    });
-                                                                }
-                                                            }}
-                                                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                                                                isSelected
-                                                                    ? 'border-pink-600 bg-pink-50 dark:bg-pink-900/30'
-                                                                    : 'border-gray-200 dark:border-gray-700 hover:border-pink-300 dark:hover:border-pink-700'
-                                                            }`}
-                                                        >
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="h-10 w-10 rounded-full bg-pink-600 flex items-center justify-center text-white font-semibold">
-                                                                    {getInitials(professor.nome)}
-                                                                </div>
-                                                                <div className="flex-1">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <h4 className="font-medium text-gray-900 dark:text-white">
-                                                                            {professor.nome}
-                                                                        </h4>
-                                                                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                                                            isLider
-                                                                                ? 'bg-pink-600 text-white'
-                                                                                : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
-                                                                        }`}>
-                                                                            {isLider ? 'Líder' : 'Professor'}
-                                                                        </span>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                                                        {professor.telefone && <span>{professor.telefone}</span>}
-                                                                        {age && <span>• {age} anos</span>}
-                                                                    </div>
-                                                                </div>
-                                                                {isSelected && (
-                                                                    <div className="h-6 w-6 rounded-full bg-pink-600 flex items-center justify-center">
-                                                                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                                        </svg>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="flex justify-between pt-4 border-t border-gray-200 dark:border-gray-700 mt-6">
-                                    <button
-                                        type="button"
-                                        onClick={async () => {
-                                            if (confirm('Tem certeza que deseja deletar esta escala?')) {
-                                                try {
-                                                    await deleteMinistrySchedule(editEscalaProfessoresData.id);
-                                                    const schedules = await getMinistrySchedules('kids');
-                                                    setEscalasProfessores(schedules);
-                                                    setShowEditarEscalaProfessoresModal(false);
-                                                    setEditEscalaProfessoresData({
-                                                        id: null,
-                                                        turmas: [],
-                                                        data: format(new Date(), 'yyyy-MM-dd'),
-                                                        horario: '09:00',
-                                                        professoresSelecionados: [],
-                                                        observacoes: ''
-                                                    });
-                                                    alert('Escala deletada com sucesso!');
-                                                } catch (error) {
-                                                    console.error('Erro ao deletar escala:', error);
-                                                    alert('Erro ao deletar escala. Tente novamente.');
-                                                }
-                                            }
-                                        }}
-                                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                        Deletar
-                                    </button>
-                                    <div className="flex space-x-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setShowEditarEscalaProfessoresModal(false);
-                                                setEditEscalaProfessoresData({
-                                                    id: null,
-                                                    turmas: [],
-                                                    data: format(new Date(), 'yyyy-MM-dd'),
-                                                    horario: '09:00',
-                                                    professoresSelecionados: [],
-                                                    observacoes: ''
-                                                });
-                                            }}
-                                            className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                                        >
-                                            Cancelar
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            disabled={editEscalaProfessoresData.professoresSelecionados.length === 0}
-                                            className="px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                                        >
-                                            <Calendar className="w-4 h-4" />
-                                            Atualizar Escala ({editEscalaProfessoresData.professoresSelecionados.length} {editEscalaProfessoresData.professoresSelecionados.length === 1 ? 'professor' : 'professores'})
-                                        </button>
-                                    </div>
-                                </div>
-                            </form>
                         </div>
                     </div>
                 </div>
@@ -6409,7 +5793,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                 required
                                             >
                                                 <option value="culto">Culto</option>
-                                                <option value="limpeza">Limpeza</option>
+                                                <option value="evento">Evento</option>
                                             </select>
                                         </div>
                                         <div>
@@ -6438,50 +5822,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         </div>
                                     </div>
 
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                            Descrição (opcional)
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={editEscalaData.descricao || ''}
-                                            onChange={(e) => setEditEscalaData({ ...editEscalaData, descricao: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                                            placeholder="Ex: Culto de celebração"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                            Local (opcional)
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={editEscalaData.local || ''}
-                                            onChange={(e) => setEditEscalaData({ ...editEscalaData, local: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                                            placeholder="Ex: Templo principal"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                            Observações (opcional)
-                                        </label>
-                                        <textarea
-                                            value={editEscalaData.observacoes || ''}
-                                            onChange={(e) => setEditEscalaData({ ...editEscalaData, observacoes: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                                            rows="2"
-                                            placeholder="Ex: Trazer uniforme"
-                                        />
-                                    </div>
-
                                     <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
                                         <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
                                             Selecione os Diáconos ({editEscalaData.diaconosSelecionados.length} selecionados)
                                         </h3>
-
+                                        
                                         {members.filter(m => m.funcao === 'diaconia' || m.funcao === 'lider da diaconia').length === 0 ? (
                                             <div className="text-center py-8 bg-gray-50 dark:bg-gray-700 rounded-lg">
                                                 <Users className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
@@ -6492,9 +5837,9 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                 {members.filter(m => m.funcao === 'diaconia' || m.funcao === 'lider da diaconia').map((diacono) => {
                                                     const isSelected = editEscalaData.diaconosSelecionados.includes(diacono.id);
                                                     const age = calculateAge(diacono.nascimento);
-
+                                                    
                                                     return (
-                                                        <div
+                                                        <div 
                                                             key={diacono.id}
                                                             onClick={() => {
                                                                 if (isSelected) {
@@ -6509,10 +5854,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                                     });
                                                                 }
                                                             }}
-                                                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${isSelected
-                                                                    ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30'
+                                                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                                                                isSelected 
+                                                                    ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30' 
                                                                     : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700'
-                                                                }`}
+                                                            }`}
                                                         >
                                                             <div className="flex items-center gap-3">
                                                                 <div className="h-10 w-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-semibold">
@@ -6523,10 +5869,11 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                                         <h4 className="font-medium text-gray-900 dark:text-white">
                                                                             {diacono.nome}
                                                                         </h4>
-                                                                        <span className={`text-xs px-2 py-0.5 rounded-full ${diacono.funcao === 'lider da diaconia'
-                                                                                ? 'bg-purple-600 text-white'
+                                                                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                                                            diacono.funcao === 'lider da diaconia' 
+                                                                                ? 'bg-purple-600 text-white' 
                                                                                 : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
-                                                                            }`}>
+                                                                        }`}>
                                                                             {diacono.funcao === 'lider da diaconia' ? 'Líder' : 'Diácono'}
                                                                         </span>
                                                                     </div>
@@ -6604,33 +5951,20 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 </button>
                             </div>
 
-                            <form onSubmit={async (e) => {
+                            <form onSubmit={(e) => {
                                 e.preventDefault();
-                                try {
-                                    // Criar aviso no Supabase
-                                    const novoAviso = await createAviso({
-                                        titulo: newAvisoData.titulo,
-                                        mensagem: newAvisoData.mensagem,
-                                        destinatarios: newAvisoData.destinatarios,
-                                        data_envio: new Date().toISOString()
-                                    });
-                                    
-                                    // Atualizar estado local
-                                    const updatedAvisos = [...avisos, novoAviso];
-                                    setAvisos(updatedAvisos);
-                                    
-                                    setShowAvisoModal(false);
-                                    setNewAvisoData({ titulo: '', mensagem: '', destinatarios: ['todos'] });
-                                    
-                                    // Mensagem personalizada baseada nos destinatários
-                                    const destMsg = newAvisoData.destinatarios.includes('todos') 
-                                        ? 'todos os membros' 
-                                        : newAvisoData.destinatarios.join(', ');
-                                    alert(`Aviso criado e enviado para: ${destMsg}!`);
-                                } catch (error) {
-                                    console.error('Erro ao criar aviso:', error);
-                                    alert('Erro ao criar aviso. Tente novamente.');
-                                }
+                                const novoAviso = {
+                                    id: Date.now(),
+                                    titulo: newAvisoData.titulo,
+                                    mensagem: newAvisoData.mensagem,
+                                    destinatarios: newAvisoData.destinatarios,
+                                    data: new Date().toISOString()
+                                };
+                                const updatedAvisos = [...avisos, novoAviso];
+                                setAvisos(updatedAvisos);
+                                localStorage.setItem('avisos', JSON.stringify(updatedAvisos));
+                                setShowAvisoModal(false);
+                                setNewAvisoData({ titulo: '', mensagem: '', destinatarios: ['todos'] });
                             }}>
                                 <div className="space-y-4">
                                     <div>
@@ -6666,7 +6000,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             Destinatários
                                         </label>
                                         <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-3 max-h-48 overflow-y-auto bg-white dark:bg-gray-700 space-y-2">
-                                            <div
+                                            <div 
                                                 onClick={() => {
                                                     if (newAvisoData.destinatarios.includes('todos')) {
                                                         setNewAvisoData({ ...newAvisoData, destinatarios: [] });
@@ -6674,15 +6008,17 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                         setNewAvisoData({ ...newAvisoData, destinatarios: ['todos'] });
                                                     }
                                                 }}
-                                                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${newAvisoData.destinatarios.includes('todos')
-                                                        ? 'bg-blue-100 dark:bg-blue-900 border-2 border-blue-500'
+                                                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                                                    newAvisoData.destinatarios.includes('todos') 
+                                                        ? 'bg-blue-100 dark:bg-blue-900 border-2 border-blue-500' 
                                                         : 'bg-gray-50 dark:bg-gray-600 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-500'
-                                                    }`}
+                                                }`}
                                             >
-                                                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${newAvisoData.destinatarios.includes('todos')
+                                                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                                    newAvisoData.destinatarios.includes('todos')
                                                         ? 'bg-blue-600 border-blue-600'
                                                         : 'border-gray-400 dark:border-gray-500'
-                                                    }`}>
+                                                }`}>
                                                     {newAvisoData.destinatarios.includes('todos') && (
                                                         <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -6691,15 +6027,15 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                 </div>
                                                 <span className="text-gray-900 dark:text-white font-semibold">Todos os Membros</span>
                                             </div>
-
+                                            
                                             <div className="border-t border-gray-200 dark:border-gray-600 my-2"></div>
-
+                                            
                                             {availableRoles.map(role => (
-                                                <div
+                                                <div 
                                                     key={role}
                                                     onClick={() => {
                                                         if (newAvisoData.destinatarios.includes('todos')) return;
-
+                                                        
                                                         let newDest = [...newAvisoData.destinatarios];
                                                         if (newDest.includes(role)) {
                                                             newDest = newDest.filter(d => d !== role);
@@ -6710,17 +6046,19 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                         }
                                                         setNewAvisoData({ ...newAvisoData, destinatarios: newDest });
                                                     }}
-                                                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${newAvisoData.destinatarios.includes('todos')
+                                                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                                                        newAvisoData.destinatarios.includes('todos')
                                                             ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-700'
                                                             : newAvisoData.destinatarios.includes(role)
                                                                 ? 'bg-blue-100 dark:bg-blue-900 border-2 border-blue-500'
                                                                 : 'bg-gray-50 dark:bg-gray-600 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-500'
-                                                        }`}
+                                                    }`}
                                                 >
-                                                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${newAvisoData.destinatarios.includes(role) && !newAvisoData.destinatarios.includes('todos')
+                                                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                                        newAvisoData.destinatarios.includes(role) && !newAvisoData.destinatarios.includes('todos')
                                                             ? 'bg-blue-600 border-blue-600'
                                                             : 'border-gray-400 dark:border-gray-500'
-                                                        }`}>
+                                                    }`}>
                                                         {newAvisoData.destinatarios.includes(role) && !newAvisoData.destinatarios.includes('todos') && (
                                                             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -6788,45 +6126,48 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                 </button>
                             </div>
 
-                            <form onSubmit={async (e) => {
+                            <form onSubmit={(e) => {
                                 e.preventDefault();
-                                try {
-                                    // Combinar data e horário em timestamp
-                                    const dataHoraCompleta = `${newOficinaData.data}T${newOficinaData.horario}:00`;
-                                    
-                                    const novaOficina = {
-                                        nome: newOficinaData.nome,
-                                        descricao: newOficinaData.descricao,
-                                        data: dataHoraCompleta,
-                                        horario: newOficinaData.horario,
+                                const oficinaId = Date.now();
+                                const novaOficina = {
+                                    id: oficinaId,
+                                    nome: newOficinaData.nome,
+                                    descricao: newOficinaData.descricao,
+                                    data: newOficinaData.data,
+                                    horario: newOficinaData.horario,
+                                    local: newOficinaData.local,
+                                    vagas: parseInt(newOficinaData.vagas) || 0,
+                                    inscritos: 0,
+                                    permissaoInscricao: newOficinaData.permissaoInscricao,
+                                    dataCriacao: new Date().toISOString()
+                                };
+                                const updatedOficinas = [...oficinas, novaOficina];
+                                setOficinas(updatedOficinas);
+                                localStorage.setItem('oficinas', JSON.stringify(updatedOficinas));
+                                
+                                // Criar evento correspondente para o calendário
+                                if (onAddEvent) {
+                                    onAddEvent({
+                                        id: Date.now() + 1,
+                                        oficinaId: oficinaId,
+                                        nome: `Oficina: ${newOficinaData.nome}`,
+                                        data: `${newOficinaData.data}T${newOficinaData.horario}`,
                                         local: newOficinaData.local,
-                                        vagas: parseInt(newOficinaData.vagas) || 0,
-                                        inscritos: 0,
-                                        permissao_inscricao: newOficinaData.permissaoInscricao,
-                                        data_criacao: new Date().toISOString()
-                                    };
-
-                                    console.log('Criando oficina:', novaOficina);
-                                    const createdWorkshop = await createWorkshop(novaOficina);
-                                    console.log('Oficina criada:', createdWorkshop);
-                                    
-                                    await loadOficinas();
-
-                                    setShowOficinaModal(false);
-                                    alert('Oficina criada com sucesso!');
-                                    setNewOficinaData({
-                                        nome: '',
-                                        descricao: '',
-                                        data: format(new Date(), 'yyyy-MM-dd'),
-                                        horario: '19:00',
-                                        local: '',
-                                        vagas: '',
-                                        permissaoInscricao: ['todos']
+                                        descricao: newOficinaData.descricao,
+                                        tipo: 'oficina'
                                     });
-                                } catch (error) {
-                                    console.error('Erro ao criar oficina:', error);
-                                    alert('Erro ao criar oficina. Verifique o console.');
                                 }
+                                
+                                setShowOficinaModal(false);
+                                setNewOficinaData({
+                                    nome: '',
+                                    descricao: '',
+                                    data: format(new Date(), 'yyyy-MM-dd'),
+                                    horario: '19:00',
+                                    local: '',
+                                    vagas: '',
+                                    permissaoInscricao: ['todos']
+                                });
                             }}>
                                 <div className="space-y-4">
                                     <div>
@@ -6921,7 +6262,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                             Quem pode se inscrever?
                                         </label>
                                         <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-3 max-h-48 overflow-y-auto bg-white dark:bg-gray-700 space-y-2">
-                                            <div
+                                            <div 
                                                 onClick={() => {
                                                     if (newOficinaData.permissaoInscricao.includes('todos')) {
                                                         setNewOficinaData({ ...newOficinaData, permissaoInscricao: [] });
@@ -6929,15 +6270,17 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                         setNewOficinaData({ ...newOficinaData, permissaoInscricao: ['todos'] });
                                                     }
                                                 }}
-                                                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${newOficinaData.permissaoInscricao.includes('todos')
-                                                        ? 'bg-indigo-100 dark:bg-indigo-900 border-2 border-indigo-500'
+                                                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                                                    newOficinaData.permissaoInscricao.includes('todos') 
+                                                        ? 'bg-indigo-100 dark:bg-indigo-900 border-2 border-indigo-500' 
                                                         : 'bg-gray-50 dark:bg-gray-600 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-500'
-                                                    }`}
+                                                }`}
                                             >
-                                                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${newOficinaData.permissaoInscricao.includes('todos')
+                                                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                                    newOficinaData.permissaoInscricao.includes('todos')
                                                         ? 'bg-indigo-600 border-indigo-600'
                                                         : 'border-gray-400 dark:border-gray-500'
-                                                    }`}>
+                                                }`}>
                                                     {newOficinaData.permissaoInscricao.includes('todos') && (
                                                         <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -6946,15 +6289,15 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                 </div>
                                                 <span className="text-gray-900 dark:text-white font-semibold">Todos os Membros</span>
                                             </div>
-
+                                            
                                             <div className="border-t border-gray-200 dark:border-gray-600 my-2"></div>
-
+                                            
                                             {availableRoles.map(role => (
-                                                <div
+                                                <div 
                                                     key={role}
                                                     onClick={() => {
                                                         if (newOficinaData.permissaoInscricao.includes('todos')) return;
-
+                                                        
                                                         let newPerm = [...newOficinaData.permissaoInscricao];
                                                         if (newPerm.includes(role)) {
                                                             newPerm = newPerm.filter(d => d !== role);
@@ -6965,17 +6308,19 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                                         }
                                                         setNewOficinaData({ ...newOficinaData, permissaoInscricao: newPerm });
                                                     }}
-                                                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${newOficinaData.permissaoInscricao.includes('todos')
+                                                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                                                        newOficinaData.permissaoInscricao.includes('todos')
                                                             ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-700'
                                                             : newOficinaData.permissaoInscricao.includes(role)
                                                                 ? 'bg-indigo-100 dark:bg-indigo-900 border-2 border-indigo-500'
                                                                 : 'bg-gray-50 dark:bg-gray-600 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-500'
-                                                        }`}
+                                                    }`}
                                                 >
-                                                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${newOficinaData.permissaoInscricao.includes(role) && !newOficinaData.permissaoInscricao.includes('todos')
+                                                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                                        newOficinaData.permissaoInscricao.includes(role) && !newOficinaData.permissaoInscricao.includes('todos')
                                                             ? 'bg-indigo-600 border-indigo-600'
                                                             : 'border-gray-400 dark:border-gray-500'
-                                                        }`}>
+                                                    }`}>
                                                         {newOficinaData.permissaoInscricao.includes(role) && !newOficinaData.permissaoInscricao.includes('todos') && (
                                                             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -7015,219 +6360,6 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                                         <Plus className="w-4 h-4" />
                                         Criar Oficina
                                     </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal Editar Oficina */}
-            {showEditOficinaModal && selectedOficina && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="p-6">
-                            <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                    <Edit className="w-7 h-7 text-indigo-600" />
-                                    Editar Oficina
-                                </h2>
-                                <button
-                                    onClick={() => {
-                                        setShowEditOficinaModal(false);
-                                        setSelectedOficina(null);
-                                    }}
-                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                                >
-                                    <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
-                                </button>
-                            </div>
-
-                            <form onSubmit={async (e) => {
-                                e.preventDefault();
-                                try {
-                                    // Combinar data e horário em timestamp
-                                    const dataHoraCompleta = editOficinaData.data.includes('T') 
-                                        ? editOficinaData.data 
-                                        : `${editOficinaData.data}T${editOficinaData.horario}:00`;
-                                    
-                                    const oficinaAtualizada = {
-                                        nome: editOficinaData.nome,
-                                        descricao: editOficinaData.descricao,
-                                        data: dataHoraCompleta,
-                                        horario: editOficinaData.horario,
-                                        local: editOficinaData.local,
-                                        vagas: parseInt(editOficinaData.vagas) || 0,
-                                        permissao_inscricao: editOficinaData.permissaoInscricao
-                                    };
-
-                                    await updateWorkshop(selectedOficina.id, oficinaAtualizada);
-                                    await loadOficinas();
-
-                                    setShowEditOficinaModal(false);
-                                    setSelectedOficina(null);
-                                    alert('Oficina atualizada com sucesso!');
-                                } catch (error) {
-                                    console.error('Erro ao atualizar oficina:', error);
-                                    alert('Erro ao atualizar oficina. Verifique o console.');
-                                }
-                            }}>
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                            Nome da Oficina
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={editOficinaData.nome}
-                                            onChange={(e) => setEditOficinaData({ ...editOficinaData, nome: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
-                                            required
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                            Descrição
-                                        </label>
-                                        <textarea
-                                            value={editOficinaData.descricao}
-                                            onChange={(e) => setEditOficinaData({ ...editOficinaData, descricao: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
-                                            rows="3"
-                                            required
-                                        />
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                                Data
-                                            </label>
-                                            <input
-                                                type="date"
-                                                value={editOficinaData.data}
-                                                onChange={(e) => setEditOficinaData({ ...editOficinaData, data: e.target.value })}
-                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
-                                                required
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                                Horário
-                                            </label>
-                                            <input
-                                                type="time"
-                                                value={editOficinaData.horario}
-                                                onChange={(e) => setEditOficinaData({ ...editOficinaData, horario: e.target.value })}
-                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
-                                                required
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                                Local
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={editOficinaData.local}
-                                                onChange={(e) => setEditOficinaData({ ...editOficinaData, local: e.target.value })}
-                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
-                                                required
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                                Vagas
-                                            </label>
-                                            <input
-                                                type="number"
-                                                value={editOficinaData.vagas}
-                                                onChange={(e) => setEditOficinaData({ ...editOficinaData, vagas: e.target.value })}
-                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
-                                                min="1"
-                                                required
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Lista de Inscritos */}
-                                    {oficinscritos.length > 0 && (
-                                        <div className="mt-6">
-                                            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                                                Inscritos ({oficinscritos.length})
-                                            </h3>
-                                            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 max-h-40 overflow-y-auto">
-                                                <div className="space-y-2">
-                                                    {oficinscritos.map((inscrito) => (
-                                                        <div
-                                                            key={inscrito.id}
-                                                            className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600"
-                                                        >
-                                                            <div className="flex items-center gap-2">
-                                                                <User className="w-4 h-4 text-gray-500" />
-                                                                <span className="text-sm text-gray-900 dark:text-white">
-                                                                    {inscrito.membro?.nome || 'Membro não encontrado'}
-                                                                </span>
-                                                            </div>
-                                                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                                                                {inscrito.data_inscricao && format(parseISO(inscrito.data_inscricao), "dd/MM/yyyy", { locale: ptBR })}
-                                                            </span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="flex justify-between pt-4 border-t border-gray-200 dark:border-gray-700 mt-6">
-                                    <button
-                                        type="button"
-                                        onClick={async () => {
-                                            if (confirm('Tem certeza que deseja deletar esta oficina? Todas as inscrições serão removidas.')) {
-                                                try {
-                                                    await deleteWorkshop(selectedOficina.id);
-                                                    await loadOficinas();
-                                                    
-                                                    setShowEditOficinaModal(false);
-                                                    setSelectedOficina(null);
-                                                    alert('Oficina deletada com sucesso!');
-                                                } catch (error) {
-                                                    console.error('Erro ao deletar oficina:', error);
-                                                    alert('Erro ao deletar oficina. Verifique o console.');
-                                                }
-                                            }
-                                        }}
-                                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                        Deletar Oficina
-                                    </button>
-                                    <div className="flex space-x-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setShowEditOficinaModal(false);
-                                                setSelectedOficina(null);
-                                            }}
-                                            className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                                        >
-                                            Cancelar
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2"
-                                        >
-                                            <Edit className="w-4 h-4" />
-                                            Salvar Alterações
-                                        </button>
-                                    </div>
                                 </div>
                             </form>
                         </div>
