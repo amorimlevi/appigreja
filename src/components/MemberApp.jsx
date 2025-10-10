@@ -192,6 +192,16 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     const [showMusiciansModal, setShowMusiciansModal] = useState(false);
     const [louvorMembers, setLouvorMembers] = useState([]);
     const [diaconiaMembers, setDiaconiaMembers] = useState([]);
+    const [showDiaconiaScheduleModal, setShowDiaconiaScheduleModal] = useState(false);
+    const [showEditDiaconiaScheduleModal, setShowEditDiaconiaScheduleModal] = useState(false);
+    const [diaconiaScheduleToEdit, setDiaconiaScheduleToEdit] = useState(null);
+    const [newDiaconiaScheduleData, setNewDiaconiaScheduleData] = useState({
+        data: format(new Date(), 'yyyy-MM-dd'),
+        horario: '19:00',
+        categoria: 'culto',
+        observacoes: '',
+        diaconosSelecionados: []
+    });
 
     // Recarregar dados do membro a cada 10 segundos
     useEffect(() => {
@@ -1526,15 +1536,15 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     <div className="flex gap-3">
                                         <button
                                             onClick={() => {
-                                                setScheduleToEdit(null);
-                                                setNewScheduleData({
+                                                setDiaconiaScheduleToEdit(null);
+                                                setNewDiaconiaScheduleData({
                                                     data: format(new Date(), 'yyyy-MM-dd'),
                                                     horario: '19:00',
                                                     categoria: 'culto',
                                                     observacoes: '',
-                                                    membros_ids: []
+                                                    diaconosSelecionados: []
                                                 });
-                                                setShowCreateScheduleModal(true);
+                                                setShowDiaconiaScheduleModal(true);
                                             }}
                                             className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
                                         >
@@ -1579,15 +1589,15 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                             key={escala.id}
                                                             className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all"
                                                             onClick={() => {
-                                                                setScheduleToEdit(escala);
-                                                                setNewScheduleData({
+                                                                setDiaconiaScheduleToEdit(escala);
+                                                                setNewDiaconiaScheduleData({
                                                                     data: escala.data,
                                                                     horario: escala.horario || '',
                                                                     categoria: escala.tipo || escala.categoria || 'culto',
                                                                     observacoes: escala.observacoes || '',
-                                                                    membros_ids: escala.membros_ids || []
+                                                                    diaconosSelecionados: escala.membros_ids || []
                                                                 });
-                                                                setShowEditScheduleModal(true);
+                                                                setShowEditDiaconiaScheduleModal(true);
                                                             }}
                                                         >
                                                             <div className="flex items-center justify-between mb-3">
@@ -4787,6 +4797,323 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         </button>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal Criar Escala de Diaconia */}
+                {showDiaconiaScheduleModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                            <div className="p-6">
+                                <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Montar Escala de Diaconia</h2>
+                                <form onSubmit={async (e) => {
+                                    e.preventDefault();
+                                    try {
+                                        await createMinistrySchedule({
+                                            data: newDiaconiaScheduleData.data,
+                                            horario: newDiaconiaScheduleData.horario,
+                                            tipo: newDiaconiaScheduleData.categoria,
+                                            observacoes: newDiaconiaScheduleData.observacoes,
+                                            ministerio: 'diaconia',
+                                            membros_ids: newDiaconiaScheduleData.diaconosSelecionados
+                                        });
+                                        
+                                        // Recarregar escalas
+                                        const escalas = await getMinistrySchedules('diaconia');
+                                        setDiaconiaSchedules(escalas);
+                                        
+                                        setShowDiaconiaScheduleModal(false);
+                                        setNewDiaconiaScheduleData({
+                                            data: format(new Date(), 'yyyy-MM-dd'),
+                                            horario: '19:00',
+                                            categoria: 'culto',
+                                            observacoes: '',
+                                            diaconosSelecionados: []
+                                        });
+                                        alert('Escala criada com sucesso!');
+                                    } catch (error) {
+                                        console.error('Erro ao criar escala:', error);
+                                        alert('Erro ao criar escala. Tente novamente.');
+                                    }
+                                }}>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Categoria
+                                            </label>
+                                            <select
+                                                value={newDiaconiaScheduleData.categoria}
+                                                onChange={(e) => setNewDiaconiaScheduleData({ ...newDiaconiaScheduleData, categoria: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                                required
+                                            >
+                                                <option value="culto">Culto</option>
+                                                <option value="limpeza">Limpeza</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                    {newDiaconiaScheduleData.categoria === 'culto' ? 'Data do Culto' : 'Data da Limpeza'}
+                                                </label>
+                                                <input
+                                                    type="date"
+                                                    value={newDiaconiaScheduleData.data}
+                                                    onChange={(e) => setNewDiaconiaScheduleData({ ...newDiaconiaScheduleData, data: e.target.value })}
+                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                                    required
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                    {newDiaconiaScheduleData.categoria === 'culto' ? 'Horário do Culto' : 'Horário da Limpeza'}
+                                                </label>
+                                                <input
+                                                    type="time"
+                                                    value={newDiaconiaScheduleData.horario}
+                                                    onChange={(e) => setNewDiaconiaScheduleData({ ...newDiaconiaScheduleData, horario: e.target.value })}
+                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                                    required
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                                            <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
+                                                Selecione os Diáconos ({newDiaconiaScheduleData.diaconosSelecionados.length} selecionados)
+                                            </h3>
+                                            <div className="space-y-2 max-h-60 overflow-y-auto">
+                                                {diaconiaMembers.map((diacono) => {
+                                                    const isSelected = newDiaconiaScheduleData.diaconosSelecionados.includes(diacono.id);
+                                                    
+                                                    return (
+                                                        <div 
+                                                            key={diacono.id} 
+                                                            className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
+                                                                isSelected ? 'bg-purple-100 dark:bg-purple-900/30' : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'
+                                                            }`}
+                                                            onClick={() => {
+                                                                const newSelecionados = isSelected
+                                                                    ? newDiaconiaScheduleData.diaconosSelecionados.filter(id => id !== diacono.id)
+                                                                    : [...newDiaconiaScheduleData.diaconosSelecionados, diacono.id];
+                                                                setNewDiaconiaScheduleData({ ...newDiaconiaScheduleData, diaconosSelecionados: newSelecionados });
+                                                            }}
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="h-10 w-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-semibold">
+                                                                    {diacono.nome?.charAt(0)?.toUpperCase() || 'D'}
+                                                                </div>
+                                                                <div>
+                                                                    <p className="font-medium text-gray-900 dark:text-white uppercase">{diacono.nome}</p>
+                                                                    <p className="text-sm text-gray-500 dark:text-gray-400">{diacono.telefone || 'Sem telefone'}</p>
+                                                                </div>
+                                                            </div>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isSelected}
+                                                                onChange={() => {}}
+                                                                className="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                                                            />
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700 mt-6">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setNewDiaconiaScheduleData({
+                                                    data: format(new Date(), 'yyyy-MM-dd'),
+                                                    horario: '19:00',
+                                                    categoria: 'culto',
+                                                    observacoes: '',
+                                                    diaconosSelecionados: []
+                                                });
+                                                setShowDiaconiaScheduleModal(false);
+                                            }}
+                                            className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={newDiaconiaScheduleData.diaconosSelecionados.length === 0}
+                                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            Criar Escala ({newDiaconiaScheduleData.diaconosSelecionados.length} {newDiaconiaScheduleData.diaconosSelecionados.length === 1 ? 'diácono' : 'diáconos'})
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal Editar Escala de Diaconia */}
+                {showEditDiaconiaScheduleModal && diaconiaScheduleToEdit && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                            <div className="p-6">
+                                <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Editar Escala de Diaconia</h2>
+                                <form onSubmit={async (e) => {
+                                    e.preventDefault();
+                                    try {
+                                        await updateMinistrySchedule(diaconiaScheduleToEdit.id, {
+                                            data: newDiaconiaScheduleData.data,
+                                            horario: newDiaconiaScheduleData.horario,
+                                            tipo: newDiaconiaScheduleData.categoria,
+                                            observacoes: newDiaconiaScheduleData.observacoes,
+                                            ministerio: 'diaconia',
+                                            membros_ids: newDiaconiaScheduleData.diaconosSelecionados
+                                        });
+                                        
+                                        // Recarregar escalas
+                                        const escalas = await getMinistrySchedules('diaconia');
+                                        setDiaconiaSchedules(escalas);
+                                        
+                                        setShowEditDiaconiaScheduleModal(false);
+                                        setDiaconiaScheduleToEdit(null);
+                                        alert('Escala atualizada com sucesso!');
+                                    } catch (error) {
+                                        console.error('Erro ao atualizar escala:', error);
+                                        alert('Erro ao atualizar escala. Tente novamente.');
+                                    }
+                                }}>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Categoria
+                                            </label>
+                                            <select
+                                                value={newDiaconiaScheduleData.categoria}
+                                                onChange={(e) => setNewDiaconiaScheduleData({ ...newDiaconiaScheduleData, categoria: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                                required
+                                            >
+                                                <option value="culto">Culto</option>
+                                                <option value="limpeza">Limpeza</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                    {newDiaconiaScheduleData.categoria === 'culto' ? 'Data do Culto' : 'Data da Limpeza'}
+                                                </label>
+                                                <input
+                                                    type="date"
+                                                    value={newDiaconiaScheduleData.data}
+                                                    onChange={(e) => setNewDiaconiaScheduleData({ ...newDiaconiaScheduleData, data: e.target.value })}
+                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                                    required
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                    {newDiaconiaScheduleData.categoria === 'culto' ? 'Horário do Culto' : 'Horário da Limpeza'}
+                                                </label>
+                                                <input
+                                                    type="time"
+                                                    value={newDiaconiaScheduleData.horario}
+                                                    onChange={(e) => setNewDiaconiaScheduleData({ ...newDiaconiaScheduleData, horario: e.target.value })}
+                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                                    required
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                                            <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
+                                                Selecione os Diáconos ({newDiaconiaScheduleData.diaconosSelecionados.length} selecionados)
+                                            </h3>
+                                            <div className="space-y-2 max-h-60 overflow-y-auto">
+                                                {diaconiaMembers.map((diacono) => {
+                                                    const isSelected = newDiaconiaScheduleData.diaconosSelecionados.includes(diacono.id);
+                                                    
+                                                    return (
+                                                        <div 
+                                                            key={diacono.id} 
+                                                            className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
+                                                                isSelected ? 'bg-purple-100 dark:bg-purple-900/30' : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'
+                                                            }`}
+                                                            onClick={() => {
+                                                                const newSelecionados = isSelected
+                                                                    ? newDiaconiaScheduleData.diaconosSelecionados.filter(id => id !== diacono.id)
+                                                                    : [...newDiaconiaScheduleData.diaconosSelecionados, diacono.id];
+                                                                setNewDiaconiaScheduleData({ ...newDiaconiaScheduleData, diaconosSelecionados: newSelecionados });
+                                                            }}
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="h-10 w-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-semibold">
+                                                                    {diacono.nome?.charAt(0)?.toUpperCase() || 'D'}
+                                                                </div>
+                                                                <div>
+                                                                    <p className="font-medium text-gray-900 dark:text-white uppercase">{diacono.nome}</p>
+                                                                    <p className="text-sm text-gray-500 dark:text-gray-400">{diacono.telefone || 'Sem telefone'}</p>
+                                                                </div>
+                                                            </div>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isSelected}
+                                                                onChange={() => {}}
+                                                                className="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                                                            />
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex justify-between pt-4 border-t border-gray-200 dark:border-gray-700 mt-6">
+                                        <button
+                                            type="button"
+                                            onClick={async () => {
+                                                if (window.confirm('Tem certeza que deseja excluir esta escala?')) {
+                                                    try {
+                                                        await deleteMinistrySchedule(diaconiaScheduleToEdit.id, 'diaconia');
+                                                        const escalas = await getMinistrySchedules('diaconia');
+                                                        setDiaconiaSchedules(escalas);
+                                                        setShowEditDiaconiaScheduleModal(false);
+                                                        setDiaconiaScheduleToEdit(null);
+                                                        alert('Escala excluída com sucesso!');
+                                                    } catch (error) {
+                                                        console.error('Erro ao excluir escala:', error);
+                                                        alert('Erro ao excluir escala. Tente novamente.');
+                                                    }
+                                                }
+                                            }}
+                                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                                        >
+                                            Excluir
+                                        </button>
+                                        <div className="flex space-x-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setShowEditDiaconiaScheduleModal(false);
+                                                    setDiaconiaScheduleToEdit(null);
+                                                }}
+                                                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                            >
+                                                Cancelar
+                                            </button>
+                                            <button
+                                                type="submit"
+                                                disabled={newDiaconiaScheduleData.diaconosSelecionados.length === 0}
+                                                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                Salvar ({newDiaconiaScheduleData.diaconosSelecionados.length} {newDiaconiaScheduleData.diaconosSelecionados.length === 1 ? 'diácono' : 'diáconos'})
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
                             </div>
                         </div>
                     </div>

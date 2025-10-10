@@ -244,6 +244,21 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         loadLouvorSchedules();
     }, []);
 
+    // Carregar escalas de diaconia do banco
+    React.useEffect(() => {
+        const loadDiaconiaSchedules = async () => {
+            try {
+                const schedules = await getMinistrySchedules('diaconia');
+                console.log('Escalas de diaconia carregadas no admin:', schedules);
+                setEscalas(schedules);
+            } catch (error) {
+                console.error('Erro ao carregar escalas de diaconia:', error);
+            }
+        };
+
+        loadDiaconiaSchedules();
+    }, []);
+
     const toggleDarkMode = () => {
         setDarkMode(!darkMode);
     };
@@ -1694,6 +1709,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
     <button 
         onClick={() => {
             setNewEscalaData({
+                categoria: 'culto',
                 data: format(new Date(), 'yyyy-MM-dd'),
                 horario: '19:00',
                 diaconosSelecionados: []
@@ -1776,6 +1792,9 @@ Montar escala        </button>
                                 const dataEscala = parseISO(escala.data);
                                 const isProxima = index === 0;
                                 const dataFormatada = format(dataEscala, "EEEE - dd/MM/yyyy", { locale: ptBR });
+                                const diaconosEscalados = escala.membros_ids 
+                                    ? members.filter(m => escala.membros_ids.includes(m.id))
+                                    : escala.diaconos || [];
                                 
                                 return (
                                     <div 
@@ -1797,11 +1816,11 @@ Montar escala        </button>
                                                 {dataFormatada}
                                             </p>
                                             <div className="flex items-center gap-2">
-                                                {escala.categoria && (
+                                                {(escala.tipo || escala.categoria) && (
                                                     <span className={`px-3 py-1 text-xs font-semibold rounded-full capitalize ${
-                                                        escala.categoria === 'culto' ? 'bg-purple-600 text-white' : 'bg-orange-600 text-white'
+                                                        (escala.tipo || escala.categoria) === 'culto' ? 'bg-purple-600 text-white' : 'bg-orange-600 text-white'
                                                     }`}>
-                                                        {escala.categoria}
+                                                        {escala.tipo || escala.categoria}
                                                     </span>
                                                 )}
                                                 <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
@@ -1826,7 +1845,7 @@ Montar escala        </button>
                                                         Diáconos escalados:
                                                     </span>
                                                     <div className="mt-1 flex flex-wrap gap-2">
-                                                        {escala.diaconos.map((diacono, dIndex) => (
+                                                        {diaconosEscalados.map((diacono, dIndex) => (
                                                             <span 
                                                                 key={dIndex}
                                                                 className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
@@ -4317,23 +4336,39 @@ Montar escala        </button>
                     <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                         <div className="p-6">
                             <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Montar Escala de Diaconia</h2>
-                            <form onSubmit={(e) => {
+                            <form onSubmit={async (e) => {
                                 e.preventDefault();
-                                // Salvar escala
-                                const novaEscala = {
-                                    id: Date.now(),
-                                    categoria: newEscalaData.categoria,
-                                    data: newEscalaData.data,
-                                    horario: newEscalaData.horario,
-                                    diaconos: members.filter(m => 
-                                        newEscalaData.diaconosSelecionados.includes(m.id || `diacono-${members.indexOf(m)}`)
-                                    )
-                                };
-                                const novasEscalas = [...escalas, novaEscala];
-                                setEscalas(novasEscalas);
-                                localStorage.setItem('escalaDiaconia', JSON.stringify(novasEscalas));
-                                console.log('Escala criada:', novaEscala);
-                                setShowEscalaModal(false);
+                                try {
+                                    const diaconosIds = members
+                                        .filter(m => newEscalaData.diaconosSelecionados.includes(m.id || `diacono-${members.indexOf(m)}`))
+                                        .map(m => m.id);
+                                    
+                                    const escalaData = {
+                                        ministerio: 'diaconia',
+                                        tipo: newEscalaData.categoria || 'culto',
+                                        data: newEscalaData.data,
+                                        horario: newEscalaData.horario,
+                                        membros_ids: diaconosIds
+                                    };
+                                    
+                                    console.log('Criando escala de diaconia:', escalaData);
+                                    await createMinistrySchedule(escalaData);
+                                    
+                                    // Recarregar escalas
+                                    const schedules = await getMinistrySchedules('diaconia');
+                                    setEscalas(schedules);
+                                    
+                                    setShowEscalaModal(false);
+                                    setNewEscalaData({
+                                        categoria: 'culto',
+                                        data: format(new Date(), 'yyyy-MM-dd'),
+                                        horario: '19:00',
+                                        diaconosSelecionados: []
+                                    });
+                                } catch (error) {
+                                    console.error('Erro ao criar escala de diaconia:', error);
+                                    alert('Erro ao criar escala. Tente novamente.');
+                                }
                             }}>
                                 <div className="space-y-4">
                                     <div>
