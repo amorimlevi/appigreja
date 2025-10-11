@@ -27,7 +27,9 @@ import {
     Plus,
     Edit,
     List,
-    Trash2
+    Trash2,
+    Phone,
+    Edit2
 } from 'lucide-react';
 import { format, parseISO, isAfter, isBefore, startOfMonth, endOfMonth, isSameMonth, isToday, addDays, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -48,6 +50,16 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
             age--;
         }
         return age;
+    };
+
+    const getInitials = (name) => {
+        if (!name) return '??';
+        return name
+            .split(' ')
+            .map(word => word[0])
+            .join('')
+            .toUpperCase()
+            .slice(0, 2);
     };
 
     // Definir itens de menu padrão e por flag
@@ -192,7 +204,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     const [showMusiciansModal, setShowMusiciansModal] = useState(false);
     const [louvorMembers, setLouvorMembers] = useState([]);
     const [diaconiaMembers, setDiaconiaMembers] = useState([]);
-    const [kidsMembers, setKidsMembers] = useState([]);
+    const [kidsMembers, setKidsMembers] = useState({ criancas: [], professores: [], all: [] });
     const [showDiaconiaScheduleModal, setShowDiaconiaScheduleModal] = useState(false);
     const [showEditDiaconiaScheduleModal, setShowEditDiaconiaScheduleModal] = useState(false);
     const [diaconiaScheduleToEdit, setDiaconiaScheduleToEdit] = useState(null);
@@ -202,6 +214,28 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
         categoria: 'culto',
         observacoes: '',
         diaconosSelecionados: []
+    });
+    const [showKidsScheduleModal, setShowKidsScheduleModal] = useState(false);
+    const [showKidsListModal, setShowKidsListModal] = useState(false);
+    const [showProfessoresListModal, setShowProfessoresListModal] = useState(false);
+    const [newKidsScheduleData, setNewKidsScheduleData] = useState({
+        turmas: [],
+        data: format(new Date(), 'yyyy-MM-dd'),
+        horario: '09:00',
+        professoresSelecionados: []
+    });
+    const [escalasKids, setEscalasKids] = useState(() => {
+        const saved = localStorage.getItem('escalasKids');
+        return saved ? JSON.parse(saved) : [];
+    });
+    const [selectedKidsSchedule, setSelectedKidsSchedule] = useState(null);
+    const [showDetalhesEscalaProfessoresModal, setShowDetalhesEscalaProfessoresModal] = useState(false);
+    const [showEditEscalaProfessoresModal, setShowEditEscalaProfessoresModal] = useState(false);
+    const [editFormDataProfessores, setEditFormDataProfessores] = useState({
+        turmas: [],
+        data: '',
+        horario: '',
+        professoresSelecionados: []
     });
 
     // Recarregar dados do membro a cada 10 segundos
@@ -406,6 +440,8 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
                                 return funcoes.some(f => f === 'professor kids' || f === 'lider kids');
                             });
+                            console.log('Professores Kids encontrados:', professores);
+                            console.log('Todos os membros Kids:', allMembersKids);
                             setKidsMembers({ criancas, professores, all: allMembersKids });
                             break;
                         case 'jovens':
@@ -1076,12 +1112,18 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
     const handleViewOficinaDetails = async (oficina) => {
         try {
+            // Verificar se o ID é válido (número)
+            if (typeof oficina.id !== 'number') {
+                alert('Esta oficina possui um ID inválido. Por favor, entre em contato com o administrador.');
+                return;
+            }
             setOficinaDetails(oficina);
             const isRegistered = await checkWorkshopRegistration(oficina.id, localMember.id);
             setIsOficinaRegistered(isRegistered);
             setShowOficinaDetailsModal(true);
         } catch (error) {
             console.error('Erro ao verificar inscrição:', error);
+            alert('Erro ao carregar detalhes da oficina.');
         }
     };
 
@@ -2238,7 +2280,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Kids</h1>
                                 {isLiderKids && (
                                     <button 
-                                        onClick={() => {/* TODO: Adicionar modal de escala */}}
+                                        onClick={() => setShowKidsScheduleModal(true)}
                                         className="flex items-center px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700"
                                     >
                                         <Plus className="w-4 h-4 mr-2" />
@@ -2248,7 +2290,10 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                <div 
+                                    onClick={() => setShowKidsListModal(true)}
+                                    className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 cursor-pointer hover:border-pink-500 dark:hover:border-pink-400 transition-colors"
+                                >
                                     <div className="flex items-center justify-between">
                                         <div>
                                             <p className="text-sm text-gray-500 dark:text-gray-400">Total de Crianças</p>
@@ -2260,7 +2305,10 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </div>
                                 </div>
                                 
-                                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                <div 
+                                    onClick={() => setShowProfessoresListModal(true)}
+                                    className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-lg transition-shadow"
+                                >
                                     <div className="flex items-center justify-between">
                                         <div>
                                             <p className="text-sm text-gray-500 dark:text-gray-400">Professores</p>
@@ -2318,12 +2366,91 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                             <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                                 <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center">
                                     <Calendar className="w-5 h-5 mr-2 text-pink-600" />
-                                    Próximas Escalas
+                                    Próximas Escalas ({kidsSchedules.length})
                                 </h3>
-                                <div className="text-center py-8">
-                                    <Calendar className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
-                                    <p className="text-gray-500 dark:text-gray-400">Nenhuma escala criada ainda.</p>
-                                </div>
+                                {kidsSchedules.length === 0 ? (
+                                    <div className="text-center py-8">
+                                        <Calendar className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                                        <p className="text-gray-500 dark:text-gray-400">Nenhuma escala criada ainda.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {kidsSchedules
+                                            .sort((a, b) => new Date(a.data) - new Date(b.data))
+                                            .slice(0, 5)
+                                            .map((escala, idx) => {
+                                                // Extrair turmas da descrição
+                                                const turmas = escala.descricao?.includes('Turmas:') 
+                                                    ? escala.descricao.replace('Turmas: ', '').split(', ')
+                                                    : [];
+                                                const hasPequenos = turmas.includes('Pequenos');
+                                                const hasGrandes = turmas.includes('Grandes');
+                                                
+                                                let cardClasses = "p-4 rounded-lg border cursor-pointer hover:shadow-lg transition-shadow ";
+                                                if (hasPequenos && hasGrandes) {
+                                                    cardClasses += "bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-blue-300 dark:border-blue-700";
+                                                } else if (hasPequenos) {
+                                                    cardClasses += "bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-300 dark:border-blue-700";
+                                                } else if (hasGrandes) {
+                                                    cardClasses += "bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-purple-300 dark:border-purple-700";
+                                                } else {
+                                                    cardClasses += "bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 border-pink-200 dark:border-pink-800";
+                                                }
+                                                
+                                                return (
+                                                    <div 
+                                                        key={idx} 
+                                                        className={cardClasses}
+                                                        onClick={() => {
+                                                            setSelectedKidsSchedule(escala);
+                                                            setShowDetalhesEscalaProfessoresModal(true);
+                                                        }}
+                                                    >
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <Calendar className="w-5 h-5 text-pink-600" />
+                                                                <div>
+                                                                    <span className="font-medium text-gray-900 dark:text-white">
+                                                                        {format(parseISO(escala.data), "dd/MM/yyyy", { locale: ptBR })} - {escala.horario}
+                                                                    </span>
+                                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                                        {format(parseISO(escala.data), "EEEE", { locale: ptBR })}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        {turmas.length > 0 && (
+                                                            <div className="mb-2">
+                                                                <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Turmas:</p>
+                                                                <div className="flex flex-wrap gap-1">
+                                                                    {turmas.map((turma, i) => (
+                                                                        <span key={i} className={`text-xs px-2 py-0.5 text-white rounded-full ${
+                                                                            turma === 'Pequenos' ? 'bg-blue-500' : 'bg-purple-600'
+                                                                        }`}>
+                                                                            {turma}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        <div className="mt-3">
+                                                            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Professores escalados:</p>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {escala.membros_ids?.map((profId, i) => {
+                                                                    const prof = kidsMembers.all?.find(m => m.id === profId);
+                                                                    return prof ? (
+                                                                        <span key={i} className="text-xs px-2 py-1 bg-pink-600 text-white rounded-full">
+                                                                            {prof.nome}
+                                                                        </span>
+                                                                    ) : null;
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -2412,7 +2539,18 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                             </div>
 
                             <div className="card">
-                                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Oficinas</h3>
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Oficinas</h3>
+                                    {isLiderJovens && (
+                                        <button
+                                            onClick={() => setShowOficinaModal(true)}
+                                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                                        >
+                                            <Plus className="w-4 h-4" />
+                                            Nova Oficina
+                                        </button>
+                                    )}
+                                </div>
                                 {oficinas.length === 0 ? (
                                     <div className="text-center py-12">
                                         <Sparkles className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
@@ -2439,14 +2577,14 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                         <div className="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
                                                             <span className="flex items-center gap-1">
                                                                 <Clock className="w-3 h-3" />
-                                                                {oficina.data && (
-                                                                    format(parseISO(oficina.data.split('T')[0]), "dd/MM/yyyy", { locale: ptBR })
-                                                                )} às {oficina.data && oficina.data.includes('T') ? oficina.data.split('T')[1].substring(0, 5) : '19:00'}
+                                                                {oficina.data && format(new Date(oficina.data), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                                                             </span>
-                                                            <span className="flex items-center gap-1">
-                                                                <Users className="w-3 h-3" />
-                                                                {oficina.inscritos || 0}/{oficina.vagas || 12} vagas
-                                                            </span>
+                                                            {oficina.vagas && (
+                                                                <span className="flex items-center gap-1">
+                                                                    <Users className="w-3 h-3" />
+                                                                    {oficina.vagas} vagas
+                                                                </span>
+                                                            )}
                                                             {oficina.local && (
                                                                 <span className="flex items-center gap-1">
                                                                     <MapPin className="w-3 h-3" />
@@ -3625,6 +3763,414 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </button>
                                 </div>
                             </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal de Lista de Crianças */}
+                {showKidsListModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden shadow-2xl">
+                            <div className="p-6">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                        <Baby className="w-6 h-6 text-pink-500" />
+                                        Crianças Cadastradas
+                                    </h2>
+                                    <button
+                                        onClick={() => setShowKidsListModal(false)}
+                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                                    >
+                                        <X className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                                    </button>
+                                </div>
+
+                                <div className="overflow-y-auto max-h-[60vh]">
+                                    {kidsMembers?.criancas?.length > 0 ? (
+                                        <div className="space-y-3">
+                                            {kidsMembers.criancas.map((crianca) => {
+                                                const idade = crianca.idade || (crianca.nascimento ? calculateAge(crianca.nascimento) : null);
+                                                let faixaEtaria = '';
+                                                if (idade !== null) {
+                                                    if (idade <= 3) faixaEtaria = '0-3 anos';
+                                                    else if (idade <= 7) faixaEtaria = '4-7 anos';
+                                                    else faixaEtaria = '8-12 anos';
+                                                }
+                                                
+                                                return (
+                                                    <div 
+                                                        key={crianca.id}
+                                                        className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/50"
+                                                    >
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex-1">
+                                                                <p className="font-semibold text-gray-900 dark:text-white">
+                                                                    {crianca.nome}
+                                                                </p>
+                                                                <div className="flex items-center gap-4 mt-1">
+                                                                    {idade !== null && (
+                                                                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                                                                            {idade} {idade === 1 ? 'ano' : 'anos'}
+                                                                        </span>
+                                                                    )}
+                                                                    {faixaEtaria && (
+                                                                        <span className="text-xs px-2 py-1 bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300 rounded-full">
+                                                                            {faixaEtaria}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <Baby className="w-5 h-5 text-pink-500" />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-12">
+                                            <Baby className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                                            <p className="text-gray-500 dark:text-gray-400">
+                                                Nenhuma criança cadastrada ainda.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal Lista de Professores */}
+                {showProfessoresListModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                            <div className="p-6">
+                                <div className="flex items-center justify-between mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                        <Users className="w-7 h-7 text-blue-500" />
+                                        Professores Kids
+                                    </h2>
+                                    <button
+                                        onClick={() => setShowProfessoresListModal(false)}
+                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                    >
+                                        <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                                    </button>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {kidsMembers?.professores?.length > 0 ? (
+                                        kidsMembers.professores.map((professor) => {
+                                            const age = calculateAge(professor.nascimento);
+                                            const isLider = professor.funcoes?.includes('lider kids');
+                                            
+                                            return (
+                                                <div 
+                                                    key={professor.id}
+                                                    className="p-4 rounded-lg border-2 border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-700"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="h-12 w-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold text-lg">
+                                                            {getInitials(professor.nome)}
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                                                    {professor.nome}
+                                                                </h3>
+                                                                <span className={`text-xs px-2 py-1 rounded-full ${
+                                                                    isLider 
+                                                                        ? 'bg-pink-600 text-white' 
+                                                                        : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                                                                }`}>
+                                                                    {isLider ? 'Líder Kids' : 'Professor Kids'}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-gray-600 dark:text-gray-400">
+                                                                {professor.telefone && (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <Phone className="w-4 h-4" />
+                                                                        <span>{professor.telefone}</span>
+                                                                    </div>
+                                                                )}
+                                                                {age && <span>• {age} anos</span>}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    ) : (
+                                        <div className="text-center py-12">
+                                            <Users className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                                            <p className="text-gray-500 dark:text-gray-400">
+                                                Nenhum professor cadastrado ainda.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex justify-end pt-6 border-t border-gray-200 dark:border-gray-700 mt-6">
+                                    <button
+                                        onClick={() => setShowProfessoresListModal(false)}
+                                        className="px-6 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                                    >
+                                        Fechar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal de Nova Escala Kids */}
+                {showKidsScheduleModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                            <div className="p-6">
+                                <div className="flex items-center justify-between mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                        <Calendar className="w-7 h-7 text-pink-600" />
+                                        Nova Escala de Professores
+                                    </h2>
+                                    <button
+                                        onClick={() => {
+                                            setShowKidsScheduleModal(false);
+                                            setNewKidsScheduleData({
+                                                turmas: [],
+                                                data: format(new Date(), 'yyyy-MM-dd'),
+                                                horario: '09:00',
+                                                professoresSelecionados: []
+                                            });
+                                        }}
+                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                    >
+                                        <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                                    </button>
+                                </div>
+
+                                <form onSubmit={async (e) => {
+                                    e.preventDefault();
+                                    if (newKidsScheduleData.turmas.length === 0) {
+                                        alert('Selecione pelo menos uma turma!');
+                                        return;
+                                    }
+                                    if (newKidsScheduleData.professoresSelecionados.length === 0) {
+                                        alert('Selecione pelo menos um professor!');
+                                        return;
+                                    }
+                                    
+                                    try {
+                                        // Salvar no Supabase
+                                        const scheduleData = {
+                                            ministerio: 'kids',
+                                            descricao: `Turmas: ${newKidsScheduleData.turmas.join(', ')}`,
+                                            data: `${newKidsScheduleData.data}T${newKidsScheduleData.horario}:00`,
+                                            horario: newKidsScheduleData.horario,
+                                            membros_ids: newKidsScheduleData.professoresSelecionados
+                                        };
+                                        
+                                        const savedSchedule = await createMinistrySchedule(scheduleData);
+                                        
+                                        // Adicionar ao estado local com o ID do Supabase
+                                        const novaEscala = {
+                                            id: savedSchedule.id,
+                                            ...newKidsScheduleData
+                                        };
+                                        const novasEscalas = [...escalasKids, novaEscala];
+                                        setEscalasKids(novasEscalas);
+                                        localStorage.setItem('escalasKids', JSON.stringify(novasEscalas));
+                                        setShowKidsScheduleModal(false);
+                                        setNewKidsScheduleData({
+                                            turmas: [],
+                                            data: format(new Date(), 'yyyy-MM-dd'),
+                                            horario: '09:00',
+                                            professoresSelecionados: []
+                                        });
+                                    } catch (error) {
+                                        console.error('Erro ao criar escala:', error);
+                                        alert('Erro ao criar escala: ' + error.message);
+                                    }
+                                }}>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Selecione as Turmas
+                                            </label>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                {['Pequenos', 'Grandes'].map((turma) => {
+                                                    const isSelected = newKidsScheduleData.turmas.includes(turma);
+                                                    return (
+                                                        <div 
+                                                            key={turma}
+                                                            onClick={() => {
+                                                                if (isSelected) {
+                                                                    setNewKidsScheduleData({
+                                                                        ...newKidsScheduleData,
+                                                                        turmas: newKidsScheduleData.turmas.filter(t => t !== turma)
+                                                                    });
+                                                                } else {
+                                                                    setNewKidsScheduleData({
+                                                                        ...newKidsScheduleData,
+                                                                        turmas: [...newKidsScheduleData.turmas, turma]
+                                                                    });
+                                                                }
+                                                            }}
+                                                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all text-center ${
+                                                                isSelected 
+                                                                    ? 'border-pink-600 bg-pink-50 dark:bg-pink-900/30' 
+                                                                    : 'border-gray-200 dark:border-gray-700 hover:border-pink-300 dark:hover:border-pink-700'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-center justify-center gap-2">
+                                                                <span className="font-medium text-gray-900 dark:text-white">{turma}</span>
+                                                                {isSelected && (
+                                                                    <div className="h-5 w-5 rounded-full bg-pink-600 flex items-center justify-center">
+                                                                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                                        </svg>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                    Data
+                                                </label>
+                                                <input
+                                                    type="date"
+                                                    value={newKidsScheduleData.data}
+                                                    onChange={(e) => setNewKidsScheduleData({ ...newKidsScheduleData, data: e.target.value })}
+                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 dark:bg-gray-700 dark:text-white"
+                                                    required
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                    Horário
+                                                </label>
+                                                <input
+                                                    type="time"
+                                                    value={newKidsScheduleData.horario}
+                                                    onChange={(e) => setNewKidsScheduleData({ ...newKidsScheduleData, horario: e.target.value })}
+                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 dark:bg-gray-700 dark:text-white"
+                                                    required
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                                            <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
+                                                Selecione os Professores ({newKidsScheduleData.professoresSelecionados.length} selecionados)
+                                            </h3>
+                                            
+                                            {!kidsMembers?.professores || kidsMembers.professores.length === 0 ? (
+                                                <div className="text-center py-8 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                                    <Users className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                                                    <p className="text-gray-500 dark:text-gray-400">Nenhum professor cadastrado.</p>
+                                                    <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+                                                        Cadastre membros com função "Professor Kids" ou "Líder Kids"
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-2 max-h-96 overflow-y-auto">
+                                                    {kidsMembers.professores.map((professor) => {
+                                                        const isSelected = newKidsScheduleData.professoresSelecionados.includes(professor.id);
+                                                        const age = professor.idade || (professor.nascimento ? calculateAge(professor.nascimento) : null);
+                                                        
+                                                        return (
+                                                            <div 
+                                                                key={professor.id}
+                                                                onClick={() => {
+                                                                    if (isSelected) {
+                                                                        setNewKidsScheduleData({
+                                                                            ...newKidsScheduleData,
+                                                                            professoresSelecionados: newKidsScheduleData.professoresSelecionados.filter(id => id !== professor.id)
+                                                                        });
+                                                                    } else {
+                                                                        setNewKidsScheduleData({
+                                                                            ...newKidsScheduleData,
+                                                                            professoresSelecionados: [...newKidsScheduleData.professoresSelecionados, professor.id]
+                                                                        });
+                                                                    }
+                                                                }}
+                                                                className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                                                                    isSelected 
+                                                                        ? 'border-pink-600 bg-pink-50 dark:bg-pink-900/30' 
+                                                                        : 'border-gray-200 dark:border-gray-700 hover:border-pink-300 dark:hover:border-pink-700'
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="h-10 w-10 rounded-full bg-pink-600 flex items-center justify-center text-white font-semibold">
+                                                                        {getInitials(professor.nome)}
+                                                                    </div>
+                                                                    <div className="flex-1">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <h4 className="font-medium text-gray-900 dark:text-white">
+                                                                                {professor.nome}
+                                                                            </h4>
+                                                                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                                                                professor.funcoes?.includes('lider kids') 
+                                                                                    ? 'bg-pink-600 text-white' 
+                                                                                    : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
+                                                                            }`}>
+                                                                                {professor.funcoes?.includes('lider kids') ? 'Líder' : 'Professor'}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                                            {professor.telefone && <span>{professor.telefone}</span>}
+                                                                            {age && <span>• {age} anos</span>}
+                                                                        </div>
+                                                                    </div>
+                                                                    {isSelected && (
+                                                                        <div className="h-6 w-6 rounded-full bg-pink-600 flex items-center justify-center">
+                                                                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                                            </svg>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700 mt-6">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowKidsScheduleModal(false);
+                                                setNewKidsScheduleData({
+                                                    turmas: [],
+                                                    data: format(new Date(), 'yyyy-MM-dd'),
+                                                    horario: '09:00',
+                                                    professoresSelecionados: []
+                                                });
+                                            }}
+                                            className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={newKidsScheduleData.professoresSelecionados.length === 0}
+                                            className="px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                        >
+                                            <Calendar className="w-4 h-4" />
+                                            Criar Escala ({newKidsScheduleData.professoresSelecionados.length} {newKidsScheduleData.professoresSelecionados.length === 1 ? 'professor' : 'professores'})
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -5258,9 +5804,382 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                         </div>
                     </div>
                 )}
-            </div>
-        </div>
-    );
-};
 
-export default MemberApp;
+                        {/* Modal Detalhes da Escala de Professores Kids */}
+                            {showDetalhesEscalaProfessoresModal && selectedKidsSchedule && (
+                                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                                        <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                                            <div className="p-6">
+                                    <div className="flex items-center justify-between mb-6">
+                                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                            <Calendar className="w-7 h-7 text-pink-600" />
+                                            Detalhes da Escala
+                                        </h2>
+                                        <button
+                                            onClick={() => {
+                                                setShowDetalhesEscalaProfessoresModal(false);
+                                                setSelectedKidsSchedule(null);
+                                            }}
+                                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                        >
+                                            <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-6">
+                                        {/* Data e Horário */}
+                                        <div className="bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 p-6 rounded-lg border border-pink-200 dark:border-pink-800">
+                                            <div className="flex items-center gap-3 mb-4">
+                                                <Calendar className="w-8 h-8 text-pink-600" />
+                                                <div>
+                                                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                                                        {format(parseISO(selectedKidsSchedule.data), "dd/MM/yyyy", { locale: ptBR })}
+                                                    </h3>
+                                                    <p className="text-lg text-gray-600 dark:text-gray-400 capitalize">
+                                                        {format(parseISO(selectedKidsSchedule.data), "EEEE", { locale: ptBR })}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Clock className="w-5 h-5 text-pink-600" />
+                                                <span className="text-lg font-medium text-gray-900 dark:text-white">
+                                                    {selectedKidsSchedule.horario}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Turmas */}
+                                        {selectedKidsSchedule.descricao?.includes('Turmas:') && (
+                                            <div>
+                                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                                                    <Baby className="w-5 h-5 text-pink-600" />
+                                                    Turmas
+                                                </h3>
+                                                <div className="flex flex-wrap gap-3">
+                                                    {selectedKidsSchedule.descricao.replace('Turmas: ', '').split(', ').map((turma, i) => (
+                                                        <div 
+                                                            key={i} 
+                                                            className={`px-6 py-3 rounded-lg text-white font-medium text-lg ${
+                                                                turma === 'Pequenos' ? 'bg-blue-500' : 'bg-purple-600'
+                                                            }`}
+                                                        >
+                                                            {turma}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Professores */}
+                                        <div>
+                                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                                                <Users className="w-5 h-5 text-pink-600" />
+                                                Professores Escalados ({selectedKidsSchedule.membros_ids?.length || 0})
+                                            </h3>
+                                            <div className="space-y-3">
+                                                {selectedKidsSchedule.membros_ids?.map((profId, i) => {
+                                                    const prof = kidsMembers.all?.find(m => m.id === profId);
+                                                    if (!prof) return null;
+                                                    const age = calculateAge(prof.nascimento);
+                                                    
+                                                    return (
+                                                        <div 
+                                                            key={i} 
+                                                            className="p-4 rounded-lg border-2 border-pink-200 dark:border-pink-800 bg-white dark:bg-gray-700"
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="h-12 w-12 rounded-full bg-pink-600 flex items-center justify-center text-white font-semibold text-lg">
+                                                                    {getInitials(prof.nome)}
+                                                                </div>
+                                                                <div className="flex-1">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <h4 className="font-semibold text-gray-900 dark:text-white text-lg">
+                                                                            {prof.nome}
+                                                                        </h4>
+                                                                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                                                            prof.funcoes?.includes('lider kids') 
+                                                                                ? 'bg-pink-600 text-white' 
+                                                                                : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
+                                                                        }`}>
+                                                                            {prof.funcoes?.includes('lider kids') ? 'Líder' : 'Professor'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-gray-600 dark:text-gray-400">
+                                                                        {prof.telefone && (
+                                                                            <div className="flex items-center gap-1">
+                                                                                <Phone className="w-4 h-4" />
+                                                                                <span>{prof.telefone}</span>
+                                                                            </div>
+                                                                        )}
+                                                                        {age && <span>• {age} anos</span>}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-3 pt-6 border-t border-gray-200 dark:border-gray-700 mt-6">
+                                        <button
+                                            onClick={() => {
+                                                setEditFormDataProfessores({
+                                                    turmas: selectedKidsSchedule.descricao?.replace('Turmas: ', '').split(', ') || [],
+                                                    data: format(parseISO(selectedKidsSchedule.data), 'yyyy-MM-dd'),
+                                                    horario: selectedKidsSchedule.horario,
+                                                    professoresSelecionados: selectedKidsSchedule.membros_ids || []
+                                                });
+                                                setShowEditEscalaProfessoresModal(true);
+                                            }}
+                                            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                        >
+                                            <Edit2 className="w-5 h-5" />
+                                            Editar Escala
+                                        </button>
+                                        <button
+                                            onClick={async () => {
+                                                if (window.confirm('Tem certeza que deseja deletar esta escala?')) {
+                                                    try {
+                                                        await deleteMinistrySchedule(selectedKidsSchedule.id);
+                                                        setKidsSchedules(prev => prev.filter(s => s.id !== selectedKidsSchedule.id));
+                                                        setShowDetalhesEscalaProfessoresModal(false);
+                                                        setSelectedKidsSchedule(null);
+                                                    } catch (error) {
+                                                        console.error('Erro ao deletar escala:', error);
+                                                        alert('Erro ao deletar escala');
+                                                    }
+                                                }
+                                            }}
+                                            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                                        >
+                                            <Trash2 className="w-5 h-5" />
+                                            Deletar
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setShowDetalhesEscalaProfessoresModal(false);
+                                                setSelectedKidsSchedule(null);
+                                            }}
+                                            className="px-6 py-3 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                                        >
+                                            Fechar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Modal Editar Escala de Professores */}
+                    {showEditEscalaProfessoresModal && selectedKidsSchedule && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                            <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                                <div className="p-6">
+                                    <div className="flex items-center justify-between mb-6">
+                                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                            <Edit2 className="w-7 h-7 text-blue-600" />
+                                            Editar Escala
+                                        </h2>
+                                        <button
+                                            onClick={() => {
+                                                setShowEditEscalaProfessoresModal(false);
+                                            }}
+                                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                        >
+                                            <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                                        </button>
+                                    </div>
+
+                                    <form onSubmit={async (e) => {
+                                        e.preventDefault();
+                                        if (editFormDataProfessores.turmas.length === 0) {
+                                            alert('Selecione pelo menos uma turma');
+                                            return;
+                                        }
+                                        if (editFormDataProfessores.professoresSelecionados.length === 0) {
+                                            alert('Selecione pelo menos um professor');
+                                            return;
+                                        }
+
+                                        try {
+                                            const updatedScheduleData = {
+                                                data: `${editFormDataProfessores.data}T${editFormDataProfessores.horario}:00`,
+                                                horario: editFormDataProfessores.horario,
+                                                descricao: `Turmas: ${editFormDataProfessores.turmas.join(', ')}`,
+                                                membros_ids: editFormDataProfessores.professoresSelecionados
+                                            };
+
+                                            await updateMinistrySchedule(selectedKidsSchedule.id, updatedScheduleData);
+                                            
+                                            const updatedSchedules = await getMinistrySchedules('kids');
+                                            setKidsSchedules(updatedSchedules);
+
+                                            setShowEditEscalaProfessoresModal(false);
+                                            setShowDetalhesEscalaProfessoresModal(false);
+                                            setSelectedKidsSchedule(null);
+                                        } catch (error) {
+                                            console.error('Erro ao atualizar escala:', error);
+                                            alert('Erro ao atualizar escala');
+                                        }
+                                    }} className="space-y-6">
+                                        {/* Turmas */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Turmas *
+                                            </label>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                {['Pequenos', 'Grandes'].map(turma => (
+                                                    <button
+                                                        key={turma}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setEditFormDataProfessores(prev => ({
+                                                                ...prev,
+                                                                turmas: prev.turmas.includes(turma)
+                                                                    ? prev.turmas.filter(t => t !== turma)
+                                                                    : [...prev.turmas, turma]
+                                                            }));
+                                                        }}
+                                                        className={`p-4 rounded-lg border-2 transition-all ${
+                                                            editFormDataProfessores.turmas.includes(turma)
+                                                                ? turma === 'Pequenos' 
+                                                                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+                                                                    : 'border-purple-600 bg-purple-50 dark:bg-purple-900/20'
+                                                                : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <Baby className={`w-5 h-5 ${
+                                                                editFormDataProfessores.turmas.includes(turma)
+                                                                    ? turma === 'Pequenos' ? 'text-blue-500' : 'text-purple-600'
+                                                                    : 'text-gray-400'
+                                                            }`} />
+                                                            <span className={`font-medium ${
+                                                                editFormDataProfessores.turmas.includes(turma)
+                                                                    ? turma === 'Pequenos' ? 'text-blue-700 dark:text-blue-300' : 'text-purple-700 dark:text-purple-300'
+                                                                    : 'text-gray-700 dark:text-gray-300'
+                                                            }`}>
+                                                                {turma}
+                                                            </span>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Data e Horário */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                    Data *
+                                                </label>
+                                                <input
+                                                    type="date"
+                                                    value={editFormDataProfessores.data}
+                                                    onChange={(e) => setEditFormDataProfessores(prev => ({ ...prev, data: e.target.value }))}
+                                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                                                    required
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                    Horário *
+                                                </label>
+                                                <input
+                                                    type="time"
+                                                    value={editFormDataProfessores.horario}
+                                                    onChange={(e) => setEditFormDataProfessores(prev => ({ ...prev, horario: e.target.value }))}
+                                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                                                    required
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Professores */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Professores *
+                                            </label>
+                                            <div className="space-y-2 max-h-60 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-lg p-3">
+                                                {kidsMembers.all?.map(professor => {
+                                                    const age = calculateAge(professor.nascimento);
+                                                    return (
+                                                        <button
+                                                            key={professor.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setEditFormDataProfessores(prev => ({
+                                                                    ...prev,
+                                                                    professoresSelecionados: prev.professoresSelecionados.includes(professor.id)
+                                                                        ? prev.professoresSelecionados.filter(id => id !== professor.id)
+                                                                        : [...prev.professoresSelecionados, professor.id]
+                                                                }));
+                                                            }}
+                                                            className={`w-full p-3 rounded-lg border-2 transition-all text-left ${
+                                                                editFormDataProfessores.professoresSelecionados.includes(professor.id)
+                                                                    ? 'border-pink-500 bg-pink-50 dark:bg-pink-900/20'
+                                                                    : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold ${
+                                                                    editFormDataProfessores.professoresSelecionados.includes(professor.id)
+                                                                        ? 'bg-pink-600'
+                                                                        : 'bg-gray-400'
+                                                                }`}>
+                                                                    {getInitials(professor.nome)}
+                                                                </div>
+                                                                <div className="flex-1">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className={`font-medium ${
+                                                                            editFormDataProfessores.professoresSelecionados.includes(professor.id)
+                                                                                ? 'text-pink-700 dark:text-pink-300'
+                                                                                : 'text-gray-700 dark:text-gray-300'
+                                                                        }`}>
+                                                                            {professor.nome}
+                                                                        </span>
+                                                                        {professor.funcoes?.includes('lider kids') && (
+                                                                            <span className="text-xs px-2 py-0.5 bg-pink-600 text-white rounded-full">
+                                                                                Líder
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    {age && (
+                                                                        <p className="text-xs text-gray-500 dark:text-gray-400">{age} anos</p>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        <div className="flex gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowEditEscalaProfessoresModal(false)}
+                                                className="flex-1 px-6 py-3 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                                            >
+                                                Cancelar
+                                            </button>
+                                            <button
+                                                type="submit"
+                                                className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                            >
+                                                Salvar Alterações
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    };
+    
+    export default MemberApp;

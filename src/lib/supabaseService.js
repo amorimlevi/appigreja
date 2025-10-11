@@ -556,8 +556,8 @@ export const deleteWorkshop = async (id) => {
 
 export const registerWorkshopParticipant = async (workshopId, membroId) => {
     const { data, error } = await supabase
-        .from('workshops_inscricoes')
-        .insert([{ workshop_id: workshopId, membro_id: Number(membroId) }])
+        .from('workshop_registrations')
+        .insert([{ workshop_id: Number(workshopId), membro_id: Number(membroId) }])
         .select()
         .single()
     
@@ -567,9 +567,9 @@ export const registerWorkshopParticipant = async (workshopId, membroId) => {
 
 export const unregisterWorkshopParticipant = async (workshopId, membroId) => {
     const { error } = await supabase
-        .from('workshops_inscricoes')
+        .from('workshop_registrations')
         .delete()
-        .eq('workshop_id', workshopId)
+        .eq('workshop_id', Number(workshopId))
         .eq('membro_id', Number(membroId))
     
     if (error) throw error
@@ -577,9 +577,9 @@ export const unregisterWorkshopParticipant = async (workshopId, membroId) => {
 
 export const checkWorkshopRegistration = async (workshopId, membroId) => {
     const { data, error } = await supabase
-        .from('workshops_inscricoes')
+        .from('workshop_registrations')
         .select('*')
-        .eq('workshop_id', workshopId)
+        .eq('workshop_id', Number(workshopId))
         .eq('membro_id', Number(membroId))
         .maybeSingle()
     
@@ -589,12 +589,12 @@ export const checkWorkshopRegistration = async (workshopId, membroId) => {
 
 export const getWorkshopRegistrations = async (workshopId) => {
     const { data, error } = await supabase
-        .from('workshops_inscricoes')
+        .from('workshop_registrations')
         .select(`
             *,
-            member:members!workshops_inscricoes_membro_id_fkey(id, nome)
+            member:members!workshop_registrations_membro_id_fkey(id, nome)
         `)
-        .eq('workshop_id', workshopId)
+        .eq('workshop_id', Number(workshopId))
     
     if (error) throw error
     return data
