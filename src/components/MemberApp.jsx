@@ -192,6 +192,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     const [showMusiciansModal, setShowMusiciansModal] = useState(false);
     const [louvorMembers, setLouvorMembers] = useState([]);
     const [diaconiaMembers, setDiaconiaMembers] = useState([]);
+    const [kidsMembers, setKidsMembers] = useState([]);
     const [showDiaconiaScheduleModal, setShowDiaconiaScheduleModal] = useState(false);
     const [showEditDiaconiaScheduleModal, setShowEditDiaconiaScheduleModal] = useState(false);
     const [diaconiaScheduleToEdit, setDiaconiaScheduleToEdit] = useState(null);
@@ -395,6 +396,17 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                             break;
                         case 'kids':
                             setKidsSchedules(schedules);
+                            // Carregar todos os membros kids
+                            const allMembersKids = await getMembers();
+                            const criancas = allMembersKids.filter(m => {
+                                const age = calculateAge(m.nascimento);
+                                return age !== null && age <= 12;
+                            });
+                            const professores = allMembersKids.filter(m => {
+                                const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+                                return funcoes.some(f => f === 'professor kids' || f === 'lider kids');
+                            });
+                            setKidsMembers({ criancas, professores, all: allMembersKids });
                             break;
                         case 'jovens':
                             setJovensSchedules(schedules);
@@ -841,6 +853,9 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     
     // Verificar se é líder de diaconia
     const isLiderDiaconia = localMember?.funcoes?.includes('lider da diaconia') || localMember?.funcoes?.includes('líder da diaconia');
+    
+    // Verificar se é líder de kids
+    const isLiderKids = localMember?.funcoes?.includes('lider kids') || localMember?.funcoes?.includes('líder kids');
 
     // Função para criar escala
     const handleCreateSchedule = async () => {
@@ -1580,14 +1595,19 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             </div>
                                         ) : (
                                             <div className="space-y-4">
-                                                {diaconiaSchedules.slice(0, 5).map((escala) => {
+                                                {diaconiaSchedules.slice(0, 5).map((escala, index) => {
                                                     const capitalizeFirstLetter = (str) => str.charAt(0).toUpperCase() + str.slice(1);
                                                     const membrosEscalados = escala.membros_ids || [];
+                                                    const isProxima = index === 0;
                                                     
                                                     return (
                                                         <div
                                                             key={escala.id}
-                                                            className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all"
+                                                            className={`p-4 rounded-lg border-l-4 cursor-pointer hover:shadow-lg transition-all ${
+                                                                isProxima 
+                                                                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+                                                                    : 'border-gray-300 bg-white dark:bg-gray-700 dark:border-gray-600'
+                                                            }`}
                                                             onClick={() => {
                                                                 setDiaconiaScheduleToEdit(escala);
                                                                 setNewDiaconiaScheduleData({
@@ -1601,16 +1621,25 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                             }}
                                                         >
                                                             <div className="flex items-center justify-between mb-3">
-                                                                <p className="font-semibold text-gray-900 dark:text-white">
+                                                                <p className={`font-semibold ${isProxima ? 'text-blue-900 dark:text-blue-300' : 'text-gray-900 dark:text-white'}`}>
                                                                     {capitalizeFirstLetter(format(parseISO(escala.data), "EEEE - dd/MM/yyyy", { locale: ptBR }))}
                                                                 </p>
                                                                 <div className="flex items-center gap-2">
-                                                                    <span className="px-3 py-1 bg-purple-500 text-white text-xs font-medium rounded">
+                                                                    <span className={`px-3 py-1 text-xs font-medium rounded ${
+                                                                        (escala.tipo || escala.categoria) === 'culto' 
+                                                                            ? 'bg-purple-500 text-white' 
+                                                                            : 'bg-orange-500 text-white'
+                                                                    }`}>
                                                                         {capitalizeFirstLetter(escala.tipo || escala.categoria || 'Culto')}
                                                                     </span>
-                                                                    <span className="px-3 py-1 bg-gray-400 text-white text-xs font-medium rounded">
+                                                                    <span className={`px-3 py-1 text-xs font-medium rounded ${
+                                                                        isProxima ? 'bg-blue-600 text-white' : 'bg-gray-400 text-white'
+                                                                    }`}>
                                                                         {escala.horario}
                                                                     </span>
+                                                                    {isProxima && (
+                                                                        <span className="px-2 py-1 bg-green-600 text-white text-xs font-medium rounded-full">Próximo</span>
+                                                                    )}
                                                                 </div>
                                                             </div>
 
@@ -1624,9 +1653,11 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                             {/* Diáconos escalados */}
                                                             {membrosEscalados.length > 0 && (
                                                                 <div>
-                                                                    <div className="flex items-center gap-2 mb-2 text-sm text-gray-600 dark:text-gray-400">
+                                                                    <div className={`flex items-center gap-2 mb-2 text-sm ${
+                                                                        isProxima ? 'text-blue-800 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'
+                                                                    }`}>
                                                                         <Users className="w-4 h-4" />
-                                                                        <span>Diáconos escalados ({membrosEscalados.length}):</span>
+                                                                        <span className="font-medium">Diáconos escalados:</span>
                                                                     </div>
                                                                     <div className="flex flex-wrap gap-2">
                                                                         {membrosEscalados.map((membroId) => {
@@ -1634,12 +1665,16 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                                             if (!membro) return null;
                                                                             
                                                                             return (
-                                                                                <div key={membroId} className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-full">
+                                                                                <div key={membroId} className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${
+                                                                                    isProxima 
+                                                                                        ? 'bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200' 
+                                                                                        : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
+                                                                                }`}>
                                                                                     <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold">
                                                                                         {membro.nome?.charAt(0) || 'D'}
                                                                                     </div>
-                                                                                    <span className="text-xs font-medium text-purple-700 dark:text-purple-300">
-                                                                                        {membro.nome?.split(' ')[0] || 'Diácono'}
+                                                                                    <span className="text-xs font-medium">
+                                                                                        {membro.nome || 'Diácono'}
                                                                                     </span>
                                                                                 </div>
                                                                             );
@@ -1727,31 +1762,45 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             </div>
                                         ) : (
                                             <div className="space-y-4">
-                                                {diaconiaSchedules.slice(0, 5).map((escala) => {
+                                                {diaconiaSchedules.slice(0, 5).map((escala, index) => {
                                                     const capitalizeFirstLetter = (str) => str.charAt(0).toUpperCase() + str.slice(1);
                                                     const membrosEscalados = escala.membros_ids || [];
                                                     const isEscalado = membrosEscalados.includes(localMember?.id);
+                                                    const isProxima = index === 0;
                                                     
                                                     return (
                                                         <div
                                                             key={escala.id}
-                                                            className={`p-4 rounded-lg border ${
-                                                                isEscalado 
-                                                                    ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700' 
-                                                                    : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600'
+                                                            className={`p-4 rounded-lg border-l-4 ${
+                                                                isProxima 
+                                                                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                                                    : isEscalado 
+                                                                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' 
+                                                                        : 'border-gray-300 bg-white dark:bg-gray-700'
                                                             }`}
                                                         >
                                                             <div className="flex items-center justify-between mb-3">
-                                                                <p className="font-semibold text-gray-900 dark:text-white">
+                                                                <p className={`font-semibold ${
+                                                                    isProxima ? 'text-blue-900 dark:text-blue-300' : 'text-gray-900 dark:text-white'
+                                                                }`}>
                                                                     {capitalizeFirstLetter(format(parseISO(escala.data), "EEEE - dd/MM/yyyy", { locale: ptBR }))}
                                                                 </p>
                                                                 <div className="flex items-center gap-2">
-                                                                    <span className="px-3 py-1 bg-purple-500 text-white text-xs font-medium rounded">
+                                                                    <span className={`px-3 py-1 text-xs font-medium rounded ${
+                                                                        (escala.tipo || escala.categoria) === 'culto' 
+                                                                            ? 'bg-purple-500 text-white' 
+                                                                            : 'bg-orange-500 text-white'
+                                                                    }`}>
                                                                         {capitalizeFirstLetter(escala.tipo || escala.categoria || 'Culto')}
                                                                     </span>
-                                                                    <span className="px-3 py-1 bg-gray-400 text-white text-xs font-medium rounded">
+                                                                    <span className={`px-3 py-1 text-xs font-medium rounded ${
+                                                                        isProxima ? 'bg-blue-600 text-white' : 'bg-gray-400 text-white'
+                                                                    }`}>
                                                                         {escala.horario}
                                                                     </span>
+                                                                    {isProxima && (
+                                                                        <span className="px-2 py-1 bg-green-600 text-white text-xs font-medium rounded-full">Próximo</span>
+                                                                    )}
                                                                 </div>
                                                             </div>
 
@@ -1763,8 +1812,41 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                                 </div>
                                                             )}
 
+                                                            {/* Diáconos escalados */}
+                                                            {membrosEscalados.length > 0 && (
+                                                                <div className="mt-3">
+                                                                    <div className={`flex items-center gap-2 mb-2 text-sm ${
+                                                                        isProxima ? 'text-blue-800 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'
+                                                                    }`}>
+                                                                        <Users className="w-4 h-4" />
+                                                                        <span className="font-medium">Diáconos escalados:</span>
+                                                                    </div>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {membrosEscalados.map((membroId) => {
+                                                                            const membro = diaconiaMembers.find(m => m.id === membroId);
+                                                                            if (!membro) return null;
+                                                                            
+                                                                            return (
+                                                                                <div key={membroId} className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${
+                                                                                    isProxima 
+                                                                                        ? 'bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200' 
+                                                                                        : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
+                                                                                }`}>
+                                                                                    <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold">
+                                                                                        {membro.nome?.charAt(0) || 'D'}
+                                                                                    </div>
+                                                                                    <span className="text-xs font-medium">
+                                                                                        {membro.nome || 'Diácono'}
+                                                                                    </span>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
                                                             {escala.observacoes && (
-                                                                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                                                <div className="flex items-center gap-2 mt-3 text-sm text-gray-600 dark:text-gray-400">
                                                                     <span>💡 {escala.observacoes}</span>
                                                                 </div>
                                                             )}
@@ -2151,38 +2233,96 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
                     {/* Kids */}
                     {activeTab === 'kids' && (
-                        <div className="space-y-4">
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-                                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-                                    <Baby className="w-6 h-6 mr-2 text-pink-600" />
-                                    Ministério Kids
-                                </h2>
-                                <p className="text-gray-600 dark:text-gray-400 mb-4">
-                                    Ministério dedicado às crianças de 0 a 12 anos. Aqui as crianças aprendem sobre Jesus de forma lúdica e divertida.
-                                </p>
+                        <div className="space-y-6">
+                            <div className="flex justify-between items-center">
+                                <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Kids</h1>
+                                {isLiderKids && (
+                                    <button 
+                                        onClick={() => {/* TODO: Adicionar modal de escala */}}
+                                        className="flex items-center px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700"
+                                    >
+                                        <Plus className="w-4 h-4 mr-2" />
+                                        Nova Escala
+                                    </button>
+                                )}
+                            </div>
 
-                                <div className="card">
-                                    <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Faixas Etárias</h3>
-                                    <div className="space-y-3">
-                                        <div className="flex items-center justify-between p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <Baby className="w-5 h-5 text-yellow-600" />
-                                                <span className="text-gray-900 dark:text-white">Pequeninos (0-3 anos)</span>
-                                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">Total de Crianças</p>
+                                            <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                                                {kidsMembers?.criancas?.length || 0}
+                                            </p>
                                         </div>
-                                        <div className="flex items-center justify-between p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <Baby className="w-5 h-5 text-orange-600" />
-                                                <span className="text-gray-900 dark:text-white">Crianças (4-7 anos)</span>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center justify-between p-3 bg-pink-50 dark:bg-pink-900/20 rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <Baby className="w-5 h-5 text-pink-600" />
-                                                <span className="text-gray-900 dark:text-white">Pré-adolescentes (8-12 anos)</span>
-                                            </div>
-                                        </div>
+                                        <Baby className="w-8 h-8 text-pink-500" />
                                     </div>
+                                </div>
+                                
+                                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">Professores</p>
+                                            <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                                                {kidsMembers?.professores?.length || 0}
+                                            </p>
+                                        </div>
+                                        <Users className="w-8 h-8 text-blue-500" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Crianças por Faixa Etária</h3>
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                                        <div className="flex items-center gap-3">
+                                            <Baby className="w-5 h-5 text-yellow-600" />
+                                            <span className="text-gray-900 dark:text-white">0-3 anos</span>
+                                        </div>
+                                        <span className="font-semibold text-gray-900 dark:text-white">
+                                            {kidsMembers?.criancas?.filter(m => {
+                                                const age = calculateAge(m.nascimento);
+                                                return age !== null && age <= 3;
+                                            }).length || 0}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                                        <div className="flex items-center gap-3">
+                                            <Baby className="w-5 h-5 text-orange-600" />
+                                            <span className="text-gray-900 dark:text-white">4-7 anos</span>
+                                        </div>
+                                        <span className="font-semibold text-gray-900 dark:text-white">
+                                            {kidsMembers?.criancas?.filter(m => {
+                                                const age = calculateAge(m.nascimento);
+                                                return age >= 4 && age <= 7;
+                                            }).length || 0}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between p-3 bg-pink-50 dark:bg-pink-900/20 rounded-lg">
+                                        <div className="flex items-center gap-3">
+                                            <Baby className="w-5 h-5 text-pink-600" />
+                                            <span className="text-gray-900 dark:text-white">8-12 anos</span>
+                                        </div>
+                                        <span className="font-semibold text-gray-900 dark:text-white">
+                                            {kidsMembers?.criancas?.filter(m => {
+                                                const age = calculateAge(m.nascimento);
+                                                return age >= 8 && age <= 12;
+                                            }).length || 0}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center">
+                                    <Calendar className="w-5 h-5 mr-2 text-pink-600" />
+                                    Próximas Escalas
+                                </h3>
+                                <div className="text-center py-8">
+                                    <Calendar className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+                                    <p className="text-gray-500 dark:text-gray-400">Nenhuma escala criada ainda.</p>
                                 </div>
                             </div>
                         </div>
