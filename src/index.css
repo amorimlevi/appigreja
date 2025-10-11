@@ -22,7 +22,6 @@ body {
     width: 100%;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
-    background-color: white;
 }
 
 #root {
@@ -31,7 +30,6 @@ body {
     height: 100%;
     width: 100%;
     overflow-x: hidden;
-    background-color: white;
 }
 
 @layer components {
