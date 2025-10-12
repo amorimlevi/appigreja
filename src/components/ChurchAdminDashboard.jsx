@@ -40,7 +40,7 @@ import { format, isAfter, isBefore, startOfWeek, endOfWeek, addDays, subDays, di
 import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { formatId } from '../utils/formatters';
-import { getEventFoods, getEventParticipants, deleteEventFood, createMinistrySchedule, getMinistrySchedules, updateMinistrySchedule, deleteMinistrySchedule, getWorkshops, deleteWorkshop, createWorkshop } from '../lib/supabaseService';
+import { getEventFoods, getEventParticipants, deleteEventFood, createMinistrySchedule, getMinistrySchedules, updateMinistrySchedule, deleteMinistrySchedule, getWorkshops, deleteWorkshop, createWorkshop, createAviso } from '../lib/supabaseService';
 
 const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], families = [], onAddEvent, onEditEvent, onDeleteEvent, onAddMember, onEditMember, onDeleteMember, onAddFamily, onEditFamily, onLogout }) => {
     console.log('ChurchAdminDashboard renderizando - members:', members.length, 'events:', events.length, 'families:', families.length)
@@ -2540,7 +2540,8 @@ Montar escala        </button>
                                             <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-500">
                                                 <span className="flex items-center gap-1">
                                                     <Clock className="w-3 h-3" />
-                                                    {format(new Date(aviso.data), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                                    {aviso.created_at ? format(new Date(aviso.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 
+                                                     aviso.data ? format(new Date(aviso.data), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'Data não disponível'}
                                                 </span>
                                                 <span className="flex items-center gap-1">
                                                     <Users className="w-3 h-3" />
@@ -6348,20 +6349,26 @@ Montar escala        </button>
                                 </button>
                             </div>
 
-                            <form onSubmit={(e) => {
+                            <form onSubmit={async (e) => {
                                 e.preventDefault();
-                                const novoAviso = {
-                                    id: Date.now(),
-                                    titulo: newAvisoData.titulo,
-                                    mensagem: newAvisoData.mensagem,
-                                    destinatarios: newAvisoData.destinatarios,
-                                    data: new Date().toISOString()
-                                };
-                                const updatedAvisos = [...avisos, novoAviso];
-                                setAvisos(updatedAvisos);
-                                localStorage.setItem('avisos', JSON.stringify(updatedAvisos));
-                                setShowAvisoModal(false);
-                                setNewAvisoData({ titulo: '', mensagem: '', destinatarios: ['todos'] });
+                                try {
+                                    const avisoData = {
+                                        titulo: newAvisoData.titulo,
+                                        mensagem: newAvisoData.mensagem,
+                                        destinatarios: newAvisoData.destinatarios
+                                    };
+                                    
+                                    const novoAviso = await createAviso(avisoData);
+                                    
+                                    const updatedAvisos = [...avisos, novoAviso];
+                                    setAvisos(updatedAvisos);
+                                    localStorage.setItem('avisos', JSON.stringify(updatedAvisos));
+                                    setShowAvisoModal(false);
+                                    setNewAvisoData({ titulo: '', mensagem: '', destinatarios: ['todos'] });
+                                } catch (error) {
+                                    console.error('Erro ao criar aviso:', error);
+                                    alert('Erro ao criar aviso. Tente novamente.');
+                                }
                             }}>
                                 <div className="space-y-4">
                                     <div>

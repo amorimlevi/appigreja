@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
-import { LogIn, User, Lock, Moon, Sun, UserPlus } from 'lucide-react';
+import { LogIn, User, Lock, Eye, EyeOff, UserPlus } from 'lucide-react';
 
 const MemberLogin = ({ members, onLogin, onShowSignup }) => {
     const [emailOrName, setEmailOrName] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
-    const [darkMode, setDarkMode] = useState(() => {
-        return localStorage.getItem('darkMode') === 'true' || false;
-    });
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -27,87 +25,85 @@ const MemberLogin = ({ members, onLogin, onShowSignup }) => {
     };
 
     return (
-        <div className={`min-h-screen flex items-center justify-center ${darkMode ? 'dark' : ''}`}>
-            <div className="min-h-screen w-full bg-gradient-to-br from-blue-500 to-purple-600 dark:from-blue-900 dark:to-purple-900 flex items-center justify-center p-4">
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 w-full max-w-md">
-                    <div className="flex justify-end mb-4">
-                        <button
-                            onClick={() => {
-                                setDarkMode(!darkMode);
-                                localStorage.setItem('darkMode', !darkMode);
-                            }}
-                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                        >
-                            {darkMode ? <Sun className="h-5 w-5 text-gray-600 dark:text-gray-300" /> : <Moon className="h-5 w-5 text-gray-600" />}
-                        </button>
-                    </div>
+        <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 px-4">
+            <div className="max-w-md w-full space-y-8">
+                <div className="text-center">
+                    <img 
+                        src="https://res.cloudinary.com/dxchbdcai/image/upload/v1759592247/Design_sem_nome_10_nwkjse.png" 
+                        alt="Logo da Igreja" 
+                        className="w-48 h-48 mx-auto mb-4 object-contain"
+                    />
+                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Igreja Zoe</h2>
+                    <p className="text-gray-600 dark:text-gray-400">"E perseveravam na doutrina dos apóstolos, e na comunhão, e no partir do pão, e nas orações."</p>
+                </div>
 
-                    <div className="text-center mb-8">
-                        <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full mb-4">
-                            <User className="h-8 w-8 text-blue-600 dark:text-blue-400" />
-                        </div>
-                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Área do Membro</h1>
-                        <p className="text-gray-600 dark:text-gray-400">Entre com suas credenciais</p>
-                    </div>
-
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8">
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Nome ou Email
+                            <label htmlFor="emailOrName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Usuário
                             </label>
                             <div className="relative">
-                                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                                <User className="w-5 h-5 absolute left-3 top-3 text-gray-400" />
                                 <input
+                                    id="emailOrName"
                                     type="text"
                                     value={emailOrName}
                                     onChange={(e) => setEmailOrName(e.target.value)}
-                                    placeholder="Digite seu nome ou email"
-                                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-gray-900 dark:focus:ring-white focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                                    placeholder="Digite seu usuário"
                                     required
                                 />
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Senha
                             </label>
                             <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                                <Lock className="w-5 h-5 absolute left-3 top-3 text-gray-400" />
                                 <input
-                                    type="password"
+                                    id="password"
+                                    type={showPassword ? 'text' : 'password'}
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
+                                    className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-gray-900 dark:focus:ring-white focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
                                     placeholder="Digite sua senha"
-                                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                                     required
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none"
+                                >
+                                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                </button>
                             </div>
                         </div>
 
                         {error && (
-                            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
+                                {error}
                             </div>
                         )}
 
                         <button
                             type="submit"
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                            className="w-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 py-3 rounded-lg font-semibold hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
                         >
-                            <LogIn className="h-5 w-5" />
-                            <span>Entrar</span>
+                            Entrar
                         </button>
                     </form>
 
                     <div className="mt-6 text-center">
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                            Primeira vez aqui?{' '}
+                        <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1">
+                            <span>Primeira vez aqui?</span>
                             <button 
                                 onClick={onShowSignup}
-                                className="text-blue-600 dark:text-blue-400 hover:underline font-medium inline-flex items-center"
+                                className="text-gray-900 dark:text-white hover:underline font-semibold inline-flex items-center gap-1"
                             >
-                                <UserPlus className="h-4 w-4 mr-1" />
+                                <UserPlus className="h-4 w-4" />
                                 Cadastre-se
                             </button>
                         </p>

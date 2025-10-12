@@ -515,11 +515,19 @@ export const checkEventRegistration = async (eventId, membroId) => {
 export const getWorkshops = async () => {
     const { data, error } = await supabase
         .from('workshops')
-        .select('*')
+        .select(`
+            *,
+            workshop_registrations(count)
+        `)
         .order('data', { ascending: true })
     
     if (error) throw error
-    return data
+    
+    // Mapear para incluir o número de inscritos
+    return data.map(workshop => ({
+        ...workshop,
+        inscritos: workshop.workshop_registrations?.[0]?.count || 0
+    }))
 }
 
 export const createWorkshop = async (workshopData) => {
@@ -771,4 +779,38 @@ export const createPrayerRequest = async (requestData) => {
     
     if (error) throw error
     return data
+}
+
+// ========== REALTIME SUBSCRIPTIONS ==========
+
+export const subscribeToTable = (tableName, onInsert, onUpdate, onDelete) => {
+    const subscription = supabase
+        .channel(`${tableName}_changes`)
+        .on(
+            'postgres_changes',
+            { event: 'INSERT', schema: 'public', table: tableName },
+            (payload) => {
+                console.log(`[Realtime] ${tableName} INSERT:`, payload.new)
+                if (onInsert) onInsert(payload.new)
+            }
+        )
+        .on(
+            'postgres_changes',
+            { event: 'UPDATE', schema: 'public', table: tableName },
+            (payload) => {
+                console.log(`[Realtime] ${tableName} UPDATE:`, payload.new)
+                if (onUpdate) onUpdate(payload.new, payload.old)
+            }
+        )
+        .on(
+            'postgres_changes',
+            { event: 'DELETE', schema: 'public', table: tableName },
+            (payload) => {
+                console.log(`[Realtime] ${tableName} DELETE:`, payload.old)
+                if (onDelete) onDelete(payload.old)
+            }
+        )
+        .subscribe()
+    
+    return subscription
 }

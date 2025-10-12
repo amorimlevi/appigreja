@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { UserPlus, ArrowLeft, Moon, Sun, X } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { UserPlus, ArrowLeft, Moon, Sun, X, Calendar } from 'lucide-react';
 
 const MemberSignup = ({ onSignup, onBack }) => {
+    const dateInputRef = useRef(null);
     const [darkMode, setDarkMode] = useState(() => {
         return localStorage.getItem('darkMode') === 'true' || false;
     });
@@ -75,30 +76,31 @@ const MemberSignup = ({ onSignup, onBack }) => {
     };
 
     return (
-        <div className={`min-h-screen flex items-center justify-center ${darkMode ? 'dark' : ''}`}>
-            <div className="min-h-screen w-full bg-gradient-to-br from-blue-500 to-purple-600 dark:from-blue-900 dark:to-purple-900 flex items-center justify-center p-4">
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 w-full max-w-md">
-                    <div className="flex justify-between items-center mb-4">
+        <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 px-4">
+            <div className="max-w-md w-full space-y-8">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8">
+                    <div className="flex justify-between items-center mb-6">
                         <button
                             onClick={onBack}
-                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                            className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
                         >
-                            <ArrowLeft className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+                            <ArrowLeft className="h-6 w-6" />
                         </button>
                         <button
                             onClick={() => {
                                 setDarkMode(!darkMode);
                                 localStorage.setItem('darkMode', !darkMode);
+                                document.documentElement.classList.toggle('dark');
                             }}
-                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                            className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
                         >
-                            {darkMode ? <Sun className="h-5 w-5 text-gray-600 dark:text-gray-300" /> : <Moon className="h-5 w-5 text-gray-600" />}
+                            {darkMode ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
                         </button>
                     </div>
 
                     <div className="text-center mb-8">
-                        <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full mb-4">
-                            <UserPlus className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                        <div className="inline-flex items-center justify-center w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-full mb-4">
+                            <UserPlus className="h-10 w-10 text-gray-900 dark:text-white" />
                         </div>
                         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Cadastro de Membro</h1>
                         <p className="text-gray-600 dark:text-gray-400">Preencha seus dados para se cadastrar</p>
@@ -113,7 +115,7 @@ const MemberSignup = ({ onSignup, onBack }) => {
                                 type="text"
                                 value={formData.nome}
                                 onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-gray-900 dark:focus:ring-white focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
                                 required
                             />
                         </div>
@@ -126,7 +128,7 @@ const MemberSignup = ({ onSignup, onBack }) => {
                                 type="email"
                                 value={formData.email}
                                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-gray-900 dark:focus:ring-white focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
                             />
                         </div>
 
@@ -139,7 +141,7 @@ const MemberSignup = ({ onSignup, onBack }) => {
                                 value={formData.telefone}
                                 onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
                                 placeholder="(11) 98765-4321"
-                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-gray-900 dark:focus:ring-white focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
                                 required
                             />
                         </div>
@@ -148,21 +150,47 @@ const MemberSignup = ({ onSignup, onBack }) => {
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Data de Nascimento *
                             </label>
-                            <input
-                                type="date"
-                                value={formData.nascimento}
-                                onChange={(e) => {
-                                    const newBirthDate = e.target.value;
-                                    const calculatedAge = calculateAge(newBirthDate);
-                                    setFormData({ 
-                                        ...formData, 
-                                        nascimento: newBirthDate,
-                                        idade: calculatedAge
-                                    });
-                                }}
-                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                                required
-                            />
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    value={formData.nascimento}
+                                    onChange={(e) => {
+                                        const newBirthDate = e.target.value;
+                                        const calculatedAge = calculateAge(newBirthDate);
+                                        setFormData({ 
+                                            ...formData, 
+                                            nascimento: newBirthDate,
+                                            idade: calculatedAge
+                                        });
+                                    }}
+                                    placeholder="dd/mm/aaaa"
+                                    className="w-full px-4 py-3 pr-12 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-gray-900 dark:focus:ring-white focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                                    required
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => dateInputRef.current?.showPicker()}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none"
+                                >
+                                    <Calendar className="w-5 h-5" />
+                                </button>
+                                <input
+                                    ref={dateInputRef}
+                                    type="date"
+                                    value={formData.nascimento}
+                                    onChange={(e) => {
+                                        const newBirthDate = e.target.value;
+                                        const calculatedAge = calculateAge(newBirthDate);
+                                        setFormData({ 
+                                            ...formData, 
+                                            nascimento: newBirthDate,
+                                            idade: calculatedAge
+                                        });
+                                    }}
+                                    className="sr-only absolute opacity-0 pointer-events-none"
+                                    required
+                                />
+                            </div>
                         </div>
 
                         <div>
@@ -172,7 +200,7 @@ const MemberSignup = ({ onSignup, onBack }) => {
                             <select
                                 value={formData.genero}
                                 onChange={(e) => setFormData({ ...formData, genero: e.target.value })}
-                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-gray-900 dark:focus:ring-white focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                 required
                             >
                                 <option value="masculino">Masculino</option>
@@ -187,13 +215,7 @@ const MemberSignup = ({ onSignup, onBack }) => {
                             <div className="space-y-2 p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50 max-h-48 overflow-y-auto">
                                 {[
                                     'membro',
-                                    'pastor', 
-                                    'lider da diaconia',
-                                    'líder de louvor',
-                                    'lider kids',
-                                    'lider jovens',
                                     'jovem',
-                                    'ministro',
                                     'louvor',
                                     'diaconia',
                                     'professor kids'
@@ -222,12 +244,12 @@ const MemberSignup = ({ onSignup, onBack }) => {
                                                     className="sr-only"
                                                 />
                                                 <div className={`w-6 h-6 border-2 rounded flex items-center justify-center transition-all ${
-                                                    isChecked 
-                                                        ? 'bg-blue-600 border-blue-600' 
-                                                        : 'bg-white border-gray-400 dark:bg-gray-700 dark:border-gray-500'
+                                                isChecked 
+                                                ? 'bg-gray-900 border-gray-900 dark:bg-white dark:border-white' 
+                                                : 'bg-white border-gray-400 dark:bg-gray-700 dark:border-gray-500'
                                                 }`}>
                                                     {isChecked && (
-                                                        <X className="w-4 h-4 text-white" strokeWidth={3} />
+                                                        <X className="w-4 h-4 text-white dark:text-gray-900" strokeWidth={3} />
                                                     )}
                                                 </div>
                                             </div>
@@ -252,7 +274,7 @@ const MemberSignup = ({ onSignup, onBack }) => {
                                 value={formData.senha}
                                 onChange={(e) => setFormData({ ...formData, senha: e.target.value })}
                                 placeholder="Mínimo 4 caracteres"
-                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-gray-900 dark:focus:ring-white focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
                                 required
                                 minLength={4}
                             />
@@ -267,7 +289,7 @@ const MemberSignup = ({ onSignup, onBack }) => {
                                 value={formData.confirmarSenha}
                                 onChange={(e) => setFormData({ ...formData, confirmarSenha: e.target.value })}
                                 placeholder="Digite a senha novamente"
-                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-gray-900 dark:focus:ring-white focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
                                 required
                                 minLength={4}
                             />
@@ -281,17 +303,16 @@ const MemberSignup = ({ onSignup, onBack }) => {
 
                         <button
                             type="submit"
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                            className="w-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 py-3 rounded-lg font-semibold hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
                         >
-                            <UserPlus className="h-5 w-5" />
-                            <span>Cadastrar</span>
+                            Cadastrar
                         </button>
                     </form>
 
                     <div className="mt-6 text-center">
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                             Já tem cadastro?{' '}
-                            <button onClick={onBack} className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                            <button onClick={onBack} className="text-gray-900 dark:text-white hover:underline font-semibold">
                                 Fazer login
                             </button>
                         </p>

@@ -39,6 +39,7 @@ import { searchMembers, getEventFoods, updateEventFood, registerEventParticipant
 const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLogout }) => {
     const [localMember, setLocalMember] = useState(currentMember);
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [isScrolling, setIsScrolling] = useState(false);
 
     const calculateAge = (birthDate) => {
         if (!birthDate) return null;
@@ -64,7 +65,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
     // Definir itens de menu padrão e por flag
     const defaultMenuItems = [
-        { id: 'home', label: 'Dashboard', icon: BarChart3 },
+        { id: 'home', label: 'Feed', icon: BarChart3 },
         { id: 'perfil', label: 'Família', icon: Users },
         { id: 'eventos', label: 'Eventos', icon: Calendar },
         { id: 'avisos', label: 'Avisos', icon: Bell },
@@ -172,6 +173,8 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     const [showOficinaDetailsModal, setShowOficinaDetailsModal] = useState(false);
     const [oficinaDetails, setOficinaDetails] = useState(null);
     const [isOficinaRegistered, setIsOficinaRegistered] = useState(false);
+    const [oficinaParticipants, setOficinaParticipants] = useState([]);
+    const [showEditOficinaModal, setShowEditOficinaModal] = useState(false);
     const [oficinaFormData, setOficinaFormData] = useState({
         nome: '',
         descricao: '',
@@ -218,6 +221,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     const [showKidsScheduleModal, setShowKidsScheduleModal] = useState(false);
     const [showKidsListModal, setShowKidsListModal] = useState(false);
     const [showProfessoresListModal, setShowProfessoresListModal] = useState(false);
+    const [showJovensListModal, setShowJovensListModal] = useState(false);
     const [newKidsScheduleData, setNewKidsScheduleData] = useState({
         turmas: [],
         data: format(new Date(), 'yyyy-MM-dd'),
@@ -489,6 +493,43 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
         checkLiderAndLoadData();
     }, [activeTab, currentMember]);
 
+    // Detectar scroll para ocultar botões flutuantes
+    useEffect(() => {
+        let scrollTimeout;
+        let lastScrollY = window.scrollY;
+        
+        const handleScroll = () => {
+            const currentScrollY = window.scrollY;
+            if (Math.abs(currentScrollY - lastScrollY) > 5) {
+                setIsScrolling(true);
+                lastScrollY = currentScrollY;
+                clearTimeout(scrollTimeout);
+                scrollTimeout = setTimeout(() => {
+                    setIsScrolling(false);
+                }, 1000);
+            }
+        };
+
+        const handleTouchMove = () => {
+            setIsScrolling(true);
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(() => {
+                setIsScrolling(false);
+            }, 1000);
+        };
+
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        document.addEventListener('scroll', handleScroll, { passive: true });
+        document.addEventListener('touchmove', handleTouchMove, { passive: true });
+        
+        return () => {
+            window.removeEventListener('scroll', handleScroll);
+            document.removeEventListener('scroll', handleScroll);
+            document.removeEventListener('touchmove', handleTouchMove);
+            clearTimeout(scrollTimeout);
+        };
+    }, []);
+
     // Eventos futuros ordenados por data
     const futureEvents = useMemo(() => {
         const now = new Date();
@@ -521,20 +562,31 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     // Função para selecionar evento e buscar comidas
     const handleSelectEvent = async (event) => {
         try {
-            // Verificar se o membro está inscrito no evento
-            const registered = await checkEventRegistration(event.id, localMember.id);
-            setIsRegistered(registered);
-
-            // Buscar comidas do evento se tiver alimentação
-            if (event.alimentacao) {
-                const comidas = await getEventFoods(event.id);
-                setSelectedEvent({
-                    ...event,
-                    comidas: comidas || []
-                });
-            } else {
+            // Verificar se é workshop ou evento regular
+            const isWorkshop = event.tipo === 'oficina' || event.workshopId;
+            
+            if (isWorkshop) {
+                // Verificar inscrição em workshop
+                const registered = await checkWorkshopRegistration(event.workshopId, localMember.id);
+                setIsRegistered(registered);
                 setSelectedEvent(event);
+            } else {
+                // Verificar se o membro está inscrito no evento regular
+                const registered = await checkEventRegistration(event.id, localMember.id);
+                setIsRegistered(registered);
+
+                // Buscar comidas do evento se tiver alimentação
+                if (event.alimentacao) {
+                    const comidas = await getEventFoods(event.id);
+                    setSelectedEvent({
+                        ...event,
+                        comidas: comidas || []
+                    });
+                } else {
+                    setSelectedEvent(event);
+                }
             }
+            
             setShowEventDetailsModal(true);
         } catch (error) {
             console.error('Erro ao buscar dados do evento:', error);
@@ -548,16 +600,33 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
         if (!selectedEvent || !currentMember) return;
 
         try {
-            if (isRegistered) {
-                // Desinscrever
-                await unregisterEventParticipant(selectedEvent.id, localMember.id);
-                setIsRegistered(false);
-                alert('Você foi desinscrito do evento.');
+            // Verificar se é workshop ou evento regular
+            const isWorkshop = selectedEvent.tipo === 'oficina' || selectedEvent.workshopId;
+            
+            if (isWorkshop) {
+                // Workshop: usar workshop_registrations
+                const workshopId = selectedEvent.workshopId;
+                
+                if (isRegistered) {
+                    await unregisterWorkshopParticipant(workshopId, localMember.id);
+                    setIsRegistered(false);
+                    alert('Você foi desinscrito da oficina.');
+                } else {
+                    await registerWorkshopParticipant(workshopId, localMember.id);
+                    setIsRegistered(true);
+                    alert('Inscrição na oficina confirmada com sucesso!');
+                }
             } else {
-                // Inscrever
-                await registerEventParticipant(selectedEvent.id, localMember.id);
-                setIsRegistered(true);
-                alert('Inscrição confirmada com sucesso!');
+                // Evento regular: usar event_participants
+                if (isRegistered) {
+                    await unregisterEventParticipant(selectedEvent.id, localMember.id);
+                    setIsRegistered(false);
+                    alert('Você foi desinscrito do evento.');
+                } else {
+                    await registerEventParticipant(selectedEvent.id, localMember.id);
+                    setIsRegistered(true);
+                    alert('Inscrição confirmada com sucesso!');
+                }
             }
         } catch (error) {
             console.error('Erro ao processar inscrição:', error);
@@ -634,8 +703,31 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     // Inscrever outra pessoa no evento
     const handleRegisterOther = async (member) => {
         try {
-            await registerEventParticipant(selectedEvent.id, member.id);
-            alert(`${member.nome} foi inscrito(a) no evento com sucesso!`);
+            // Verificar se é workshop ou evento regular
+            const isWorkshop = selectedEvent.tipo === 'oficina' || selectedEvent.workshopId;
+            
+            if (isWorkshop) {
+                // Verificar se já está inscrito
+                const alreadyRegistered = await checkWorkshopRegistration(selectedEvent.workshopId, member.id);
+                if (alreadyRegistered) {
+                    alert(`${member.nome} já está inscrito(a) nesta oficina.`);
+                    return;
+                }
+                
+                await registerWorkshopParticipant(selectedEvent.workshopId, member.id);
+                alert(`${member.nome} foi inscrito(a) na oficina com sucesso!`);
+            } else {
+                // Verificar se já está inscrito
+                const alreadyRegistered = await checkEventRegistration(selectedEvent.id, member.id);
+                if (alreadyRegistered) {
+                    alert(`${member.nome} já está inscrito(a) neste evento.`);
+                    return;
+                }
+                
+                await registerEventParticipant(selectedEvent.id, member.id);
+                alert(`${member.nome} foi inscrito(a) no evento com sucesso!`);
+            }
+            
             setShowRegisterOtherModal(false);
             setRegisterOtherSearch('');
             setRegisterOtherResults([]);
@@ -1120,6 +1212,11 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
             setOficinaDetails(oficina);
             const isRegistered = await checkWorkshopRegistration(oficina.id, localMember.id);
             setIsOficinaRegistered(isRegistered);
+            
+            // Buscar participantes da oficina
+            const participants = await getWorkshopRegistrations(oficina.id);
+            setOficinaParticipants(participants || []);
+            
             setShowOficinaDetailsModal(true);
         } catch (error) {
             console.error('Erro ao verificar inscrição:', error);
@@ -1136,6 +1233,12 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 setIsOficinaRegistered(false);
                 alert('Inscrição cancelada com sucesso!');
             } else {
+                // Verificar se ainda há vagas disponíveis
+                if (oficinaParticipants.length >= oficinaDetails.vagas) {
+                    alert('Não há mais vagas disponíveis para esta oficina.');
+                    return;
+                }
+                
                 await registerWorkshopParticipant(oficinaDetails.id, localMember.id);
                 setIsOficinaRegistered(true);
                 alert('Inscrição confirmada com sucesso!');
@@ -1143,6 +1246,10 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
             
             const updatedOficinas = await getWorkshops();
             setOficinas(updatedOficinas);
+            
+            // Atualizar a lista de participantes
+            const participants = await getWorkshopRegistrations(oficinaDetails.id);
+            setOficinaParticipants(participants || []);
         } catch (error) {
             console.error('Erro ao processar inscrição:', error);
             alert('Erro ao processar inscrição. Tente novamente.');
@@ -1253,6 +1360,48 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                     </>
                 )}
 
+                {/* Botões de navegação centralizados */}
+                <div 
+                    className={`fixed z-40 rounded-full shadow-2xl p-2 flex items-center gap-2 left-1/2 -translate-x-1/2 transition-all duration-300 backdrop-blur-sm ${
+                        isScrolling || sidebarOpen ? 'opacity-0 pointer-events-none translate-y-20' : 'opacity-100'
+                    }`}
+                    style={{
+                        bottom: `calc(1.5rem + env(safe-area-inset-bottom, 0px))`,
+                        backgroundColor: 'rgba(0, 0, 0, 0.5)'
+                    }}
+                >
+                    <button
+                        onClick={() => setActiveTab('home')}
+                        className={`p-3 rounded-full transition-all active:scale-95 ${
+                            activeTab === 'home'
+                                ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white'
+                                : 'text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100'
+                        }`}
+                    >
+                        <BarChart3 className="w-5 h-5" />
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('perfil')}
+                        className={`p-3 rounded-full transition-all active:scale-95 ${
+                            activeTab === 'perfil'
+                                ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white'
+                                : 'text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100'
+                        }`}
+                    >
+                        <Users className="w-5 h-5" />
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('eventos')}
+                        className={`p-3 rounded-full transition-all active:scale-95 ${
+                            activeTab === 'eventos'
+                                ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white'
+                                : 'text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100'
+                        }`}
+                    >
+                        <Calendar className="w-5 h-5" />
+                    </button>
+                </div>
+
                 {/* Main Content */}
                 <div className="p-4 pb-24" style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom))' }}>
                     {/* Início */}
@@ -1260,22 +1409,24 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                         <div className="space-y-6">
                             {/* Ouça Agora */}
                             {playlistMusicas.length > 0 && (
-                                <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg shadow-lg p-6 text-white">
-                                    <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                                <div className="bg-black rounded-lg shadow-lg p-6">
+                                    <h2 className="text-lg font-semibold mb-3 flex items-center gap-2 text-white">
                                         <Music className="w-5 h-5" />
                                         Ouça Agora
                                     </h2>
                                     {(() => {
                                         const randomMusic = playlistMusicas[Math.floor(Math.random() * playlistMusicas.length)];
                                         return (
-                                            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-                                                <p className="font-semibold text-lg">{randomMusic.titulo}</p>
-                                                {randomMusic.artista && (
-                                                    <p className="text-sm text-white/80 mt-1">{randomMusic.artista}</p>
-                                                )}
-                                                {randomMusic.duracao && (
-                                                    <p className="text-xs text-white/70 mt-1">{randomMusic.duracao}</p>
-                                                )}
+                                            <div className="bg-black rounded-lg p-4 flex items-center justify-between" style={{backgroundColor: 'rgba(255,255,255,0.05)'}}>
+                                                <div>
+                                                    <p className="font-semibold text-lg text-white">{randomMusic.titulo}</p>
+                                                    {randomMusic.artista && (
+                                                        <p className="text-sm text-gray-300 mt-1">{randomMusic.artista}</p>
+                                                    )}
+                                                    {randomMusic.duracao && (
+                                                        <p className="text-xs text-gray-400 mt-1">{randomMusic.duracao}</p>
+                                                    )}
+                                                </div>
                                                 {randomMusic.link && (
                                                     <button
                                                         onClick={() => {
@@ -1286,7 +1437,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                             }
                                                             window.open(link, '_blank', 'noopener,noreferrer');
                                                         }}
-                                                        className="mt-3 px-4 py-2 bg-white text-purple-600 rounded-lg text-sm font-medium hover:bg-white/90 transition-colors flex items-center gap-2"
+                                                        className="px-4 py-2 bg-white text-gray-900 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors flex items-center gap-2 flex-shrink-0"
                                                     >
                                                         <Music className="w-4 h-4" />
                                                         Ouvir Agora
@@ -1299,23 +1450,23 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                             )}
 
                             {/* Avisos Recentes */}
-                            <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg shadow-md p-6 border border-blue-200 dark:border-blue-700">
+                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
                                 <div className="flex items-center justify-between mb-4">
-                                    <h2 className="text-lg font-bold text-blue-900 dark:text-blue-100 flex items-center gap-2">
+                                    <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                         <Bell className="w-5 h-5" />
                                         Avisos Recentes
                                     </h2>
                                     <button
                                         onClick={() => setActiveTab('avisos')}
-                                        className="text-sm text-blue-700 dark:text-blue-300 hover:underline font-medium"
+                                        className="text-sm text-gray-900 dark:text-white hover:underline font-medium"
                                     >
                                         Ver todos →
                                     </button>
                                 </div>
                                 {recentAvisos.length > 0 ? (
                                     <div className="space-y-3">
-                                        {recentAvisos.map(aviso => (
-                                            <div key={aviso.id} className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border-l-4 border-blue-500 hover:shadow-md transition-shadow">
+                                        {recentAvisos.slice(0, 3).map(aviso => (
+                                            <div key={aviso.id} className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg shadow-sm border-l-4 border-gray-900 dark:border-white hover:shadow-md transition-shadow">
                                                 <p className="font-semibold text-gray-900 dark:text-white">{aviso.titulo}</p>
                                                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 line-clamp-2">{aviso.mensagem}</p>
                                             </div>
@@ -1323,22 +1474,22 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </div>
                                 ) : (
                                     <div className="text-center py-8">
-                                        <Bell className="w-12 h-12 mx-auto text-blue-300 dark:text-blue-700 mb-2" />
+                                        <Bell className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-700 mb-2" />
                                         <p className="text-gray-500 dark:text-gray-400">Nenhum aviso recente</p>
                                     </div>
                                 )}
                             </div>
 
                             {/* Próximos Eventos */}
-                            <div className="bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-800/20 rounded-lg shadow-md p-6 border border-green-200 dark:border-green-700">
+                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
                                 <div className="flex items-center justify-between mb-4">
-                                    <h2 className="text-lg font-bold text-green-900 dark:text-green-100 flex items-center gap-2">
+                                    <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                         <Calendar className="w-5 h-5" />
                                         Próximos Eventos
                                     </h2>
                                     <button
                                         onClick={() => setActiveTab('eventos')}
-                                        className="text-sm text-green-700 dark:text-green-300 hover:underline font-medium"
+                                        className="text-sm text-gray-900 dark:text-white hover:underline font-medium"
                                     >
                                         Ver calendário →
                                     </button>
@@ -1349,7 +1500,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             <div
                                                 key={event.id}
                                                 onClick={() => handleSelectEvent(event)}
-                                                className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md cursor-pointer transition-all border-l-4 border-green-500 hover:scale-[1.02]"
+                                                className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg shadow-sm hover:shadow-md cursor-pointer transition-all border-l-4 border-gray-900 dark:border-white hover:scale-[1.02]"
                                             >
                                                 <p className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                                                     {event.tipo === 'oficina' && '🎓 '}
@@ -1364,7 +1515,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </div>
                                 ) : (
                                     <div className="text-center py-8">
-                                        <Calendar className="w-12 h-12 mx-auto text-green-300 dark:text-green-700 mb-2" />
+                                        <Calendar className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-700 mb-2" />
                                         <p className="text-gray-500 dark:text-gray-400">Nenhum evento agendado</p>
                                     </div>
                                 )}
@@ -2485,11 +2636,19 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                             )}
 
                             {isLiderJovens && (
-                                <div className="card">
+                                <div 
+                                    onClick={() => setShowJovensListModal(true)}
+                                    className="card cursor-pointer hover:border-indigo-500 dark:hover:border-indigo-400 transition-colors"
+                                >
                                     <div className="flex items-center justify-between">
                                         <div>
                                             <p className="text-sm text-gray-500 dark:text-gray-400">Total de Jovens</p>
-                                            <p className="text-2xl font-bold text-gray-900 dark:text-white">{jovensMembers.length}</p>
+                                            <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                                                {jovensMembers.filter(m => {
+                                                    const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+                                                    return funcoes.includes('jovem');
+                                                }).length}
+                                            </p>
                                         </div>
                                         <Sparkles className="w-8 h-8 text-indigo-500" />
                                     </div>
@@ -2506,8 +2665,9 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         </div>
                                         <span className="font-semibold text-gray-900 dark:text-white">
                                             {jovensMembers.filter(j => {
+                                                const funcoes = j.funcoes || (j.funcao ? [j.funcao] : []);
                                                 const age = calculateAge(j.nascimento);
-                                                return age >= 13 && age <= 18;
+                                                return funcoes.includes('jovem') && age >= 13 && age <= 18;
                                             }).length}
                                         </span>
                                     </div>
@@ -2518,8 +2678,9 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         </div>
                                         <span className="font-semibold text-gray-900 dark:text-white">
                                             {jovensMembers.filter(j => {
+                                                const funcoes = j.funcoes || (j.funcao ? [j.funcao] : []);
                                                 const age = calculateAge(j.nascimento);
-                                                return age >= 19 && age <= 24;
+                                                return funcoes.includes('jovem') && age >= 19 && age <= 24;
                                             }).length}
                                         </span>
                                     </div>
@@ -2530,8 +2691,9 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         </div>
                                         <span className="font-semibold text-gray-900 dark:text-white">
                                             {jovensMembers.filter(j => {
+                                                const funcoes = j.funcoes || (j.funcao ? [j.funcao] : []);
                                                 const age = calculateAge(j.nascimento);
-                                                return age >= 25;
+                                                return funcoes.includes('jovem') && age >= 25;
                                             }).length}
                                         </span>
                                     </div>
@@ -2562,7 +2724,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             <div
                                                 key={oficina.id}
                                                 className="p-4 border-l-4 border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
-                                                onClick={() => isLiderJovens ? handleEditOficina(oficina) : handleViewOficinaDetails(oficina)}
+                                                onClick={() => handleViewOficinaDetails(oficina)}
                                             >
                                                 <div className="flex justify-between items-start">
                                                     <div className="flex-1">
@@ -3024,7 +3186,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         Funções * (Selecione uma ou mais)
                                     </label>
                                     <div className="space-y-2 p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50">
-                                        {['Membro', 'Jovem', 'Diaconia', 'Louvor'].map((funcao) => {
+                                        {['Membro', 'Jovem', 'Louvor', 'Diaconia', 'Professor kids'].map((funcao) => {
                                             const isChecked = newMemberData.funcoes.includes(funcao);
                                             return (
                                                 <label key={funcao} className="flex items-center space-x-3 cursor-pointer p-2 hover:bg-gray-100 dark:hover:bg-gray-600 rounded transition-colors">
@@ -3913,6 +4075,108 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 <div className="flex justify-end pt-6 border-t border-gray-200 dark:border-gray-700 mt-6">
                                     <button
                                         onClick={() => setShowProfessoresListModal(false)}
+                                        className="px-6 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                                    >
+                                        Fechar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal de Lista de Jovens */}
+                {showJovensListModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                            <div className="p-6">
+                                <div className="flex items-center justify-between mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                        <Sparkles className="w-7 h-7 text-indigo-500" />
+                                        Jovens Cadastrados
+                                    </h2>
+                                    <button
+                                        onClick={() => setShowJovensListModal(false)}
+                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                    >
+                                        <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                                    </button>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {jovensMembers.filter(m => {
+                                        const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+                                        return funcoes.includes('jovem');
+                                    }).length > 0 ? (
+                                        jovensMembers.filter(m => {
+                                            const funcoes = m.funcoes || (m.funcao ? [m.funcao] : []);
+                                            return funcoes.includes('jovem');
+                                        }).map((jovem) => {
+                                            const age = calculateAge(jovem.nascimento);
+                                            const isLider = jovem.funcoes?.includes('lider_jovens');
+                                            
+                                            return (
+                                                <div 
+                                                    key={jovem.id}
+                                                    className="p-4 rounded-lg border-2 border-indigo-200 dark:border-indigo-800 bg-white dark:bg-gray-700"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="h-12 w-12 rounded-full bg-indigo-600 flex items-center justify-center text-white font-semibold text-lg">
+                                                            {getInitials(jovem.nome)}
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                                                    {jovem.nome}
+                                                                </h3>
+                                                                {isLider && (
+                                                                    <span className="text-xs px-2 py-1 rounded-full bg-indigo-600 text-white">
+                                                                        Líder de Jovens
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-gray-600 dark:text-gray-400">
+                                                                {jovem.telefone && (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <Phone className="w-4 h-4" />
+                                                                        <span>{jovem.telefone}</span>
+                                                                    </div>
+                                                                )}
+                                                                {age && <span>• {age} anos</span>}
+                                                                {age && (
+                                                                    <span className={`px-2 py-0.5 rounded text-xs ${
+                                                                        age >= 13 && age <= 18 
+                                                                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' 
+                                                                            : age >= 19 && age <= 24
+                                                                                ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                                                                                : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                                                                    }`}>
+                                                                        {age >= 13 && age <= 18 
+                                                                            ? 'Adolescente' 
+                                                                            : age >= 19 && age <= 24
+                                                                                ? 'Jovem'
+                                                                                : 'Jovem Adulto'}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    ) : (
+                                        <div className="text-center py-12">
+                                            <Sparkles className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                                            <p className="text-gray-500 dark:text-gray-400">
+                                                Nenhum jovem cadastrado ainda.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex justify-end pt-6 border-t border-gray-200 dark:border-gray-700 mt-6">
+                                    <button
+                                        onClick={() => setShowJovensListModal(false)}
                                         className="px-6 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
                                     >
                                         Fechar
@@ -5441,9 +5705,18 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
                                         <div>
                                             <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Vagas</h3>
-                                            <p className="text-gray-900 dark:text-white flex items-center gap-2">
+                                            <p className={`flex items-center gap-2 font-semibold ${
+                                                oficinaParticipants.length >= oficinaDetails.vagas 
+                                                    ? 'text-red-600 dark:text-red-400' 
+                                                    : 'text-gray-900 dark:text-white'
+                                            }`}>
                                                 <Users className="w-4 h-4" />
-                                                {oficinaDetails.inscritos || 0}/{oficinaDetails.vagas || 12}
+                                                {oficinaParticipants.length}/{oficinaDetails.vagas || 12}
+                                                {oficinaParticipants.length >= oficinaDetails.vagas && (
+                                                    <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2 py-0.5 rounded">
+                                                        Esgotado
+                                                    </span>
+                                                )}
                                             </p>
                                         </div>
                                     </div>
@@ -5458,32 +5731,221 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         </div>
                                     )}
 
-                                    <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                                        <button
-                                            onClick={() => {
-                                                setShowOficinaDetailsModal(false);
-                                                setOficinaDetails(null);
-                                            }}
-                                            className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
-                                        >
-                                            Fechar
-                                        </button>
+                                    {/* Lista de Inscritos */}
+                                    {oficinaParticipants.length > 0 && (
+                                        <div>
+                                            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Inscritos ({oficinaParticipants.length})
+                                            </h3>
+                                            <div className="max-h-40 overflow-y-auto space-y-2">
+                                                {oficinaParticipants.map((participant) => (
+                                                    <div
+                                                        key={participant.id}
+                                                        className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                                                    >
+                                                        <Users className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                                                        <span className="text-sm text-gray-900 dark:text-white">
+                                                            {participant.member?.nome || 'Nome não disponível'}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="flex justify-between gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => {
+                                                    setShowOficinaDetailsModal(false);
+                                                    setOficinaDetails(null);
+                                                }}
+                                                className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                                            >
+                                                Fechar
+                                            </button>
+                                            {isLiderJovens && (
+                                                <button
+                                                    onClick={() => {
+                                                        setOficinaFormData({
+                                                            nome: oficinaDetails.nome,
+                                                            descricao: oficinaDetails.descricao,
+                                                            data: oficinaDetails.data?.split('T')[0] || format(new Date(), 'yyyy-MM-dd'),
+                                                            horario: oficinaDetails.data?.split('T')[1]?.substring(0, 5) || '19:00',
+                                                            local: oficinaDetails.local,
+                                                            vagas: oficinaDetails.vagas || 12,
+                                                            permissaoInscricao: oficinaDetails.permissaoInscricao || ['todos']
+                                                        });
+                                                        setShowOficinaDetailsModal(false);
+                                                        setShowEditOficinaModal(true);
+                                                    }}
+                                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                                                >
+                                                    <Edit className="w-4 h-4" />
+                                                    Editar
+                                                </button>
+                                            )}
+                                        </div>
                                         <button
                                             onClick={handleOficinaRegistration}
-                                            disabled={(oficinaDetails.inscritos >= oficinaDetails.vagas) && !isOficinaRegistered}
+                                            disabled={(oficinaParticipants.length >= oficinaDetails.vagas) && !isOficinaRegistered}
                                             className={`px-4 py-2 rounded-lg text-white ${
                                                 isOficinaRegistered
                                                     ? 'bg-red-600 hover:bg-red-700'
-                                                    : (oficinaDetails.inscritos >= oficinaDetails.vagas)
+                                                    : (oficinaParticipants.length >= oficinaDetails.vagas)
                                                         ? 'bg-gray-400 cursor-not-allowed'
                                                         : 'bg-indigo-600 hover:bg-indigo-700'
                                             }`}
                                         >
-                                            {isOficinaRegistered ? 'Cancelar Inscrição' : 'Inscrever-se'}
+                                            {isOficinaRegistered 
+                                                ? 'Cancelar Inscrição' 
+                                                : (oficinaParticipants.length >= oficinaDetails.vagas)
+                                                    ? 'Vagas Esgotadas'
+                                                    : 'Inscrever-se'
+                                            }
                                         </button>
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal de Editar Oficina */}
+                {showEditOficinaModal && oficinaDetails && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] overflow-y-auto p-4">
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                    Editar Oficina
+                                </h3>
+                                <button
+                                    onClick={() => setShowEditOficinaModal(false)}
+                                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                                >
+                                    <X className="w-6 h-6" />
+                                </button>
+                            </div>
+
+                            <form onSubmit={async (e) => {
+                                e.preventDefault();
+                                try {
+                                    const workshopData = {
+                                        nome: oficinaFormData.nome,
+                                        descricao: oficinaFormData.descricao,
+                                        data: `${oficinaFormData.data}T${oficinaFormData.horario}`,
+                                        local: oficinaFormData.local,
+                                        vagas: parseInt(oficinaFormData.vagas),
+                                        permissao_inscricao: oficinaFormData.permissaoInscricao
+                                    };
+
+                                    await updateWorkshop(oficinaDetails.id, workshopData);
+                                    alert('Oficina atualizada com sucesso!');
+                                    setShowEditOficinaModal(false);
+                                    
+                                    // Recarregar lista de oficinas
+                                    const updatedWorkshops = await getWorkshops();
+                                    setOficinas(updatedWorkshops || []);
+                                } catch (error) {
+                                    console.error('Erro ao atualizar oficina:', error);
+                                    alert('Erro ao atualizar oficina. Tente novamente.');
+                                }
+                            }} className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Nome da Oficina *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={oficinaFormData.nome}
+                                        onChange={(e) => setOficinaFormData({ ...oficinaFormData, nome: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Descrição
+                                    </label>
+                                    <textarea
+                                        value={oficinaFormData.descricao}
+                                        onChange={(e) => setOficinaFormData({ ...oficinaFormData, descricao: e.target.value })}
+                                        rows="3"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                            Data *
+                                        </label>
+                                        <input
+                                            type="date"
+                                            required
+                                            value={oficinaFormData.data}
+                                            onChange={(e) => setOficinaFormData({ ...oficinaFormData, data: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                            Horário *
+                                        </label>
+                                        <input
+                                            type="time"
+                                            required
+                                            value={oficinaFormData.horario}
+                                            onChange={(e) => setOficinaFormData({ ...oficinaFormData, horario: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Local
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={oficinaFormData.local}
+                                        onChange={(e) => setOficinaFormData({ ...oficinaFormData, local: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                                        Número de Vagas *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        required
+                                        min="1"
+                                        value={oficinaFormData.vagas}
+                                        onChange={(e) => setOficinaFormData({ ...oficinaFormData, vagas: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    />
+                                </div>
+
+                                <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowEditOficinaModal(false)}
+                                        className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                                    >
+                                        Salvar Alterações
+                                    </button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 )}
