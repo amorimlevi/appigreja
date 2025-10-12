@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { format, isAfter, isBefore, startOfWeek, endOfWeek, addDays, subDays, differenceInYears, startOfMonth, endOfMonth, isSameMonth, isToday, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import CustomCalendar from './CustomCalendar';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { formatId } from '../utils/formatters';
 import { getEventFoods, getEventParticipants, deleteEventFood, createMinistrySchedule, getMinistrySchedules, updateMinistrySchedule, deleteMinistrySchedule, getWorkshops, deleteWorkshop, createWorkshop, createAviso } from '../lib/supabaseService';

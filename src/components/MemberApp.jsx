@@ -35,6 +35,7 @@ import { format, parseISO, isAfter, isBefore, startOfMonth, endOfMonth, isSameMo
 import { ptBR } from 'date-fns/locale';
 import { formatId } from '../utils/formatters';
 import { searchMembers, getEventFoods, updateEventFood, registerEventParticipant, unregisterEventParticipant, checkEventRegistration, updateMember, getMinistrySchedules, getMembers, getFamilyByMemberId, getUnreadAvisosCount, markAvisoAsRead, getAvisosWithReadStatus, getPlaylistMusicas, getMemberById, createMinistrySchedule, updateMinistrySchedule, deleteMinistrySchedule, createPlaylistMusica, deletePlaylistMusica, getWorkshops, createWorkshop, updateWorkshop, deleteWorkshop, registerWorkshopParticipant, unregisterWorkshopParticipant, checkWorkshopRegistration, getWorkshopRegistrations } from '../lib/supabaseService';
+import CustomCalendar from './CustomCalendar';
 
 const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLogout }) => {
     const [localMember, setLocalMember] = useState(currentMember);
@@ -105,6 +106,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     const [activeTab, setActiveTab] = useState('home');
     const [calendarDate, setCalendarDate] = useState(new Date());
     const [eventView, setEventView] = useState('calendar'); // 'calendar' ou 'list'
+    const [calendarViewMode, setCalendarViewMode] = useState('month'); // 'day', 'month', 'year'
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [showEventDetailsModal, setShowEventDetailsModal] = useState(false);
     const [selectedFoods, setSelectedFoods] = useState({});
@@ -495,38 +497,27 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
     // Detectar scroll para ocultar botões flutuantes
     useEffect(() => {
-        let scrollTimeout;
         let lastScrollY = window.scrollY;
         
         const handleScroll = () => {
             const currentScrollY = window.scrollY;
-            if (Math.abs(currentScrollY - lastScrollY) > 5) {
+            
+            // Esconde ao rolar para baixo, mostra ao rolar para cima ou estar no topo
+            if (currentScrollY > lastScrollY && currentScrollY > 50) {
+                // Scrolling down
                 setIsScrolling(true);
-                lastScrollY = currentScrollY;
-                clearTimeout(scrollTimeout);
-                scrollTimeout = setTimeout(() => {
-                    setIsScrolling(false);
-                }, 1000);
-            }
-        };
-
-        const handleTouchMove = () => {
-            setIsScrolling(true);
-            clearTimeout(scrollTimeout);
-            scrollTimeout = setTimeout(() => {
+            } else if (currentScrollY < lastScrollY || currentScrollY <= 50) {
+                // Scrolling up or at top
                 setIsScrolling(false);
-            }, 1000);
+            }
+            
+            lastScrollY = currentScrollY;
         };
 
         window.addEventListener('scroll', handleScroll, { passive: true });
-        document.addEventListener('scroll', handleScroll, { passive: true });
-        document.addEventListener('touchmove', handleTouchMove, { passive: true });
         
         return () => {
             window.removeEventListener('scroll', handleScroll);
-            document.removeEventListener('scroll', handleScroll);
-            document.removeEventListener('touchmove', handleTouchMove);
-            clearTimeout(scrollTimeout);
         };
     }, []);
 
@@ -741,8 +732,8 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     const renderCalendar = () => {
         const monthStart = startOfMonth(calendarDate);
         const monthEnd = endOfMonth(calendarDate);
-        const startDate = startOfWeek(monthStart, { locale: ptBR });
-        const endDate = endOfWeek(monthEnd, { locale: ptBR });
+        const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
+        const endDate = endOfWeek(monthEnd, { weekStartsOn: 1 });
 
         const dateFormat = "d";
         const rows = [];
@@ -763,52 +754,37 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
                 const isCurrentMonth = isSameMonth(day, monthStart);
                 const isTodayDate = isToday(day);
+                const hasEvents = dayEvents.length > 0;
 
                 days.push(
                     <div
                         key={day}
+                        onClick={() => {
+                            if (hasEvents) {
+                                handleSelectEvent(dayEvents[0]);
+                            }
+                        }}
                         className={`
-                            min-h-[80px] p-2 border border-gray-200 dark:border-gray-700
-                            ${!isCurrentMonth ? 'bg-gray-50 dark:bg-gray-800/50 text-gray-400' : 'bg-white dark:bg-gray-800'}
-                            ${isTodayDate ? 'ring-2 ring-blue-500' : ''}
+                            aspect-square flex items-center justify-center p-2 cursor-pointer
+                            ${!isCurrentMonth ? 'text-gray-300 dark:text-gray-600' : 'text-gray-900 dark:text-white'}
+                            ${isTodayDate ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-full font-bold' : ''}
+                            ${hasEvents && !isTodayDate ? 'text-red-600 dark:text-red-400 font-semibold' : ''}
                         `}
                     >
-                        <div className={`text-sm font-medium ${isTodayDate ? 'text-blue-600 dark:text-blue-400' : ''}`}>
-                            {format(day, dateFormat)}
-                        </div>
-                        <div className="mt-1 space-y-1">
-                            {dayEvents.map(event => {
-                                const isOficina = event.tipo === 'oficina';
-                                return (
-                                    <div
-                                        key={event.id}
-                                        onClick={() => handleSelectEvent(event)}
-                                        className={`
-                                            text-xs p-1 rounded cursor-pointer truncate
-                                            ${isOficina
-                                                ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-900/50'
-                                                : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50'}
-                                        `}
-                                        title={event.nome}
-                                    >
-                                        {isOficina && '🎓 '}{event.nome}
-                                    </div>
-                                );
-                            })}
-                        </div>
+                        {format(day, dateFormat)}
                     </div>
                 );
                 day = addDays(day, 1);
             }
             rows.push(
-                <div key={day} className="grid grid-cols-7 gap-0">
+                <div key={day} className="grid grid-cols-7">
                     {days}
                 </div>
             );
             days = [];
         }
 
-        return <div className="space-y-0">{rows}</div>;
+        return <div>{rows}</div>;
     };
 
     // Renderizar detalhes do evento
@@ -1301,16 +1277,16 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     <div className="w-12 h-1 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
                                 </div>
 
-                                <div className="flex items-center space-x-3 mb-6 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                                    <div className="h-12 w-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">
+                                <div className="flex items-center space-x-3 mb-6 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                                    <div className="h-12 w-12 rounded-full bg-gray-900 dark:bg-white flex items-center justify-center text-white dark:text-gray-900 font-bold">
                                         {currentMember?.nome?.charAt(0) || 'M'}
                                     </div>
                                     <div>
                                         <p className="font-semibold text-gray-900 dark:text-white">{currentMember?.nome}</p>
                                         <p className="text-sm text-gray-600 dark:text-gray-400">
                                             {currentMember?.funcoes && localMember.funcoes.length > 0
-                                                ? localMember.funcoes.join(', ')
-                                                : currentMember?.funcao || 'Membro'
+                                                ? localMember.funcoes.map(f => f.charAt(0).toUpperCase() + f.slice(1)).join(', ')
+                                                : currentMember?.funcao ? currentMember.funcao.charAt(0).toUpperCase() + currentMember.funcao.slice(1) : 'Membro'
                                             }
                                         </p>
                                     </div>
@@ -1362,7 +1338,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
                 {/* Botões de navegação centralizados */}
                 <div 
-                    className={`fixed z-40 rounded-full shadow-2xl p-2 flex items-center gap-2 left-1/2 -translate-x-1/2 transition-all duration-300 backdrop-blur-sm ${
+                    className={`fixed z-40 rounded-full shadow-2xl p-2 flex items-center justify-center gap-2 left-1/2 -translate-x-1/2 transition-all duration-300 backdrop-blur-sm ${
                         isScrolling || sidebarOpen ? 'opacity-0 pointer-events-none translate-y-20' : 'opacity-100'
                     }`}
                     style={{
@@ -1372,7 +1348,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 >
                     <button
                         onClick={() => setActiveTab('home')}
-                        className={`p-3 rounded-full transition-all active:scale-95 ${
+                        className={`p-3 rounded-full transition-all active:scale-95 flex items-center justify-center ${
                             activeTab === 'home'
                                 ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white'
                                 : 'text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100'
@@ -1382,7 +1358,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                     </button>
                     <button
                         onClick={() => setActiveTab('perfil')}
-                        className={`p-3 rounded-full transition-all active:scale-95 ${
+                        className={`p-3 rounded-full transition-all active:scale-95 flex items-center justify-center ${
                             activeTab === 'perfil'
                                 ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white'
                                 : 'text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100'
@@ -1392,7 +1368,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                     </button>
                     <button
                         onClick={() => setActiveTab('eventos')}
-                        className={`p-3 rounded-full transition-all active:scale-95 ${
+                        className={`p-3 rounded-full transition-all active:scale-95 flex items-center justify-center ${
                             activeTab === 'eventos'
                                 ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white'
                                 : 'text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100'
@@ -1449,37 +1425,6 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 </div>
                             )}
 
-                            {/* Avisos Recentes */}
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                        <Bell className="w-5 h-5" />
-                                        Avisos Recentes
-                                    </h2>
-                                    <button
-                                        onClick={() => setActiveTab('avisos')}
-                                        className="text-sm text-gray-900 dark:text-white hover:underline font-medium"
-                                    >
-                                        Ver todos →
-                                    </button>
-                                </div>
-                                {recentAvisos.length > 0 ? (
-                                    <div className="space-y-3">
-                                        {recentAvisos.slice(0, 3).map(aviso => (
-                                            <div key={aviso.id} className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg shadow-sm border-l-4 border-gray-900 dark:border-white hover:shadow-md transition-shadow">
-                                                <p className="font-semibold text-gray-900 dark:text-white">{aviso.titulo}</p>
-                                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 line-clamp-2">{aviso.mensagem}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-8">
-                                        <Bell className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-700 mb-2" />
-                                        <p className="text-gray-500 dark:text-gray-400">Nenhum aviso recente</p>
-                                    </div>
-                                )}
-                            </div>
-
                             {/* Próximos Eventos */}
                             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
                                 <div className="flex items-center justify-between mb-4">
@@ -1520,6 +1465,37 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </div>
                                 )}
                             </div>
+
+                            {/* Avisos Recentes */}
+                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                        <Bell className="w-5 h-5" />
+                                        Avisos Recentes
+                                    </h2>
+                                    <button
+                                        onClick={() => setActiveTab('avisos')}
+                                        className="text-sm text-gray-900 dark:text-white hover:underline font-medium"
+                                    >
+                                        Ver todos →
+                                    </button>
+                                </div>
+                                {recentAvisos.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {recentAvisos.slice(0, 3).map(aviso => (
+                                            <div key={aviso.id} className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg shadow-sm border-l-4 border-gray-900 dark:border-white hover:shadow-md transition-shadow">
+                                                <p className="font-semibold text-gray-900 dark:text-white">{aviso.titulo}</p>
+                                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 line-clamp-2">{aviso.mensagem}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-8">
+                                        <Bell className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-700 mb-2" />
+                                        <p className="text-gray-500 dark:text-gray-400">Nenhum aviso recente</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
 
@@ -1553,37 +1529,66 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                             </div>
 
                             {eventView === 'calendar' && (
-                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 border border-gray-200 dark:border-gray-700">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                                            {format(calendarDate, 'MMMM yyyy', { locale: ptBR })}
+                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                                    {/* Tabs Day/Month/Year */}
+                                    <div className="flex justify-center mb-6 border-b border-gray-200 dark:border-gray-700">
+                                        <button
+                                            onClick={() => setCalendarViewMode('day')}
+                                            className={`px-6 py-2 text-sm font-medium transition-colors ${
+                                                calendarViewMode === 'day'
+                                                    ? 'border-b-2 border-gray-900 dark:border-white text-gray-900 dark:text-white'
+                                                    : 'text-gray-500 dark:text-gray-400'
+                                            }`}
+                                        >
+                                            Day
+                                        </button>
+                                        <button
+                                            onClick={() => setCalendarViewMode('month')}
+                                            className={`px-6 py-2 text-sm font-medium transition-colors ${
+                                                calendarViewMode === 'month'
+                                                    ? 'border-b-2 border-gray-900 dark:border-white text-gray-900 dark:text-white'
+                                                    : 'text-gray-500 dark:text-gray-400'
+                                            }`}
+                                        >
+                                            Month
+                                        </button>
+                                        <button
+                                            onClick={() => setCalendarViewMode('year')}
+                                            className={`px-6 py-2 text-sm font-medium transition-colors ${
+                                                calendarViewMode === 'year'
+                                                    ? 'border-b-2 border-gray-900 dark:border-white text-gray-900 dark:text-white'
+                                                    : 'text-gray-500 dark:text-gray-400'
+                                            }`}
+                                        >
+                                            Year
+                                        </button>
+                                    </div>
+
+                                    {/* Cabeçalho do Mês */}
+                                    <div className="flex items-center justify-between mb-6">
+                                        <h2 className="text-3xl font-bold text-gray-900 dark:text-white capitalize">
+                                            {format(calendarDate, 'MMMM', { locale: ptBR })}
                                         </h2>
-                                        <div className="flex items-center space-x-2">
+                                        <div className="flex items-center space-x-4">
                                             <button
                                                 onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1))}
                                                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                                             >
-                                                <ChevronLeft className="h-5 w-5" />
-                                            </button>
-                                            <button
-                                                onClick={() => setCalendarDate(new Date())}
-                                                className="px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                                            >
-                                                Hoje
+                                                <ChevronLeft className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                                             </button>
                                             <button
                                                 onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1))}
                                                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                                             >
-                                                <ChevronRight className="h-5 w-5" />
+                                                <ChevronRight className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                                             </button>
                                         </div>
                                     </div>
 
                                     {/* Dias da Semana */}
-                                    <div className="grid grid-cols-7 gap-0 mb-2">
-                                        {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(day => (
-                                            <div key={day} className="text-center text-sm font-semibold text-gray-700 dark:text-gray-300 py-2">
+                                    <div className="grid grid-cols-7 mb-4">
+                                        {['Mn', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(day => (
+                                            <div key={day} className="text-center text-sm font-medium text-gray-500 dark:text-gray-400 py-2">
                                                 {day}
                                             </div>
                                         ))}
@@ -3132,22 +3137,17 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                                        Data de Nascimento
-                                    </label>
-                                    <input
-                                        type="date"
+                                    <CustomCalendar
+                                        label="Data de Nascimento"
                                         value={newMemberData.dataNascimento}
-                                        onChange={(e) => {
-                                            const newBirthDate = e.target.value;
-                                            const calculatedAge = calculateAge(newBirthDate);
+                                        onChange={(date) => {
+                                            const calculatedAge = calculateAge(date);
                                             setNewMemberData({
                                                 ...newMemberData,
-                                                dataNascimento: newBirthDate,
+                                                dataNascimento: date,
                                                 idade: calculatedAge !== null ? calculatedAge.toString() : ''
                                             });
                                         }}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                     />
                                 </div>
 
