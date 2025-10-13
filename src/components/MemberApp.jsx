@@ -1594,8 +1594,12 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
                             {/* Carrossel de Fotos dos Cultos */}
                             {photos.length > 0 && (
-                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-700">
-                                    <div className="relative h-64 sm:h-80 md:h-96 bg-gray-900">
+                                <div>
+                                    <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
+                                        Nossa Programação
+                                    </h2>
+                                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-700">
+                                        <div className="relative h-64 sm:h-80 md:h-96 bg-gray-900">
                                         <img
                                             src={photos[currentPhotoIndex].url}
                                             alt={photos[currentPhotoIndex].titulo || 'Foto do culto'}
@@ -1628,9 +1632,10 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     <ChevronRight className="w-8 h-8" />
                                                 </button>
                                             </>
-                                        )}
-                                    </div>
-                                </div>
+                                            )}
+                                                </div>
+                                                </div>
+                                                </div>
                             )}
 
                             {/* Ouça Agora */}
