@@ -39,6 +39,30 @@ import { formatId } from '../utils/formatters';
 import { searchMembers, getEventFoods, updateEventFood, registerEventParticipant, unregisterEventParticipant, checkEventRegistration, updateMember, getMinistrySchedules, getMembers, getFamilyByMemberId, getUnreadAvisosCount, markAvisoAsRead, getAvisosWithReadStatus, getPlaylistMusicas, getMemberById, createMinistrySchedule, updateMinistrySchedule, deleteMinistrySchedule, createPlaylistMusica, deletePlaylistMusica, getWorkshops, createWorkshop, updateWorkshop, deleteWorkshop, registerWorkshopParticipant, unregisterWorkshopParticipant, checkWorkshopRegistration, getWorkshopRegistrations, getPhotos } from '../lib/supabaseService';
 import CustomCalendar from './CustomCalendar';
 
+// Lista de versículos bíblicos
+const VERSICULOS = [
+    { texto: "Porque Deus amou o mundo de tal maneira que deu o seu Filho unigênito, para que todo aquele que nele crê não pereça, mas tenha a vida eterna.", referencia: "João 3:16" },
+    { texto: "Tudo posso naquele que me fortalece.", referencia: "Filipenses 4:13" },
+    { texto: "O Senhor é o meu pastor, nada me faltará.", referencia: "Salmos 23:1" },
+    { texto: "Confia no Senhor de todo o teu coração e não te estribes no teu próprio entendimento.", referencia: "Provérbios 3:5" },
+    { texto: "Ainda que eu andasse pelo vale da sombra da morte, não temeria mal algum, porque tu estás comigo.", referencia: "Salmos 23:4" },
+    { texto: "Entrega o teu caminho ao Senhor; confia nele, e ele o fará.", referencia: "Salmos 37:5" },
+    { texto: "Mas os que esperam no Senhor renovarão as suas forças; subirão com asas como águias.", referencia: "Isaías 40:31" },
+    { texto: "E sabemos que todas as coisas contribuem juntamente para o bem daqueles que amam a Deus.", referencia: "Romanos 8:28" },
+    { texto: "O Senhor é a minha luz e a minha salvação; a quem temerei?", referencia: "Salmos 27:1" },
+    { texto: "Não temas, porque eu sou contigo; não te assombres, porque eu sou o teu Deus.", referencia: "Isaías 41:10" },
+    { texto: "Buscai primeiro o reino de Deus, e a sua justiça, e todas estas coisas vos serão acrescentadas.", referencia: "Mateus 6:33" },
+    { texto: "Lançando sobre ele toda a vossa ansiedade, porque ele tem cuidado de vós.", referencia: "1 Pedro 5:7" },
+    { texto: "A alegria do Senhor é a vossa força.", referencia: "Neemias 8:10" },
+    { texto: "Eu sou o caminho, e a verdade, e a vida. Ninguém vem ao Pai senão por mim.", referencia: "João 14:6" },
+    { texto: "Grande é o Senhor e muito digno de ser louvado.", referencia: "Salmos 48:1" },
+    { texto: "Eis que estou convosco todos os dias, até à consumação dos séculos.", referencia: "Mateus 28:20" },
+    { texto: "O amor nunca falha.", referencia: "1 Coríntios 13:8" },
+    { texto: "Porque onde estiverem dois ou três reunidos em meu nome, aí estou eu no meio deles.", referencia: "Mateus 18:20" },
+    { texto: "Alegrai-vos sempre no Senhor; outra vez digo, alegrai-vos.", referencia: "Filipenses 4:4" },
+    { texto: "Bem-aventurados os limpos de coração, porque eles verão a Deus.", referencia: "Mateus 5:8" }
+];
+
 const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLogout }) => {
     const [localMember, setLocalMember] = useState(currentMember);
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -72,7 +96,6 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
         { id: 'perfil', label: 'Família', icon: Users },
         { id: 'eventos', label: 'Eventos', icon: Calendar },
         { id: 'avisos', label: 'Avisos', icon: Bell },
-        { id: 'galeria', label: 'Cultos', icon: Church },
         { id: 'playlistzoe', label: 'Playlist Zoe', icon: null },
         { id: 'configuracoes', label: 'Configurações', icon: Settings }
     ];
@@ -108,7 +131,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     }, [localMember]);
     const [activeTab, setActiveTab] = useState('home');
     const [calendarDate, setCalendarDate] = useState(new Date());
-    const [eventView, setEventView] = useState('calendar'); // 'calendar' ou 'list'
+    const [eventView, setEventView] = useState('list'); // 'calendar' ou 'list'
     const [calendarViewMode, setCalendarViewMode] = useState('month'); // 'day', 'month', 'year'
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [showEventDetailsModal, setShowEventDetailsModal] = useState(false);
@@ -231,6 +254,29 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     const [selectedPhoto, setSelectedPhoto] = useState(null);
     const [showPhotoDetailsModal, setShowPhotoDetailsModal] = useState(false);
     const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+    const [showAvisosDropdown, setShowAvisosDropdown] = useState(false);
+    const [dailyMusic, setDailyMusic] = useState(() => {
+        const saved = localStorage.getItem('dailyMusic');
+        if (saved) {
+            const data = JSON.parse(saved);
+            const today = format(new Date(), 'yyyy-MM-dd');
+            if (data.date === today) {
+                return data.music;
+            }
+        }
+        return null;
+    });
+    const [dailyVerse, setDailyVerse] = useState(() => {
+        const saved = localStorage.getItem('dailyVerse');
+        if (saved) {
+            const data = JSON.parse(saved);
+            const today = format(new Date(), 'yyyy-MM-dd');
+            if (data.date === today) {
+                return data.verse;
+            }
+        }
+        return null;
+    });
     const [newKidsScheduleData, setNewKidsScheduleData] = useState({
         turmas: [],
         data: format(new Date(), 'yyyy-MM-dd'),
@@ -1305,6 +1351,88 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 </h1>
                             </div>
                             <div className="flex items-center space-x-2">
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setShowAvisosDropdown(!showAvisosDropdown)}
+                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors relative"
+                                    >
+                                        <Bell className="h-5 w-5" />
+                                        {unreadAvisosCount > 0 && (
+                                            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center px-1">
+                                                {unreadAvisosCount}
+                                            </span>
+                                        )}
+                                    </button>
+                                    {showAvisosDropdown && (
+                                        <>
+                                            <div className="fixed inset-0 z-40" onClick={() => setShowAvisosDropdown(false)} />
+                                            <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50">
+                                                <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                                                    <h3 className="font-bold text-gray-900 dark:text-white">Avisos Recentes</h3>
+                                                </div>
+                                                <div className="p-2">
+                                                    {recentAvisos.length > 0 ? (
+                                                        <div className="space-y-2">
+                                                            {recentAvisos.slice(0, 5).map(aviso => {
+                                                                const notification = aviso.aviso_notifications?.[0];
+                                                                const isUnread = notification && !notification.lido;
+                                                                
+                                                                return (
+                                                                <div 
+                                                                    key={aviso.id} 
+                                                                    className={`p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer transition-colors border-l-4 ${
+                                                                        isUnread 
+                                                                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500' 
+                                                                            : 'bg-transparent border-transparent'
+                                                                    }`}
+                                                                    onClick={() => {
+                                                                        setShowAvisosDropdown(false);
+                                                                        setActiveTab('avisos');
+                                                                        if (isUnread) {
+                                                                            markAvisoAsRead(aviso.id, currentMember.id).then(() => {
+                                                                                getAvisosWithReadStatus(currentMember.id).then(avisosData => {
+                                                                                    setAvisos(avisosData);
+                                                                                });
+                                                                            });
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <div className="flex items-start justify-between gap-2">
+                                                                        <p className="font-semibold text-sm text-gray-900 dark:text-white flex-1">{aviso.titulo}</p>
+                                                                        {isUnread && (
+                                                                            <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1"></span>
+                                                                        )}
+                                                                    </div>
+                                                                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">{aviso.mensagem}</p>
+                                                                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                                        {format(parseISO(aviso.created_at), "d 'de' MMM", { locale: ptBR })}
+                                                                    </p>
+                                                                </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-center py-8">
+                                                            <Bell className="w-8 h-8 mx-auto text-gray-300 dark:text-gray-700 mb-2" />
+                                                            <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum aviso recente</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="p-3 border-t border-gray-200 dark:border-gray-700">
+                                                    <button
+                                                        onClick={() => {
+                                                            setShowAvisosDropdown(false);
+                                                            setActiveTab('avisos');
+                                                        }}
+                                                        className="w-full text-center text-sm text-gray-900 dark:text-white font-medium hover:underline"
+                                                    >
+                                                        Ver todos os avisos →
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                                 <button
                                     onClick={() => {
                                         setDarkMode(!darkMode);
@@ -1436,6 +1564,34 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                     {/* Início */}
                     {activeTab === 'home' && (
                         <div className="space-y-6">
+                            {/* Versículo do Dia */}
+                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
+                                {(() => {
+                                    let verse = dailyVerse;
+                                    
+                                    if (!verse) {
+                                        const today = format(new Date(), 'yyyy-MM-dd');
+                                        const dayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24);
+                                        verse = VERSICULOS[dayOfYear % VERSICULOS.length];
+                                        localStorage.setItem('dailyVerse', JSON.stringify({ date: today, verse }));
+                                        setDailyVerse(verse);
+                                    }
+                                    
+                                    if (!verse) return null;
+                                    
+                                    return (
+                                        <div className="space-y-3">
+                                            <p className="text-lg leading-relaxed italic text-gray-700 dark:text-gray-300">
+                                                "{verse.texto}"
+                                            </p>
+                                            <p className="text-right font-semibold text-gray-900 dark:text-white">
+                                                - {verse.referencia}
+                                            </p>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+
                             {/* Carrossel de Fotos dos Cultos */}
                             {photos.length > 0 && (
                                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-700">
@@ -1461,30 +1617,16 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             <>
                                                 <button
                                                     onClick={() => setCurrentPhotoIndex((prev) => (prev === 0 ? photos.length - 1 : prev - 1))}
-                                                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
+                                                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-transparent hover:bg-black/30 text-white p-3 rounded-full transition-colors flex items-center justify-center"
                                                 >
-                                                    <ChevronLeft className="w-6 h-6" />
+                                                    <ChevronLeft className="w-8 h-8" />
                                                 </button>
                                                 <button
                                                     onClick={() => setCurrentPhotoIndex((prev) => (prev === photos.length - 1 ? 0 : prev + 1))}
-                                                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
+                                                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-transparent hover:bg-black/30 text-white p-3 rounded-full transition-colors flex items-center justify-center"
                                                 >
-                                                    <ChevronRight className="w-6 h-6" />
+                                                    <ChevronRight className="w-8 h-8" />
                                                 </button>
-                                                {/* Indicadores */}
-                                                <div className="absolute bottom-20 left-1/2 -translate-x-1/2 flex gap-2">
-                                                    {photos.map((_, index) => (
-                                                        <button
-                                                            key={index}
-                                                            onClick={() => setCurrentPhotoIndex(index)}
-                                                            className={`w-2 h-2 rounded-full transition-all ${
-                                                                index === currentPhotoIndex
-                                                                    ? 'bg-white w-8'
-                                                                    : 'bg-white/50 hover:bg-white/70'
-                                                            }`}
-                                                        />
-                                                    ))}
-                                                </div>
                                             </>
                                         )}
                                     </div>
@@ -1499,7 +1641,17 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         Ouça Agora
                                     </h2>
                                     {(() => {
-                                        const randomMusic = playlistMusicas[Math.floor(Math.random() * playlistMusicas.length)];
+                                        let randomMusic = dailyMusic;
+                                        
+                                        if (!randomMusic && playlistMusicas.length > 0) {
+                                            randomMusic = playlistMusicas[Math.floor(Math.random() * playlistMusicas.length)];
+                                            const today = format(new Date(), 'yyyy-MM-dd');
+                                            localStorage.setItem('dailyMusic', JSON.stringify({ date: today, music: randomMusic }));
+                                            setDailyMusic(randomMusic);
+                                        }
+                                        
+                                        if (!randomMusic) return null;
+                                        
                                         return (
                                             <div className="bg-black rounded-lg p-4 flex items-center justify-between" style={{backgroundColor: 'rgba(255,255,255,0.05)'}}>
                                                 <div>
@@ -1574,36 +1726,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 )}
                             </div>
 
-                            {/* Avisos Recentes */}
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                        <Bell className="w-5 h-5" />
-                                        Avisos Recentes
-                                    </h2>
-                                    <button
-                                        onClick={() => setActiveTab('avisos')}
-                                        className="text-sm text-gray-900 dark:text-white hover:underline font-medium"
-                                    >
-                                        Ver todos →
-                                    </button>
-                                </div>
-                                {recentAvisos.length > 0 ? (
-                                    <div className="space-y-3">
-                                        {recentAvisos.slice(0, 3).map(aviso => (
-                                            <div key={aviso.id} className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg shadow-sm border-l-4 border-gray-900 dark:border-white hover:shadow-md transition-shadow">
-                                                <p className="font-semibold text-gray-900 dark:text-white">{aviso.titulo}</p>
-                                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 line-clamp-2">{aviso.mensagem}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-8">
-                                        <Bell className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-700 mb-2" />
-                                        <p className="text-gray-500 dark:text-gray-400">Nenhum aviso recente</p>
-                                    </div>
-                                )}
-                            </div>
+
                         </div>
                     )}
 
@@ -1614,64 +1737,30 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                             <div className="flex justify-end mb-4">
                                 <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700">
                                     <button
-                                        onClick={() => setEventView('calendar')}
-                                        className={`px-4 py-2 text-sm font-medium rounded-l-lg transition-colors ${eventView === 'calendar'
-                                                ? 'bg-blue-600 text-white'
-                                                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                            }`}
-                                    >
-                                        <Calendar className="h-4 w-4 inline mr-2" />
-                                        Calendário
-                                    </button>
-                                    <button
                                         onClick={() => setEventView('list')}
-                                        className={`px-4 py-2 text-sm font-medium rounded-r-lg transition-colors ${eventView === 'list'
-                                                ? 'bg-blue-600 text-white'
+                                        className={`px-4 py-2 text-sm font-medium rounded-l-lg transition-colors ${eventView === 'list'
+                                                ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900'
                                                 : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
                                             }`}
                                     >
                                         <List className="h-4 w-4 inline mr-2" />
                                         Lista
                                     </button>
+                                    <button
+                                        onClick={() => setEventView('calendar')}
+                                        className={`px-4 py-2 text-sm font-medium rounded-r-lg transition-colors ${eventView === 'calendar'
+                                                ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900'
+                                                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                            }`}
+                                    >
+                                        <Calendar className="h-4 w-4 inline mr-2" />
+                                        Calendário
+                                    </button>
                                 </div>
                             </div>
 
                             {eventView === 'calendar' && (
                                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-                                    {/* Tabs Day/Month/Year */}
-                                    <div className="flex justify-center mb-6 border-b border-gray-200 dark:border-gray-700">
-                                        <button
-                                            onClick={() => setCalendarViewMode('day')}
-                                            className={`px-6 py-2 text-sm font-medium transition-colors ${
-                                                calendarViewMode === 'day'
-                                                    ? 'border-b-2 border-gray-900 dark:border-white text-gray-900 dark:text-white'
-                                                    : 'text-gray-500 dark:text-gray-400'
-                                            }`}
-                                        >
-                                            Day
-                                        </button>
-                                        <button
-                                            onClick={() => setCalendarViewMode('month')}
-                                            className={`px-6 py-2 text-sm font-medium transition-colors ${
-                                                calendarViewMode === 'month'
-                                                    ? 'border-b-2 border-gray-900 dark:border-white text-gray-900 dark:text-white'
-                                                    : 'text-gray-500 dark:text-gray-400'
-                                            }`}
-                                        >
-                                            Month
-                                        </button>
-                                        <button
-                                            onClick={() => setCalendarViewMode('year')}
-                                            className={`px-6 py-2 text-sm font-medium transition-colors ${
-                                                calendarViewMode === 'year'
-                                                    ? 'border-b-2 border-gray-900 dark:border-white text-gray-900 dark:text-white'
-                                                    : 'text-gray-500 dark:text-gray-400'
-                                            }`}
-                                        >
-                                            Year
-                                        </button>
-                                    </div>
-
                                     {/* Cabeçalho do Mês */}
                                     <div className="flex items-center justify-between mb-6">
                                         <h2 className="text-3xl font-bold text-gray-900 dark:text-white capitalize">
