@@ -42,6 +42,7 @@ import CustomCalendar from './CustomCalendar';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { formatId } from '../utils/formatters';
 import { getEventFoods, getEventParticipants, deleteEventFood, createMinistrySchedule, getMinistrySchedules, updateMinistrySchedule, deleteMinistrySchedule, getWorkshops, deleteWorkshop, createWorkshop, createAviso } from '../lib/supabaseService';
+import { supabase } from '../lib/supabaseClient';
 
 const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], families = [], onAddEvent, onEditEvent, onDeleteEvent, onAddMember, onEditMember, onDeleteMember, onAddFamily, onEditFamily, onLogout }) => {
     console.log('ChurchAdminDashboard renderizando - members:', members.length, 'events:', events.length, 'families:', families.length)
@@ -6353,11 +6354,14 @@ Montar escala        </button>
                             <form onSubmit={async (e) => {
                                 e.preventDefault();
                                 try {
+                                    // Obter usuário autenticado
+                                    const { data: { user } } = await supabase.auth.getUser();
+                                    
                                     const avisoData = {
                                         titulo: newAvisoData.titulo,
                                         mensagem: newAvisoData.mensagem,
                                         destinatarios: newAvisoData.destinatarios,
-                                        autor_id: currentUser?.id || null
+                                        autor_id: user?.id || null
                                     };
                                     
                                     const novoAviso = await createAviso(avisoData);
