@@ -8,7 +8,7 @@ export default function CustomCalendar({ value, onChange, label, disabled = fals
     const [viewMode, setViewMode] = useState('month'); // 'day', 'month', 'year'
     const [currentDate, setCurrentDate] = useState(value ? parseISO(value) : new Date());
 
-    const renderCalendar = () => {
+    const renderDayView = () => {
         const monthStart = startOfMonth(currentDate);
         const monthEnd = endOfMonth(currentDate);
         const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
@@ -57,6 +57,62 @@ export default function CustomCalendar({ value, onChange, label, disabled = fals
         }
 
         return <div>{rows}</div>;
+    };
+
+    const renderMonthView = () => {
+        const months = [
+            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+        ];
+        const currentMonth = currentDate.getMonth();
+
+        return (
+            <div className="grid grid-cols-3 gap-3">
+                {months.map((month, index) => (
+                    <button
+                        key={month}
+                        type="button"
+                        onClick={() => {
+                            setCurrentDate(new Date(currentDate.getFullYear(), index, 1));
+                            setViewMode('day');
+                        }}
+                        className={`
+                            p-3 rounded-lg text-center cursor-pointer transition-colors
+                            ${currentMonth === index ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold' : 'text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700'}
+                        `}
+                    >
+                        {month}
+                    </button>
+                ))}
+            </div>
+        );
+    };
+
+    const renderYearView = () => {
+        const currentYear = currentDate.getFullYear();
+        const startYear = currentYear - 50;
+        const years = Array.from({ length: 101 }, (_, i) => startYear + i);
+
+        return (
+            <div className="grid grid-cols-3 gap-3 max-h-64 overflow-y-auto">
+                {years.map(year => (
+                    <button
+                        key={year}
+                        type="button"
+                        onClick={() => {
+                            setCurrentDate(new Date(year, currentDate.getMonth(), 1));
+                            setViewMode('month');
+                        }}
+                        className={`
+                            p-3 rounded-lg text-center cursor-pointer transition-colors
+                            ${currentYear === year ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold' : 'text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700'}
+                        `}
+                    >
+                        {year}
+                    </button>
+                ))}
+            </div>
+        );
     };
 
     return (
@@ -120,40 +176,47 @@ export default function CustomCalendar({ value, onChange, label, disabled = fals
                             </button>
                         </div>
 
-                        {/* Cabeçalho do Mês */}
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white capitalize">
-                                {format(currentDate, 'MMMM', { locale: ptBR })}
-                            </h2>
-                            <div className="flex items-center space-x-4">
-                                <button
-                                    type="button"
-                                    onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1))}
-                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                                >
-                                    <ChevronLeft className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1))}
-                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                                >
-                                    <ChevronRight className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Dias da Semana */}
-                        <div className="grid grid-cols-7 mb-4">
-                            {['Mn', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(day => (
-                                <div key={day} className="text-center text-sm font-medium text-gray-500 dark:text-gray-400 py-2">
-                                    {day}
+                        {viewMode === 'day' && (
+                            <>
+                                {/* Cabeçalho do Mês */}
+                                <div className="flex items-center justify-between mb-6">
+                                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white capitalize">
+                                        {format(currentDate, 'MMMM', { locale: ptBR })}
+                                    </h2>
+                                    <div className="flex items-center space-x-4">
+                                        <button
+                                            type="button"
+                                            onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1))}
+                                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                        >
+                                            <ChevronLeft className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1))}
+                                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                        >
+                                            <ChevronRight className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                                        </button>
+                                    </div>
                                 </div>
-                            ))}
-                        </div>
 
-                        {/* Calendário */}
-                        {renderCalendar()}
+                                {/* Dias da Semana */}
+                                <div className="grid grid-cols-7 mb-4">
+                                    {['Mn', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(day => (
+                                        <div key={day} className="text-center text-sm font-medium text-gray-500 dark:text-gray-400 py-2">
+                                            {day}
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Calendário */}
+                                {renderDayView()}
+                            </>
+                        )}
+
+                        {viewMode === 'month' && renderMonthView()}
+                        {viewMode === 'year' && renderYearView()}
                     </div>
                 </>
             )}

@@ -1342,7 +1342,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                             <div className="flex items-center space-x-3">
                                 <button
                                     onClick={() => setSidebarOpen(!sidebarOpen)}
-                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex items-center justify-center"
                                 >
                                     {sidebarOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
                                 </button>
@@ -1354,7 +1354,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 <div className="relative">
                                     <button
                                         onClick={() => setShowAvisosDropdown(!showAvisosDropdown)}
-                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors relative"
+                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors relative flex items-center justify-center"
                                     >
                                         <Bell className="h-5 w-5" />
                                         {unreadAvisosCount > 0 && (
@@ -1438,7 +1438,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         setDarkMode(!darkMode);
                                         localStorage.setItem('darkMode', !darkMode);
                                     }}
-                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex items-center justify-center"
                                 >
                                     {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
                                 </button>
@@ -1598,12 +1598,12 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
                                         Nossa Programação
                                     </h2>
-                                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-700">
-                                        <div className="relative h-64 sm:h-80 md:h-96 bg-gray-900">
+                                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 max-w-xl mx-auto">
+                                        <div className="relative h-40 sm:h-44 md:h-48 bg-gray-900">
                                         <img
                                             src={photos[currentPhotoIndex].url}
                                             alt={photos[currentPhotoIndex].titulo || 'Foto do culto'}
-                                            className="w-full h-full object-cover"
+                                            className="w-full h-full object-contain"
                                         />
                                         {/* Overlay com legenda */}
                                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
