@@ -1600,22 +1600,35 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </h2>
                                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 max-w-xl mx-auto">
                                         <div className="relative h-40 sm:h-44 md:h-48 bg-gray-900">
-                                        <img
-                                            src={photos[currentPhotoIndex].url}
-                                            alt={photos[currentPhotoIndex].titulo || 'Foto do culto'}
-                                            className="w-full h-full object-contain"
-                                        />
+                                        {photos[currentPhotoIndex].url?.match(/\.(mp4|webm|ogg)$/i) ? (
+                                            <video
+                                                src={photos[currentPhotoIndex].url}
+                                                className="w-full h-full object-contain"
+                                                controls
+                                                playsInline
+                                            />
+                                        ) : (
+                                            <img
+                                                src={photos[currentPhotoIndex].url}
+                                                alt={photos[currentPhotoIndex].titulo || 'Foto do culto'}
+                                                className="w-full h-full object-contain"
+                                            />
+                                        )}
                                         {/* Overlay com legenda */}
-                                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
-                                            <p className="text-white font-semibold text-lg">
-                                                {photos[currentPhotoIndex].titulo || 'Sem título'}
-                                            </p>
-                                            {photos[currentPhotoIndex].descricao && (
-                                                <p className="text-gray-200 text-sm mt-1">
-                                                    {photos[currentPhotoIndex].descricao}
-                                                </p>
-                                            )}
-                                        </div>
+                                        {(photos[currentPhotoIndex].titulo || photos[currentPhotoIndex].descricao) && (
+                                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
+                                                {photos[currentPhotoIndex].titulo && (
+                                                    <p className="text-white font-semibold text-lg">
+                                                        {photos[currentPhotoIndex].titulo}
+                                                    </p>
+                                                )}
+                                                {photos[currentPhotoIndex].descricao && (
+                                                    <p className="text-gray-200 text-sm mt-1">
+                                                        {photos[currentPhotoIndex].descricao}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
                                         {/* Botões de navegação */}
                                         {photos.length > 1 && (
                                             <>
