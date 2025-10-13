@@ -6356,7 +6356,8 @@ Montar escala        </button>
                                     const avisoData = {
                                         titulo: newAvisoData.titulo,
                                         mensagem: newAvisoData.mensagem,
-                                        destinatarios: newAvisoData.destinatarios
+                                        destinatarios: newAvisoData.destinatarios,
+                                        autor_id: currentUser?.id || null
                                     };
                                     
                                     const novoAviso = await createAviso(avisoData);

@@ -1615,17 +1615,11 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     <div
                                                         key={event.id}
                                                         onClick={() => handleSelectEvent(event)}
-                                                        className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 border-l-4 cursor-pointer hover:shadow-md transition-all ${isOficina
-                                                                ? 'border-purple-500 hover:border-purple-600'
-                                                                : 'border-blue-500 hover:border-blue-600'
-                                                            }`}
+                                                        className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 border-l-4 border-gray-900 dark:border-white cursor-pointer hover:shadow-md transition-all"
                                                     >
                                                         <div className="flex items-start justify-between">
                                                             <div className="flex-1">
-                                                                <h3 className={`font-semibold text-lg ${isOficina
-                                                                        ? 'text-purple-900 dark:text-purple-200'
-                                                                        : 'text-gray-900 dark:text-white'
-                                                                    }`}>
+                                                                <h3 className="font-semibold text-lg text-gray-900 dark:text-white">
                                                                     {isOficina && '🎓 '}{event.nome}
                                                                 </h3>
                                                                 <div className="flex items-center text-sm text-gray-600 dark:text-gray-400 mt-2">
@@ -1645,7 +1639,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                                 )}
                                                             </div>
                                                             {isOficina && (
-                                                                <span className="ml-3 px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-xs font-medium">
+                                                                <span className="ml-3 px-3 py-1 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-full text-xs font-medium">
                                                                     Oficina
                                                                 </span>
                                                             )}
