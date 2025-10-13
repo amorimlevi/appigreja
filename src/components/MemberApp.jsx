@@ -29,12 +29,14 @@ import {
     List,
     Trash2,
     Phone,
-    Edit2
+    Edit2,
+    Image,
+    Church
 } from 'lucide-react';
 import { format, parseISO, isAfter, isBefore, startOfMonth, endOfMonth, isSameMonth, isToday, addDays, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatId } from '../utils/formatters';
-import { searchMembers, getEventFoods, updateEventFood, registerEventParticipant, unregisterEventParticipant, checkEventRegistration, updateMember, getMinistrySchedules, getMembers, getFamilyByMemberId, getUnreadAvisosCount, markAvisoAsRead, getAvisosWithReadStatus, getPlaylistMusicas, getMemberById, createMinistrySchedule, updateMinistrySchedule, deleteMinistrySchedule, createPlaylistMusica, deletePlaylistMusica, getWorkshops, createWorkshop, updateWorkshop, deleteWorkshop, registerWorkshopParticipant, unregisterWorkshopParticipant, checkWorkshopRegistration, getWorkshopRegistrations } from '../lib/supabaseService';
+import { searchMembers, getEventFoods, updateEventFood, registerEventParticipant, unregisterEventParticipant, checkEventRegistration, updateMember, getMinistrySchedules, getMembers, getFamilyByMemberId, getUnreadAvisosCount, markAvisoAsRead, getAvisosWithReadStatus, getPlaylistMusicas, getMemberById, createMinistrySchedule, updateMinistrySchedule, deleteMinistrySchedule, createPlaylistMusica, deletePlaylistMusica, getWorkshops, createWorkshop, updateWorkshop, deleteWorkshop, registerWorkshopParticipant, unregisterWorkshopParticipant, checkWorkshopRegistration, getWorkshopRegistrations, getPhotos } from '../lib/supabaseService';
 import CustomCalendar from './CustomCalendar';
 
 const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLogout }) => {
@@ -70,6 +72,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
         { id: 'perfil', label: 'Família', icon: Users },
         { id: 'eventos', label: 'Eventos', icon: Calendar },
         { id: 'avisos', label: 'Avisos', icon: Bell },
+        { id: 'galeria', label: 'Cultos', icon: Church },
         { id: 'playlistzoe', label: 'Playlist Zoe', icon: null },
         { id: 'configuracoes', label: 'Configurações', icon: Settings }
     ];
@@ -224,6 +227,10 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     const [showKidsListModal, setShowKidsListModal] = useState(false);
     const [showProfessoresListModal, setShowProfessoresListModal] = useState(false);
     const [showJovensListModal, setShowJovensListModal] = useState(false);
+    const [photos, setPhotos] = useState([]);
+    const [selectedPhoto, setSelectedPhoto] = useState(null);
+    const [showPhotoDetailsModal, setShowPhotoDetailsModal] = useState(false);
+    const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
     const [newKidsScheduleData, setNewKidsScheduleData] = useState({
         turmas: [],
         data: format(new Date(), 'yyyy-MM-dd'),
@@ -317,6 +324,37 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
         const interval = setInterval(loadAvisosData, 30000);
         return () => clearInterval(interval);
     }, [localMember?.id, activeTab]);
+
+    // Marcar todos os avisos como lidos quando acessar a aba de avisos
+    useEffect(() => {
+        const markAllAvisosAsRead = async () => {
+            if (activeTab === 'avisos' && localMember?.id && filteredAvisos.length > 0) {
+                try {
+                    // Marcar apenas avisos não lidos
+                    const unreadAvisos = filteredAvisos.filter(aviso => 
+                        aviso.aviso_notifications && 
+                        aviso.aviso_notifications.length > 0 && 
+                        !aviso.aviso_notifications[0].lido
+                    );
+                    
+                    // Marcar cada aviso não lido como lido
+                    for (const aviso of unreadAvisos) {
+                        await markAvisoAsRead(aviso.id, localMember.id);
+                    }
+                    
+                    // Atualizar lista e contador se houver avisos marcados
+                    if (unreadAvisos.length > 0) {
+                        const avisosDoMembro = await getAvisosWithReadStatus(localMember.id);
+                        setFilteredAvisos(avisosDoMembro || []);
+                        setUnreadAvisosCount(0);
+                    }
+                } catch (error) {
+                    console.error('Erro ao marcar avisos como lidos:', error);
+                }
+            }
+        };
+        markAllAvisosAsRead();
+    }, [activeTab, filteredAvisos.length, localMember?.id]);
 
     // Carregar playlist Zoe
     useEffect(() => {
@@ -464,6 +502,21 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
         loadSchedules();
     }, [activeTab, currentMember]);
+
+    // Carregar fotos quando acessar a aba galeria ou home
+    useEffect(() => {
+        const loadPhotos = async () => {
+            if (activeTab === 'galeria' || activeTab === 'home') {
+                try {
+                    const photosData = await getPhotos();
+                    setPhotos(photosData || []);
+                } catch (error) {
+                    console.error('Erro ao carregar fotos:', error);
+                }
+            }
+        };
+        loadPhotos();
+    }, [activeTab]);
 
     // Verificar se é líder jovens e carregar dados
     useEffect(() => {
@@ -1383,6 +1436,61 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                     {/* Início */}
                     {activeTab === 'home' && (
                         <div className="space-y-6">
+                            {/* Carrossel de Fotos dos Cultos */}
+                            {photos.length > 0 && (
+                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-700">
+                                    <div className="relative h-64 sm:h-80 md:h-96 bg-gray-900">
+                                        <img
+                                            src={photos[currentPhotoIndex].url}
+                                            alt={photos[currentPhotoIndex].titulo || 'Foto do culto'}
+                                            className="w-full h-full object-cover"
+                                        />
+                                        {/* Overlay com legenda */}
+                                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
+                                            <p className="text-white font-semibold text-lg">
+                                                {photos[currentPhotoIndex].titulo || 'Sem título'}
+                                            </p>
+                                            {photos[currentPhotoIndex].descricao && (
+                                                <p className="text-gray-200 text-sm mt-1">
+                                                    {photos[currentPhotoIndex].descricao}
+                                                </p>
+                                            )}
+                                        </div>
+                                        {/* Botões de navegação */}
+                                        {photos.length > 1 && (
+                                            <>
+                                                <button
+                                                    onClick={() => setCurrentPhotoIndex((prev) => (prev === 0 ? photos.length - 1 : prev - 1))}
+                                                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
+                                                >
+                                                    <ChevronLeft className="w-6 h-6" />
+                                                </button>
+                                                <button
+                                                    onClick={() => setCurrentPhotoIndex((prev) => (prev === photos.length - 1 ? 0 : prev + 1))}
+                                                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
+                                                >
+                                                    <ChevronRight className="w-6 h-6" />
+                                                </button>
+                                                {/* Indicadores */}
+                                                <div className="absolute bottom-20 left-1/2 -translate-x-1/2 flex gap-2">
+                                                    {photos.map((_, index) => (
+                                                        <button
+                                                            key={index}
+                                                            onClick={() => setCurrentPhotoIndex(index)}
+                                                            className={`w-2 h-2 rounded-full transition-all ${
+                                                                index === currentPhotoIndex
+                                                                    ? 'bg-white w-8'
+                                                                    : 'bg-white/50 hover:bg-white/70'
+                                                            }`}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Ouça Agora */}
                             {playlistMusicas.length > 0 && (
                                 <div className="bg-black rounded-lg shadow-lg p-6">
@@ -1672,26 +1780,11 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             return (
                                                 <div 
                                                     key={aviso.id} 
-                                                    className={`p-4 rounded-lg border cursor-pointer transition-colors ${
+                                                    className={`p-4 rounded-lg border transition-colors ${
                                                         isUnread 
-                                                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/30' 
-                                                            : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' 
+                                                            : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600'
                                                     }`}
-                                                    onClick={async () => {
-                                                        try {
-                                                            if (isUnread) {
-                                                                await markAvisoAsRead(aviso.id, localMember.id);
-                                                                // Atualizar lista de avisos
-                                                                const avisosDoMembro = await getAvisosWithReadStatus(localMember.id);
-                                                                setFilteredAvisos(avisosDoMembro || []);
-                                                                // Atualizar contador
-                                                                const newCount = await getUnreadAvisosCount(localMember.id);
-                                                                setUnreadAvisosCount(newCount);
-                                                            }
-                                                        } catch (error) {
-                                                            console.error('Erro ao marcar aviso como lido:', error);
-                                                        }
-                                                    }}
                                                 >
                                                     <div className="flex items-start justify-between">
                                                         <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
@@ -2367,6 +2460,99 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                     )}
 
                     {/* Playlist Zoe */}
+                    {activeTab === 'galeria' && (
+                        <div className="space-y-4">
+                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Galeria de Fotos</h2>
+                            
+                            {photos.length === 0 ? (
+                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-12 border border-gray-200 dark:border-gray-700 text-center">
+                                    <Image className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
+                                    <p className="text-gray-500 dark:text-gray-400">Nenhuma foto na galeria ainda.</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                    {photos.map((photo) => (
+                                        <div 
+                                            key={photo.id}
+                                            className="relative group cursor-pointer rounded-lg overflow-hidden shadow-md hover:shadow-xl transition-shadow bg-white dark:bg-gray-800"
+                                            onClick={() => {
+                                                setSelectedPhoto(photo);
+                                                setShowPhotoDetailsModal(true);
+                                            }}
+                                        >
+                                            <img 
+                                                src={photo.url} 
+                                                alt={photo.titulo}
+                                                className="w-full h-48 object-cover"
+                                            />
+                                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center">
+                                                <div className="text-white opacity-0 group-hover:opacity-100 transition-opacity text-center p-2">
+                                                    <p className="font-semibold text-sm">{photo.titulo}</p>
+                                                </div>
+                                            </div>
+                                            <div className="absolute top-2 right-2">
+                                                <span className="px-2 py-1 bg-black bg-opacity-50 text-white text-xs rounded">
+                                                    {photo.categoria}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Modal de Detalhes da Foto */}
+                            {showPhotoDetailsModal && selectedPhoto && (
+                                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                                    <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                                        <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
+                                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">{selectedPhoto.titulo}</h2>
+                                            <button
+                                                onClick={() => setShowPhotoDetailsModal(false)}
+                                                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                                            >
+                                                <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                                            </button>
+                                        </div>
+
+                                        <div className="p-6 space-y-4">
+                                            <img 
+                                                src={selectedPhoto.url} 
+                                                alt={selectedPhoto.titulo}
+                                                className="w-full rounded-lg"
+                                            />
+                                            
+                                            {selectedPhoto.descricao && (
+                                                <p className="text-gray-600 dark:text-gray-400">{selectedPhoto.descricao}</p>
+                                            )}
+
+                                            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                                <div>
+                                                    <p className="text-sm text-gray-500 dark:text-gray-400">Categoria</p>
+                                                    <p className="font-medium text-gray-900 dark:text-white capitalize">{selectedPhoto.categoria}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm text-gray-500 dark:text-gray-400">Data</p>
+                                                    <p className="font-medium text-gray-900 dark:text-white">
+                                                        {selectedPhoto.data_foto ? format(new Date(selectedPhoto.data_foto), 'dd/MM/yyyy') : '-'}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex justify-end pt-4">
+                                                <button
+                                                    onClick={() => setShowPhotoDetailsModal(false)}
+                                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                                >
+                                                    Fechar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {activeTab === 'playlistzoe' && (
                         <div className="space-y-4">
                             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">

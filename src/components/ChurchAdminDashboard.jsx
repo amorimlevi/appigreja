@@ -34,14 +34,17 @@ import {
     LogOut,
     Bell,
     Send,
-    CheckCircle
+    CheckCircle,
+    Image,
+    Upload,
+    Church
 } from 'lucide-react';
 import { format, isAfter, isBefore, startOfWeek, endOfWeek, addDays, subDays, differenceInYears, startOfMonth, endOfMonth, isSameMonth, isToday, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import CustomCalendar from './CustomCalendar';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { formatId } from '../utils/formatters';
-import { getEventFoods, getEventParticipants, deleteEventFood, createMinistrySchedule, getMinistrySchedules, updateMinistrySchedule, deleteMinistrySchedule, getWorkshops, deleteWorkshop, createWorkshop, createAviso } from '../lib/supabaseService';
+import { getEventFoods, getEventParticipants, deleteEventFood, createMinistrySchedule, getMinistrySchedules, updateMinistrySchedule, deleteMinistrySchedule, getWorkshops, deleteWorkshop, createWorkshop, createAviso, uploadPhoto, getPhotos, deletePhoto } from '../lib/supabaseService';
 import { supabase } from '../lib/supabaseClient';
 
 const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], families = [], onAddEvent, onEditEvent, onDeleteEvent, onAddMember, onEditMember, onDeleteMember, onAddFamily, onEditFamily, onLogout }) => {
@@ -221,6 +224,17 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         alimentacao: false,
         comidas: []
     });
+    const [photos, setPhotos] = useState([]);
+    const [showPhotoModal, setShowPhotoModal] = useState(false);
+    const [newPhotoData, setNewPhotoData] = useState({
+        titulo: '',
+        descricao: '',
+        categoria: 'geral',
+        data_foto: format(new Date(), 'yyyy-MM-dd'),
+        file: null
+    });
+    const [selectedPhoto, setSelectedPhoto] = useState(null);
+    const [showPhotoDetailsModal, setShowPhotoDetailsModal] = useState(false);
 
     // Aplicar tema escuro ao DOM
     React.useEffect(() => {
@@ -296,6 +310,21 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         if (activeTab === 'jovens') {
             loadWorkshops();
         }
+    }, [activeTab]);
+
+    // Carregar fotos quando acessar a aba galeria
+    useEffect(() => {
+        const loadPhotos = async () => {
+            if (activeTab === 'galeria') {
+                try {
+                    const photosData = await getPhotos();
+                    setPhotos(photosData || []);
+                } catch (error) {
+                    console.error('Erro ao carregar fotos:', error);
+                }
+            }
+        };
+        loadPhotos();
     }, [activeTab]);
 
     const toggleDarkMode = () => {
@@ -809,6 +838,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         { id: 'events', label: 'Eventos', icon: Calendar },
         { id: 'birthdays', label: 'Aniversários', icon: Gift },
         { id: 'avisos', label: 'Avisos', icon: Bell },
+        { id: 'galeria', label: 'Cultos', icon: Church },
         { id: 'diaconia', label: 'Diaconia', icon: Heart },
         { id: 'louvor', label: 'Louvor', icon: Music },
         { id: 'playlistzoe', label: 'Playlist Zoe', icon: Music },
@@ -2455,6 +2485,267 @@ Montar escala        </button>
         );
     };
 
+    const renderGaleria = () => {
+        const handleUploadPhoto = async (e) => {
+            e.preventDefault();
+            if (!newPhotoData.file) {
+                alert('Por favor, selecione uma foto.');
+                return;
+            }
+
+            try {
+                await uploadPhoto(newPhotoData.file, {
+                    titulo: newPhotoData.titulo,
+                    descricao: newPhotoData.descricao,
+                    categoria: newPhotoData.categoria,
+                    data_foto: newPhotoData.data_foto
+                }, null); // Por enquanto não vinculamos ao autor
+
+                // Recarregar fotos
+                const photosData = await getPhotos();
+                setPhotos(photosData || []);
+                
+                // Fechar modal e limpar form
+                setShowPhotoModal(false);
+                setNewPhotoData({
+                    titulo: '',
+                    descricao: '',
+                    categoria: 'geral',
+                    data_foto: format(new Date(), 'yyyy-MM-dd'),
+                    file: null
+                });
+            } catch (error) {
+                console.error('Erro ao fazer upload da foto:', error);
+                alert('Erro ao fazer upload da foto. Tente novamente.');
+            }
+        };
+
+        const handleDeletePhoto = async (photo) => {
+            if (!window.confirm('Deseja realmente deletar esta foto?')) return;
+
+            try {
+                await deletePhoto(photo.id, photo.storage_path);
+                const photosData = await getPhotos();
+                setPhotos(photosData || []);
+                setShowPhotoDetailsModal(false);
+            } catch (error) {
+                console.error('Erro ao deletar foto:', error);
+                alert('Erro ao deletar foto. Tente novamente.');
+            }
+        };
+
+        return (
+            <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                    <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Galeria de Fotos</h1>
+                    <button 
+                        onClick={() => setShowPhotoModal(true)}
+                        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                        <Upload className="w-4 h-4 mr-2" />
+                        Upload Foto
+                    </button>
+                </div>
+
+                {photos.length === 0 ? (
+                    <div className="card text-center py-12">
+                        <Image className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
+                        <p className="text-gray-500 dark:text-gray-400">Nenhuma foto na galeria ainda.</p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {photos.map((photo) => (
+                            <div 
+                                key={photo.id}
+                                className="relative group cursor-pointer rounded-lg overflow-hidden shadow-md hover:shadow-xl transition-shadow"
+                                onClick={() => {
+                                    setSelectedPhoto(photo);
+                                    setShowPhotoDetailsModal(true);
+                                }}
+                            >
+                                <img 
+                                    src={photo.url} 
+                                    alt={photo.titulo}
+                                    className="w-full h-48 object-cover"
+                                />
+                                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center">
+                                    <div className="text-white opacity-0 group-hover:opacity-100 transition-opacity text-center p-2">
+                                        <p className="font-semibold">{photo.titulo}</p>
+                                    </div>
+                                </div>
+                                <div className="absolute top-2 right-2">
+                                    <span className="px-2 py-1 bg-black bg-opacity-50 text-white text-xs rounded">
+                                        {photo.categoria}
+                                    </span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Modal de Upload */}
+                {showPhotoModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+                            <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
+                                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Upload de Foto</h2>
+                                <button
+                                    onClick={() => setShowPhotoModal(false)}
+                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                                >
+                                    <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleUploadPhoto} className="p-6 space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Foto *
+                                    </label>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        required
+                                        onChange={(e) => setNewPhotoData({ ...newPhotoData, file: e.target.files[0] })}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Título *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={newPhotoData.titulo}
+                                        onChange={(e) => setNewPhotoData({ ...newPhotoData, titulo: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Descrição
+                                    </label>
+                                    <textarea
+                                        value={newPhotoData.descricao}
+                                        onChange={(e) => setNewPhotoData({ ...newPhotoData, descricao: e.target.value })}
+                                        rows={3}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Categoria
+                                    </label>
+                                    <select
+                                        value={newPhotoData.categoria}
+                                        onChange={(e) => setNewPhotoData({ ...newPhotoData, categoria: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                    >
+                                        <option value="geral">Geral</option>
+                                        <option value="evento">Evento</option>
+                                        <option value="culto">Culto</option>
+                                        <option value="kids">Kids</option>
+                                        <option value="jovens">Jovens</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Data da Foto
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={newPhotoData.data_foto}
+                                        onChange={(e) => setNewPhotoData({ ...newPhotoData, data_foto: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                    />
+                                </div>
+
+                                <div className="flex gap-2 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPhotoModal(false)}
+                                        className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                    >
+                                        Upload
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal de Detalhes da Foto */}
+                {showPhotoDetailsModal && selectedPhoto && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                            <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
+                                <h2 className="text-xl font-bold text-gray-900 dark:text-white">{selectedPhoto.titulo}</h2>
+                                <button
+                                    onClick={() => setShowPhotoDetailsModal(false)}
+                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                                >
+                                    <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                                </button>
+                            </div>
+
+                            <div className="p-6 space-y-4">
+                                <img 
+                                    src={selectedPhoto.url} 
+                                    alt={selectedPhoto.titulo}
+                                    className="w-full rounded-lg"
+                                />
+                                
+                                {selectedPhoto.descricao && (
+                                    <p className="text-gray-600 dark:text-gray-400">{selectedPhoto.descricao}</p>
+                                )}
+
+                                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                    <div>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">Categoria</p>
+                                        <p className="font-medium text-gray-900 dark:text-white capitalize">{selectedPhoto.categoria}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">Data</p>
+                                        <p className="font-medium text-gray-900 dark:text-white">
+                                            {selectedPhoto.data_foto ? format(new Date(selectedPhoto.data_foto), 'dd/MM/yyyy') : '-'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2 pt-4">
+                                    <button
+                                        onClick={() => setShowPhotoDetailsModal(false)}
+                                        className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+                                    >
+                                        Fechar
+                                    </button>
+                                    <button
+                                        onClick={() => handleDeletePhoto(selectedPhoto)}
+                                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                        Deletar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
     const renderAvisos = () => {
         const getDestinatariosCount = (destinatarios) => {
             // Se destinatarios é uma string (avisos antigos), converter para array
@@ -2808,6 +3099,7 @@ Montar escala        </button>
                     {activeTab === 'events' && renderEvents()}
                     {activeTab === 'birthdays' && renderBirthdays()}
                     {activeTab === 'avisos' && renderAvisos()}
+                    {activeTab === 'galeria' && renderGaleria()}
                     {activeTab === 'diaconia' && renderDiaconia()}
                     {activeTab === 'louvor' && renderLouvor()}
                     {activeTab === 'playlistzoe' && renderPlaylistZoe()}

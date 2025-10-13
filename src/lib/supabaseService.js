@@ -814,3 +814,99 @@ export const subscribeToTable = (tableName, onInsert, onUpdate, onDelete) => {
     
     return subscription
 }
+
+// ========== FOTOS / GALERIA ==========
+
+export const uploadPhoto = async (file, photoData, userId) => {
+    try {
+        // Gerar nome único para o arquivo
+        const fileExt = file.name.split('.').pop()
+        const fileName = `${userId}/${Date.now()}.${fileExt}`
+        
+        // Upload para o Storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('church-photos')
+            .upload(fileName, file, {
+                cacheControl: '3600',
+                upsert: false
+            })
+        
+        if (uploadError) throw uploadError
+        
+        // Obter URL pública da foto
+        const { data: { publicUrl } } = supabase.storage
+            .from('church-photos')
+            .getPublicUrl(fileName)
+        
+        // Salvar metadados na tabela photos
+        const { data, error } = await supabase
+            .from('photos')
+            .insert([{
+                titulo: photoData.titulo,
+                descricao: photoData.descricao || null,
+                url: publicUrl,
+                storage_path: fileName,
+                autor_id: userId,
+                categoria: photoData.categoria || 'geral',
+                data_foto: photoData.data_foto || new Date().toISOString().split('T')[0]
+            }])
+            .select()
+            .single()
+        
+        if (error) throw error
+        return data
+    } catch (error) {
+        console.error('Erro ao fazer upload da foto:', error)
+        throw error
+    }
+}
+
+export const getPhotos = async (categoria = null) => {
+    let query = supabase
+        .from('photos')
+        .select('*')
+        .order('created_at', { ascending: false })
+    
+    if (categoria) {
+        query = query.eq('categoria', categoria)
+    }
+    
+    const { data, error } = await query
+    
+    if (error) throw error
+    return data
+}
+
+export const deletePhoto = async (photoId, storagePath) => {
+    try {
+        // Deletar do Storage
+        const { error: storageError } = await supabase.storage
+            .from('church-photos')
+            .remove([storagePath])
+        
+        if (storageError) throw storageError
+        
+        // Deletar da tabela
+        const { error } = await supabase
+            .from('photos')
+            .delete()
+            .eq('id', photoId)
+        
+        if (error) throw error
+    } catch (error) {
+        console.error('Erro ao deletar foto:', error)
+        throw error
+    }
+}
+
+export const updatePhoto = async (photoId, updates) => {
+    const { data, error } = await supabase
+        .from('photos')
+        .update(updates)
+        .eq('id', photoId)
+        .select()
+        .single()
+    
+    if (error) throw error
+    return data
+}
