@@ -23,10 +23,6 @@ import {
 } from './lib/supabaseService'
 
 console.log('App.jsx carregado!')
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('DOM carregado!')
-  document.body.style.backgroundColor = 'red' // Debug: fundo vermelho temporário
-})
 
 // Dados de exemplo para demonstração
 const sampleMembers = [
@@ -528,7 +524,8 @@ function AppContent() {
         }
       }
       
-      setEvents([...events, newEvent]);
+      // Não adiciona ao estado aqui - a subscription realtime fará isso automaticamente
+      // setEvents([...events, newEvent]);
     } catch (error) {
       console.error('Erro ao criar evento:', error);
       alert('Erro ao criar evento');

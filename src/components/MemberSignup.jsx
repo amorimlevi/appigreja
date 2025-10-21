@@ -1,8 +1,8 @@
-import React, { useState, useRef } from 'react';
-import { UserPlus, ArrowLeft, Moon, Sun, X, Calendar } from 'lucide-react';
+import React, { useState } from 'react';
+import { UserPlus, ArrowLeft, Moon, Sun, X } from 'lucide-react';
+import CustomCalendar from './CustomCalendar';
 
 const MemberSignup = ({ onSignup, onBack }) => {
-    const dateInputRef = useRef(null);
     const [darkMode, setDarkMode] = useState(() => {
         return localStorage.getItem('darkMode') === 'true' || false;
     });
@@ -32,78 +32,89 @@ const MemberSignup = ({ onSignup, onBack }) => {
     };
     
     const [error, setError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        
+        if (isSubmitting) return; // Previne múltiplos submits
+        
         setError('');
+        setIsSubmitting(true);
 
         // Validações
         if (!formData.nome || !formData.telefone || !formData.nascimento) {
             setError('Por favor, preencha todos os campos obrigatórios');
+            setIsSubmitting(false);
             return;
         }
 
         if (formData.senha !== formData.confirmarSenha) {
             setError('As senhas não coincidem');
+            setIsSubmitting(false);
             return;
         }
 
         if (formData.senha.length < 4) {
             setError('A senha deve ter pelo menos 4 caracteres');
+            setIsSubmitting(false);
             return;
         }
 
         // Validar se pelo menos uma função foi selecionada
         if (formData.funcoes.length === 0) {
             setError('Selecione pelo menos uma função');
+            setIsSubmitting(false);
             return;
         }
 
-        // Criar novo membro
-        const newMember = {
-            nome: formData.nome,
-            email: formData.email,
-            telefone: formData.telefone,
-            nascimento: formData.nascimento,
-            idade: formData.idade,
-            genero: formData.genero,
-            funcoes: formData.funcoes,
-            status: 'ativo',
-            senha: formData.senha
-        };
+        try {
+            // Criar novo membro
+            const newMember = {
+                nome: formData.nome,
+                email: formData.email,
+                telefone: formData.telefone,
+                nascimento: formData.nascimento,
+                idade: formData.idade,
+                genero: formData.genero,
+                funcoes: formData.funcoes,
+                status: 'ativo',
+                senha: formData.senha
+            };
 
-        onSignup(newMember);
+            await onSignup(newMember);
+        } catch (err) {
+            setError('Erro ao cadastrar. Tente novamente.');
+            setIsSubmitting(false);
+        }
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 px-4">
-            <div className="max-w-md w-full space-y-8">
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8">
-                    <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 bg-white dark:bg-black overflow-y-scroll" style={{
+            paddingTop: 'calc(env(safe-area-inset-top, 44px) + 16px)',
+            paddingBottom: 'calc(env(safe-area-inset-bottom, 16px) + 80px)',
+            paddingLeft: '16px',
+            paddingRight: '16px',
+            WebkitOverflowScrolling: 'touch',
+            overscrollBehavior: 'contain'
+        }}>
+            <div className="max-w-md w-full mx-auto">
+                <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6">
+                    <div className="flex justify-start items-center mb-6">
                         <button
                             onClick={onBack}
                             className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
                         >
                             <ArrowLeft className="h-6 w-6" />
                         </button>
-                        <button
-                            onClick={() => {
-                                setDarkMode(!darkMode);
-                                localStorage.setItem('darkMode', !darkMode);
-                                document.documentElement.classList.toggle('dark');
-                            }}
-                            className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
-                        >
-                            {darkMode ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
-                        </button>
                     </div>
 
-                    <div className="text-center mb-8">
-                        <div className="inline-flex items-center justify-center w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-full mb-4">
-                            <UserPlus className="h-10 w-10 text-gray-900 dark:text-white" />
+                    <div className="text-center mb-6">
+                        <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full mb-3">
+                            <UserPlus className="h-8 w-8 text-gray-900 dark:text-white" />
                         </div>
-                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Cadastro de Membro</h1>
-                        <p className="text-gray-600 dark:text-gray-400">Preencha seus dados para se cadastrar</p>
+                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Cadastro de Membro</h1>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Preencha seus dados para se cadastrar</p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
@@ -146,52 +157,18 @@ const MemberSignup = ({ onSignup, onBack }) => {
                             />
                         </div>
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Data de Nascimento *
-                            </label>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    value={formData.nascimento}
-                                    onChange={(e) => {
-                                        const newBirthDate = e.target.value;
-                                        const calculatedAge = calculateAge(newBirthDate);
-                                        setFormData({ 
-                                            ...formData, 
-                                            nascimento: newBirthDate,
-                                            idade: calculatedAge
-                                        });
-                                    }}
-                                    placeholder="dd/mm/aaaa"
-                                    className="w-full px-4 py-3 pr-12 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-gray-900 dark:focus:ring-white focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
-                                    required
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => dateInputRef.current?.showPicker()}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none"
-                                >
-                                    <Calendar className="w-5 h-5" />
-                                </button>
-                                <input
-                                    ref={dateInputRef}
-                                    type="date"
-                                    value={formData.nascimento}
-                                    onChange={(e) => {
-                                        const newBirthDate = e.target.value;
-                                        const calculatedAge = calculateAge(newBirthDate);
-                                        setFormData({ 
-                                            ...formData, 
-                                            nascimento: newBirthDate,
-                                            idade: calculatedAge
-                                        });
-                                    }}
-                                    className="sr-only absolute opacity-0 pointer-events-none"
-                                    required
-                                />
-                            </div>
-                        </div>
+                        <CustomCalendar
+                            label="Data de Nascimento *"
+                            value={formData.nascimento}
+                            onChange={(newBirthDate) => {
+                                const calculatedAge = calculateAge(newBirthDate);
+                                setFormData({ 
+                                    ...formData, 
+                                    nascimento: newBirthDate,
+                                    idade: calculatedAge
+                                });
+                            }}
+                        />
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -301,11 +278,20 @@ const MemberSignup = ({ onSignup, onBack }) => {
                             </div>
                         )}
 
+                        {isSubmitting && (
+                            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                                <p className="text-sm text-blue-600 dark:text-blue-400 text-center">
+                                    ⏳ Conectando com o servidor...
+                                </p>
+                            </div>
+                        )}
+
                         <button
                             type="submit"
-                            className="w-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 py-3 rounded-lg font-semibold hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+                            disabled={isSubmitting}
+                            className="w-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 py-3 rounded-lg font-semibold hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Cadastrar
+                            {isSubmitting ? 'Cadastrando...' : 'Cadastrar'}
                         </button>
                     </form>
 

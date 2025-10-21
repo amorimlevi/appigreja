@@ -7,6 +7,58 @@ export default function CustomCalendar({ value, onChange, label, disabled = fals
     const [isOpen, setIsOpen] = useState(false);
     const [viewMode, setViewMode] = useState('month'); // 'day', 'month', 'year'
     const [currentDate, setCurrentDate] = useState(value ? parseISO(value) : new Date());
+    const [inputValue, setInputValue] = useState(() => {
+        if (!value) return '';
+        try {
+            return format(parseISO(value), 'dd/MM/yyyy');
+        } catch {
+            return '';
+        }
+    });
+
+    // Formatar data enquanto digita
+    const formatDateInput = (input) => {
+        const numbers = input.replace(/\D/g, '');
+        if (numbers.length <= 2) return numbers;
+        if (numbers.length <= 4) return `${numbers.slice(0, 2)}/${numbers.slice(2)}`;
+        return `${numbers.slice(0, 2)}/${numbers.slice(2, 4)}/${numbers.slice(4, 8)}`;
+    };
+
+    // Converter DD/MM/YYYY para YYYY-MM-DD
+    const convertToISODate = (dateStr) => {
+        const numbers = dateStr.replace(/\D/g, '');
+        if (numbers.length !== 8) return null;
+
+        const day = numbers.slice(0, 2);
+        const month = numbers.slice(2, 4);
+        const year = numbers.slice(4, 8);
+
+        const date = new Date(year, month - 1, day);
+        if (date.getDate() !== parseInt(day) || date.getMonth() !== parseInt(month) - 1) {
+            return null; // Data inválida
+        }
+
+        return `${year}-${month}-${day}`;
+    };
+
+    const handleInputChange = (e) => {
+        const formatted = formatDateInput(e.target.value);
+        setInputValue(formatted);
+
+        if (formatted.length === 10) {
+            const isoDate = convertToISODate(formatted);
+            if (isoDate) {
+                onChange(isoDate);
+                setCurrentDate(parseISO(isoDate));
+            }
+        }
+    };
+
+    const handleDateSelect = (date) => {
+        onChange(date);
+        setInputValue(format(parseISO(date), 'dd/MM/yyyy'));
+        setIsOpen(false);
+    };
 
     const renderDayView = () => {
         const monthStart = startOfMonth(currentDate);
@@ -31,8 +83,7 @@ export default function CustomCalendar({ value, onChange, label, disabled = fals
                         key={day}
                         onClick={() => {
                             if (!disabled) {
-                                onChange(format(cloneDay, 'yyyy-MM-dd'));
-                                setIsOpen(false);
+                                handleDateSelect(format(cloneDay, 'yyyy-MM-dd'));
                             }
                         }}
                         className={`
@@ -122,20 +173,34 @@ export default function CustomCalendar({ value, onChange, label, disabled = fals
                     {label}
                 </label>
             )}
-            
-            <button
-                type="button"
-                onClick={() => !disabled && setIsOpen(!isOpen)}
-                disabled={disabled}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-left hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-                {value ? format(parseISO(value), "d 'de' MMMM 'de' yyyy", { locale: ptBR }) : 'Selecione uma data'}
-            </button>
+
+            <div className="relative">
+                <input
+                    type="text"
+                    value={inputValue}
+                    onChange={handleInputChange}
+                    onFocus={() => !disabled && setIsOpen(true)}
+                    disabled={disabled}
+                    placeholder="DD/MM/AAAA"
+                    maxLength={10}
+                    className="w-full px-4 py-3 pr-12 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-gray-900 dark:focus:ring-white focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                <button
+                    type="button"
+                    onClick={() => !disabled && setIsOpen(!isOpen)}
+                    disabled={disabled}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                </button>
+            </div>
 
             {isOpen && (
                 <>
-                    <div 
-                        className="fixed inset-0 z-40" 
+                    <div
+                        className="fixed inset-0 z-40"
                         onClick={() => setIsOpen(false)}
                     />
                     <div className="absolute z-50 mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6 border border-gray-200 dark:border-gray-700 w-full min-w-[320px]">
@@ -144,35 +209,32 @@ export default function CustomCalendar({ value, onChange, label, disabled = fals
                             <button
                                 type="button"
                                 onClick={() => setViewMode('day')}
-                                className={`px-6 py-2 text-sm font-medium transition-colors ${
-                                    viewMode === 'day'
+                                className={`px-6 py-2 text-sm font-medium transition-colors ${viewMode === 'day'
                                         ? 'border-b-2 border-gray-900 dark:border-white text-gray-900 dark:text-white'
                                         : 'text-gray-500 dark:text-gray-400'
-                                }`}
+                                    }`}
                             >
-                                Day
+                                Dia
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setViewMode('month')}
-                                className={`px-6 py-2 text-sm font-medium transition-colors ${
-                                    viewMode === 'month'
+                                className={`px-6 py-2 text-sm font-medium transition-colors ${viewMode === 'month'
                                         ? 'border-b-2 border-gray-900 dark:border-white text-gray-900 dark:text-white'
                                         : 'text-gray-500 dark:text-gray-400'
-                                }`}
+                                    }`}
                             >
-                                Month
+                                Mês
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setViewMode('year')}
-                                className={`px-6 py-2 text-sm font-medium transition-colors ${
-                                    viewMode === 'year'
+                                className={`px-6 py-2 text-sm font-medium transition-colors ${viewMode === 'year'
                                         ? 'border-b-2 border-gray-900 dark:border-white text-gray-900 dark:text-white'
                                         : 'text-gray-500 dark:text-gray-400'
-                                }`}
+                                    }`}
                             >
-                                Year
+                                Ano
                             </button>
                         </div>
 

@@ -1,0 +1,31 @@
+{
+  "appId": "com.igreja.admin",
+  "appName": "Igreja Admin",
+  "webDir": "dist",
+  "server": {
+    "cleartext": true,
+    "allowNavigation": ["*"]
+  },
+  "plugins": {
+    "StatusBar": {
+      "style": "LIGHT",
+      "backgroundColor": "#FFFFFF"
+    },
+    "Keyboard": {
+      "resize": "body",
+      "style": "dark"
+    }
+  },
+  "ios": {
+    "path": "ios-admin",
+    "contentInset": "always",
+    "scrollEnabled": true
+  },
+  "android": {
+    "path": "android-admin",
+    "buildOptions": {
+      "keystorePath": "release-key.keystore",
+      "keystoreAlias": "admin-app"
+    }
+  }
+}

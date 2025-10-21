@@ -4,32 +4,53 @@
 
 /* Safe Area Support para iOS e Android */
 :root {
-    --safe-area-inset-top: env(safe-area-inset-top);
-    --safe-area-inset-bottom: env(safe-area-inset-bottom);
-    --safe-area-inset-left: env(safe-area-inset-left);
-    --safe-area-inset-right: env(safe-area-inset-right);
+    --safe-area-inset-top: env(safe-area-inset-top, 0px);
+    --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-inset-left: env(safe-area-inset-left, 0px);
+    --safe-area-inset-right: env(safe-area-inset-right, 0px);
 
-    /* Status bar height padrão */
+    /* Status bar height padrão para iOS */
     --status-bar-height: 44px;
 }
 
 /* Reset para permitir conteúdo sob status bar */
 html,
 body {
-    margin: 0;
-    padding: 0;
-    height: 100%;
-    width: 100%;
-    overflow-x: hidden;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    width: 100% !important;
+    overflow: hidden !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
     -webkit-overflow-scrolling: touch;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none !important;
 }
 
+/* Safe area removida - status bar transparente */
+
 #root {
-    margin: 0;
-    padding: 0;
-    height: 100%;
-    width: 100%;
-    overflow-x: hidden;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    width: 100% !important;
+    overflow: hidden !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: none !important;
 }
 
 @layer components {
@@ -46,7 +67,7 @@ body {
 
     .card {
         @apply bg-white rounded-lg shadow-sm p-6 border-0 hover:shadow-md transition-shadow duration-200;
-        @apply dark:bg-gray-800 dark:border-0 dark:hover:shadow-gray-900/20;
+        @apply dark:bg-black dark:border-0 dark:hover:shadow-gray-900/20;
     }
 
     .stats-card {
@@ -73,14 +94,15 @@ textarea {
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
-    background-color: white;
+    font-size: 16px; /* Previne zoom ao focar no iOS */
 }
 
-.dark input,
-.dark select,
-.dark textarea {
-    background-color: rgb(55, 65, 81);
-    /* gray-700 */
+/* Touch action apenas em áreas roláveis */
+
+/* Garantir que SVGs não capturem toques nos botões */
+button svg,
+a svg {
+    pointer-events: none;
 }
 
 /* Scrollbar customization */

@@ -46,9 +46,12 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { formatId } from '../utils/formatters';
 import { getEventFoods, getEventParticipants, deleteEventFood, createMinistrySchedule, getMinistrySchedules, updateMinistrySchedule, deleteMinistrySchedule, getWorkshops, deleteWorkshop, createWorkshop, createAviso, uploadPhoto, getPhotos, deletePhoto } from '../lib/supabaseService';
 import { supabase } from '../lib/supabaseClient';
+import { useBlockScroll } from '../hooks/useBlockScroll';
+import { useChurchLogo } from '../hooks/useChurchSettings';
 
 const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], families = [], onAddEvent, onEditEvent, onDeleteEvent, onAddMember, onEditMember, onDeleteMember, onAddFamily, onEditFamily, onLogout }) => {
     console.log('ChurchAdminDashboard renderizando - members:', members.length, 'events:', events.length, 'families:', families.length)
+    const { value: logoUrl } = useChurchLogo();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('dashboard');
     const [genderFilter, setGenderFilter] = useState('all');
@@ -61,7 +64,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
     const [memberView, setMemberView] = useState('individual'); // 'individual' ou 'familias'
     const [calendarDate, setCalendarDate] = useState(new Date());
     const [darkMode, setDarkMode] = useState(() => {
-        return localStorage.getItem('darkMode') === 'true' || false;
+        return window.matchMedia('(prefers-color-scheme: dark)').matches;
     });
     const [showMemberModal, setShowMemberModal] = useState(false);
     const [showEventModal, setShowEventModal] = useState(false);
@@ -236,6 +239,18 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
     const [selectedPhoto, setSelectedPhoto] = useState(null);
     const [showPhotoDetailsModal, setShowPhotoDetailsModal] = useState(false);
 
+    useBlockScroll(
+        sidebarOpen || showEscalaLouvorModal || showMemberModal || 
+        showEventModal || showPrayerModal || showEditMemberModal || 
+        showDeleteMemberModal || showFamilyModal || showEditFamilyModal ||
+        showEventDetailsModal || showEditEventModal || showDeleteEventModal ||
+        showAvisoModal || showOficinaModal || showPhotoModal || showPhotoDetailsModal ||
+        showViewEscalaModal || showEscalaProfessoresModal || showDetalhesEscalaProfessoresModal ||
+        showEditEscalaProfessoresModal || showMusicModal || showEscalaModal || 
+        showEscalaOptionsModal || showEditEscalaModal || showMusicosModal ||
+        showMusicasCadastradasModal || showProfessoresModal || showCriancasModal || showJovensModal
+    );
+
     // Aplicar tema escuro ao DOM
     React.useEffect(() => {
         if (darkMode) {
@@ -243,8 +258,30 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         } else {
             document.documentElement.classList.remove('dark');
         }
-        localStorage.setItem('darkMode', darkMode.toString());
     }, [darkMode]);
+
+    // Detectar mudanças na preferência de cor do sistema
+    React.useEffect(() => {
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        
+        const handleChange = (e) => {
+            setDarkMode(e.matches);
+        };
+        
+        mediaQuery.addEventListener('change', handleChange);
+        return () => mediaQuery.removeEventListener('change', handleChange);
+    }, []);
+
+    // Forçar recálculo de viewport no mount
+    React.useEffect(() => {
+        const forceResize = () => {
+            window.dispatchEvent(new Event('resize'));
+        };
+        
+        forceResize();
+        setTimeout(forceResize, 100);
+        setTimeout(forceResize, 300);
+    }, []);
 
     // Carregar escalas de louvor do banco
     React.useEffect(() => {
@@ -326,10 +363,6 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         };
         loadPhotos();
     }, [activeTab]);
-
-    const toggleDarkMode = () => {
-        setDarkMode(!darkMode);
-    };
 
     // Handlers para modais
     const handleAddMember = () => {
@@ -850,7 +883,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
     const renderDashboard = () => (
         <div className="space-y-6">
             <div className="flex items-center justify-between mb-4">
-                <img src="https://res.cloudinary.com/dxchbdcai/image/upload/v1759592247/Design_sem_nome_10_nwkjse.png" alt="Logo da Igreja" className="w-20 h-20 md:w-24 md:h-24 object-contain" />
+                <img src={logoUrl} alt="Logo da Igreja" className="w-20 h-20 md:w-24 md:h-24 object-contain" />
                 <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Igreja Zoe</h1>
             </div>
             <div className="flex flex-col md:flex-row gap-2 mb-4">
@@ -1673,40 +1706,15 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             {/* Configurações de Aparência */}
             <div className="card">
                 <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Aparência</h3>
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h4 className="text-sm font-medium text-gray-900 dark:text-white">Tema</h4>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">Escolha entre o tema claro ou escuro</p>
-                        </div>
-                        <div className="flex items-center space-x-3">
-                            <span className={`text-sm ${!darkMode ? 'text-gray-900 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
-                                Claro
-                            </span>
-                            <button
-                                onClick={toggleDarkMode}
-                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-gray-800 focus:ring-offset-2 ${darkMode ? 'bg-gray-900' : 'bg-gray-200'
-                                    }`}
-                            >
-                                <span
-                                    className={`inline-block h-4 w-4 transform rounded-full transition-transform ${darkMode ? 'bg-white translate-x-6' : 'bg-gray-900 translate-x-1'
-                                        }`}
-                                />
-                            </button>
-                            <span className={`text-sm ${darkMode ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
-                                Escuro
-                            </span>
-                        </div>
-
-                        {onLogout && (
-                            <button
-                                onClick={onLogout}
-                                className="mt-6 w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                            >
-                                <LogOut className="w-4 h-4" />
-                                <span>Sair</span>
-                            </button>
-                        )}
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h4 className="text-sm font-medium text-gray-900 dark:text-white">Tema</h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Segue automaticamente o tema do sistema</p>
+                    </div>
+                    <div className="px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">
+                            {darkMode ? '🌙 Escuro' : '☀️ Claro'}
+                        </span>
                     </div>
                 </div>
             </div>
@@ -1761,6 +1769,19 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                     </div>
                 </div>
             </div>
+
+            {/* Botão Sair - Fixo na parte inferior */}
+            {onLogout && (
+                <div className="fixed bottom-4 left-0 right-0 px-4 lg:px-8 max-w-7xl mx-auto">
+                    <button
+                        onClick={onLogout}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium shadow-lg"
+                    >
+                        <LogOut className="w-5 h-5" />
+                        <span>Sair</span>
+                    </button>
+                </div>
+            )}
         </div>
     );
 
@@ -2978,9 +2999,7 @@ Montar escala        </button>
     };
 
     return (
-        <div className="flex flex-col md:flex-row h-screen bg-white dark:bg-gray-900 transition-colors" style={{ 
-            paddingTop: 'env(safe-area-inset-top, 0px)'
-        }}>
+        <div className="flex flex-col md:flex-row h-screen bg-white dark:bg-black transition-colors overflow-hidden">
             {/* Sidebar Desktop */}
             <div className={`hidden md:block bg-white dark:bg-gray-800 shadow-lg transition-all duration-300 ${sidebarOpen ? 'md:w-64' : 'md:w-16'
                 }`}>
@@ -2988,11 +3007,11 @@ Montar escala        </button>
                     <div className="flex items-center justify-between">
                         {sidebarOpen ? (
                             <div className="flex items-center space-x-3">
-                                <img src="https://res.cloudinary.com/dxchbdcai/image/upload/v1759588261/Captura_de_Tela_2025-10-04_%C3%A0s_11.30.40_ydns5v.png" alt="Logo da Igreja" className="w-10 h-10 object-contain" />
+                                <img src={logoUrl} alt="Logo da Igreja" className="w-10 h-10 object-contain" />
                                 <h2 className="text-xl font-bold text-gray-900 dark:text-white">Igreja Admin</h2>
                             </div>
                         ) : (
-                            <img src="https://res.cloudinary.com/dxchbdcai/image/upload/v1759588261/Captura_de_Tela_2025-10-04_%C3%A0s_11.30.40_ydns5v.png" alt="Logo da Igreja" className="w-8 h-8 mx-auto object-contain" />
+                            <img src={logoUrl} alt="Logo da Igreja" className="w-8 h-8 mx-auto object-contain" />
                         )}
                         <button
                             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -3086,13 +3105,14 @@ Montar escala        </button>
             </button>
 
             {/* Main Content */}
-            <div className="flex-1 overflow-auto" style={{ 
-                height: '100%',
-                overflowY: 'scroll',
-                WebkitOverflowScrolling: 'touch',
-                paddingBottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))'
+            <div className="flex-1 h-full" style={{ 
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                WebkitOverflowScrolling: 'touch'
             }}>
-                <div className="p-4 md:p-6">
+                <div className="p-4 md:p-6" style={{ 
+                    paddingTop: 'calc(1rem + env(safe-area-inset-top, 0px))'
+                }}>
                     {activeTab === 'dashboard' && renderDashboard()}
                     {activeTab === 'members' && renderMembers()}
                     {activeTab === 'events' && renderEvents()}
@@ -4922,9 +4942,9 @@ Montar escala        </button>
 
             {/* Modal Nova Escala de Louvor */}
             {showEscalaLouvorModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="p-6">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full my-4 max-h-[calc(100vh-2rem)] flex flex-col">
+                        <div className="p-6 overflow-y-auto flex-1">
                             <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Nova Escala de Louvor</h2>
                             <form onSubmit={async (e) => {
                                 e.preventDefault();
@@ -5103,27 +5123,27 @@ Montar escala        </button>
                                         <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
                                             Instrumentos ({Object.values(newEscalaLouvorData.instrumentos).filter(Boolean).length} escalados)
                                         </h3>
-                                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                                        <div className="space-y-3">
                                             {['Voz 1', 'Voz 2', 'Voz 3', 'Teclado 1', 'Teclado 2', 'Guitarra', 'Contrabaixo', 'Violão', 'Bateria'].map((instrumento) => {
                                                 const musicoId = newEscalaLouvorData.instrumentos[instrumento];
                                                 const musico = musicoId ? members.find(m => (m.id || `musico-${members.indexOf(m)}`) === musicoId) : null;
                                                 
                                                 return (
                                                     <div key={instrumento} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                                                        <div className="flex items-center justify-between mb-2">
-                                                            <div className="flex items-center gap-2">
-                                                                <Music className="w-5 h-5 text-purple-600" />
-                                                                <span className="font-medium text-gray-900 dark:text-white">{instrumento}</span>
-                                                            </div>
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <Music className="w-5 h-5 text-purple-600 flex-shrink-0" />
+                                                            <span className="font-medium text-gray-900 dark:text-white flex-1">{instrumento}</span>
                                                             {musico && (
                                                                 <button
                                                                     type="button"
-                                                                    onClick={() => {
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        e.stopPropagation();
                                                                         const newInstrumentos = { ...newEscalaLouvorData.instrumentos };
                                                                         delete newInstrumentos[instrumento];
                                                                         setNewEscalaLouvorData({ ...newEscalaLouvorData, instrumentos: newInstrumentos });
                                                                     }}
-                                                                    className="text-red-600 hover:text-red-700"
+                                                                    className="text-red-600 hover:text-red-700 p-1"
                                                                 >
                                                                     <X className="w-4 h-4" />
                                                                 </button>
@@ -5132,27 +5152,32 @@ Montar escala        </button>
                                                         
                                                         {musico ? (
                                                             <div className="flex items-center gap-3 p-2 bg-purple-100 dark:bg-purple-900/30 rounded">
-                                                                <div className="h-8 w-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-semibold">
+                                                                <div className="h-8 w-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
                                                                     {getInitials(musico.nome)}
                                                                 </div>
-                                                                <div className="flex-1">
-                                                                    <p className="text-sm font-medium text-gray-900 dark:text-white">{musico.nome}</p>
-                                                                    <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{musico.funcao}</p>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{musico.nome}</p>
+                                                                    <p className="text-xs text-gray-500 dark:text-gray-400 capitalize truncate">{musico.funcao}</p>
                                                                 </div>
                                                             </div>
                                                         ) : (
                                                             <select
                                                                 value={musicoId || ''}
                                                                 onChange={(e) => {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                    const value = e.target.value;
                                                                     setNewEscalaLouvorData({
                                                                         ...newEscalaLouvorData,
                                                                         instrumentos: {
                                                                             ...newEscalaLouvorData.instrumentos,
-                                                                            [instrumento]: e.target.value || undefined
+                                                                            [instrumento]: value || undefined
                                                                         }
                                                                     });
                                                                 }}
-                                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white text-sm"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-600 dark:text-white text-sm appearance-none cursor-pointer"
+                                                                style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
                                                             >
                                                                 <option value="">Selecione um músico</option>
                                                                 {members.filter(m => {

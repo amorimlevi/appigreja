@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Lock, User, Eye, EyeOff } from 'lucide-react';
+import { useChurchLogo } from '../hooks/useChurchSettings';
 
 const Login = ({ onLogin }) => {
     const [username, setUsername] = useState('');
@@ -7,6 +8,22 @@ const Login = ({ onLogin }) => {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [isDark, setIsDark] = useState(false);
+
+    useEffect(() => {
+        const checkDarkMode = () => {
+            const darkMode = document.documentElement.classList.contains('dark');
+            setIsDark(darkMode);
+        };
+        
+        checkDarkMode();
+        const observer = new MutationObserver(checkDarkMode);
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        
+        return () => observer.disconnect();
+    }, []);
+
+    const { value: logoUrl } = useChurchLogo(isDark);
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -28,11 +45,10 @@ const Login = ({ onLogin }) => {
             <div className="max-w-md w-full space-y-8">
                 <div className="text-center">
                     <img 
-                        src="https://res.cloudinary.com/dxchbdcai/image/upload/v1759592247/Design_sem_nome_10_nwkjse.png" 
+                        src={logoUrl} 
                         alt="Logo da Igreja" 
-                        className="w-48 h-48 mx-auto mb-4 object-contain"
+                        className="w-80 h-80 mx-auto mb-6 object-contain"
                     />
-                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Igreja Zoe</h2>
                     <p className="text-gray-600 dark:text-gray-400">"E perseveravam na doutrina dos apóstolos, e na comunhão, e no partir do pão, e nas orações."</p>
                 </div>
 

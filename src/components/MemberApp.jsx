@@ -38,6 +38,9 @@ import { ptBR } from 'date-fns/locale';
 import { formatId } from '../utils/formatters';
 import { searchMembers, getEventFoods, updateEventFood, registerEventParticipant, unregisterEventParticipant, checkEventRegistration, updateMember, getMinistrySchedules, getMembers, getFamilyByMemberId, getUnreadAvisosCount, markAvisoAsRead, getAvisosWithReadStatus, getPlaylistMusicas, getMemberById, createMinistrySchedule, updateMinistrySchedule, deleteMinistrySchedule, createPlaylistMusica, deletePlaylistMusica, getWorkshops, createWorkshop, updateWorkshop, deleteWorkshop, registerWorkshopParticipant, unregisterWorkshopParticipant, checkWorkshopRegistration, getWorkshopRegistrations, getPhotos } from '../lib/supabaseService';
 import CustomCalendar from './CustomCalendar';
+import Modal from './Modal';
+import { initializePushNotifications, removeDeviceToken } from '../services/pushNotifications';
+import { useBlockScroll } from '../hooks/useBlockScroll';
 
 // Lista de versículos bíblicos
 const VERSICULOS = [
@@ -162,7 +165,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
         funcoes: []
     });
     const [darkMode, setDarkMode] = useState(() => {
-        return localStorage.getItem('darkMode') === 'true' || false;
+        return window.matchMedia('(prefers-color-scheme: dark)').matches;
     });
     const [searchResults, setSearchResults] = useState([]);
     const [playlistMusicas, setPlaylistMusicas] = useState([]);
@@ -254,6 +257,22 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     const [selectedPhoto, setSelectedPhoto] = useState(null);
     const [showPhotoDetailsModal, setShowPhotoDetailsModal] = useState(false);
     const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+    const [touchStart, setTouchStart] = useState(0);
+    const [touchEnd, setTouchEnd] = useState(0);
+    const [showDetalhesEscalaProfessoresModal, setShowDetalhesEscalaProfessoresModal] = useState(false);
+    const [showEditEscalaProfessoresModal, setShowEditEscalaProfessoresModal] = useState(false);
+
+    useBlockScroll(
+        showEventDetailsModal || showFamilyModal || showAddMemberModal || 
+        showEditFamilyModal || showEditProfileModal || showScheduleModal || 
+        showSearchMemberModal || showRegisterOtherModal || showCreateScheduleModal || 
+        showEditScheduleModal || showOficinaModal || showOficinaDetailsModal || 
+        showEditOficinaModal || showMusicModal || showMusicListModal || 
+        showMusiciansModal || showDiaconiaScheduleModal || showEditDiaconiaScheduleModal || 
+        showKidsScheduleModal || showKidsListModal || showProfessoresListModal || 
+        showJovensListModal || showPhotoDetailsModal || showDetalhesEscalaProfessoresModal || 
+        showEditEscalaProfessoresModal || sidebarOpen
+    );
     const [showAvisosDropdown, setShowAvisosDropdown] = useState(false);
     const [dailyMusic, setDailyMusic] = useState(() => {
         const saved = localStorage.getItem('dailyMusic');
@@ -288,14 +307,48 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
         return saved ? JSON.parse(saved) : [];
     });
     const [selectedKidsSchedule, setSelectedKidsSchedule] = useState(null);
-    const [showDetalhesEscalaProfessoresModal, setShowDetalhesEscalaProfessoresModal] = useState(false);
-    const [showEditEscalaProfessoresModal, setShowEditEscalaProfessoresModal] = useState(false);
     const [editFormDataProfessores, setEditFormDataProfessores] = useState({
         turmas: [],
         data: '',
         horario: '',
         professoresSelecionados: []
     });
+
+    // Detectar mudanças na preferência de cor do sistema
+    useEffect(() => {
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        
+        const handleChange = (e) => {
+            setDarkMode(e.matches);
+        };
+        
+        mediaQuery.addEventListener('change', handleChange);
+        return () => mediaQuery.removeEventListener('change', handleChange);
+    }, []);
+
+    // Forçar recálculo de viewport no mount
+    useEffect(() => {
+        const forceResize = () => {
+            window.dispatchEvent(new Event('resize'));
+        };
+        
+        forceResize();
+        setTimeout(forceResize, 100);
+        setTimeout(forceResize, 300);
+    }, []);
+
+    // Inicializar push notifications
+    useEffect(() => {
+        if (currentMember?.id) {
+            initializePushNotifications(currentMember.id);
+        }
+        
+        return () => {
+            if (currentMember?.id) {
+                removeDeviceToken(currentMember.id);
+            }
+        };
+    }, [currentMember?.id]);
 
     // Recarregar dados do membro a cada 10 segundos
     useEffect(() => {
@@ -657,12 +710,14 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
             
             if (isWorkshop) {
                 // Verificar inscrição em workshop
-                const registered = await checkWorkshopRegistration(event.workshopId, localMember.id);
+                const registered = await checkWorkshopRegistration(event.workshopId, currentMember.id);
+                console.log('Workshop registration check:', event.workshopId, currentMember.id, registered);
                 setIsRegistered(registered);
                 setSelectedEvent(event);
             } else {
                 // Verificar se o membro está inscrito no evento regular
-                const registered = await checkEventRegistration(event.id, localMember.id);
+                const registered = await checkEventRegistration(event.id, currentMember.id);
+                console.log('Event registration check:', event.id, currentMember.id, registered);
                 setIsRegistered(registered);
 
                 // Buscar comidas do evento se tiver alimentação
@@ -693,28 +748,49 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
             // Verificar se é workshop ou evento regular
             const isWorkshop = selectedEvent.tipo === 'oficina' || selectedEvent.workshopId;
             
+            console.log('handleEventRegistration - selectedEvent:', selectedEvent);
+            console.log('handleEventRegistration - currentMember.id:', currentMember.id);
+            console.log('handleEventRegistration - isRegistered:', isRegistered);
+            
             if (isWorkshop) {
                 // Workshop: usar workshop_registrations
                 const workshopId = selectedEvent.workshopId;
                 
                 if (isRegistered) {
-                    await unregisterWorkshopParticipant(workshopId, localMember.id);
-                    setIsRegistered(false);
+                    console.log('Cancelando inscrição na oficina:', workshopId, currentMember.id);
+                    await unregisterWorkshopParticipant(workshopId, currentMember.id);
+                    // Verificar novamente o status após cancelar
+                    const stillRegistered = await checkWorkshopRegistration(workshopId, currentMember.id);
+                    console.log('Status após cancelamento (workshop):', stillRegistered);
+                    setIsRegistered(stillRegistered);
                     alert('Você foi desinscrito da oficina.');
                 } else {
-                    await registerWorkshopParticipant(workshopId, localMember.id);
-                    setIsRegistered(true);
+                    console.log('Inscrevendo na oficina:', workshopId, currentMember.id);
+                    await registerWorkshopParticipant(workshopId, currentMember.id);
+                    // Verificar novamente o status após inscrever
+                    const nowRegistered = await checkWorkshopRegistration(workshopId, currentMember.id);
+                    console.log('Status após inscrição (workshop):', nowRegistered);
+                    setIsRegistered(nowRegistered);
                     alert('Inscrição na oficina confirmada com sucesso!');
                 }
             } else {
                 // Evento regular: usar event_participants
                 if (isRegistered) {
-                    await unregisterEventParticipant(selectedEvent.id, localMember.id);
-                    setIsRegistered(false);
+                    console.log('Cancelando inscrição no evento:', selectedEvent.id, currentMember.id);
+                    const unregisterResult = await unregisterEventParticipant(selectedEvent.id, currentMember.id);
+                    console.log('Resultado do unregister:', unregisterResult);
+                    // Verificar novamente o status após cancelar
+                    const stillRegistered = await checkEventRegistration(selectedEvent.id, currentMember.id);
+                    console.log('Status após cancelamento (evento):', stillRegistered);
+                    setIsRegistered(stillRegistered);
                     alert('Você foi desinscrito do evento.');
                 } else {
-                    await registerEventParticipant(selectedEvent.id, localMember.id);
-                    setIsRegistered(true);
+                    console.log('Inscrevendo no evento:', selectedEvent.id, currentMember.id);
+                    await registerEventParticipant(selectedEvent.id, currentMember.id);
+                    // Verificar novamente o status após inscrever
+                    const nowRegistered = await checkEventRegistration(selectedEvent.id, currentMember.id);
+                    console.log('Status após inscrição (evento):', nowRegistered);
+                    setIsRegistered(nowRegistered);
                     alert('Inscrição confirmada com sucesso!');
                 }
             }
@@ -866,7 +942,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                         className={`
                             aspect-square flex items-center justify-center p-2 cursor-pointer
                             ${!isCurrentMonth ? 'text-gray-300 dark:text-gray-600' : 'text-gray-900 dark:text-white'}
-                            ${isTodayDate ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-full font-bold' : ''}
+                            ${isTodayDate ? 'bg-gray-900 dark:bg-white text-white dark:text-black rounded-full font-bold' : ''}
                             ${hasEvents && !isTodayDate ? 'text-red-600 dark:text-red-400 font-semibold' : ''}
                         `}
                     >
@@ -894,160 +970,151 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
         const hasFood = selectedEvent.alimentacao && selectedEvent.comidas?.length > 0;
 
         return (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-                <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                    <div className="p-6">
-                        <div className="flex justify-between items-start mb-4">
-                            <div>
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                                    {selectedEvent.tipo === 'oficina' && '🎓 '}
-                                    {selectedEvent.nome}
-                                </h2>
-                                {selectedEvent.tipo === 'oficina' && (
-                                    <span className="inline-block mt-2 px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-sm">
-                                        Oficina
-                                    </span>
-                                )}
-                            </div>
-                            <button
-                                onClick={() => {
-                                    setShowEventDetailsModal(false);
-                                    setSelectedEvent(null);
-                                    setSelectedFoods({});
-                                }}
-                                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                            >
-                                <X className="h-6 w-6" />
-                            </button>
-                        </div>
-
-                        <div className="space-y-4">
-                            <div className="flex items-center text-gray-600 dark:text-gray-300">
-                                <Clock className="h-5 w-5 mr-2" />
-                                <span>{format(eventDate, "EEEE, d 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })}</span>
-                            </div>
-
-                            {selectedEvent.local && (
-                                <div className="flex items-center text-gray-600 dark:text-gray-300">
-                                    <MapPin className="h-5 w-5 mr-2" />
-                                    <span>{selectedEvent.local}</span>
-                                </div>
-                            )}
-
-                            {selectedEvent.descricao && (
-                                <div className="mt-4">
-                                    <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Descrição</h3>
-                                    <p className="text-gray-600 dark:text-gray-300">{selectedEvent.descricao}</p>
-                                </div>
-                            )}
-
-                            {/* Botões de inscrição */}
-                            <div className="mt-6 space-y-3">
-                                <button
-                                    onClick={handleEventRegistration}
-                                    className={`w-full px-6 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center ${isRegistered
-                                            ? 'bg-red-600 hover:bg-red-700 text-white'
-                                            : 'bg-green-600 hover:bg-green-700 text-white'
-                                        }`}
-                                >
-                                    {isRegistered ? (
-                                        <>
-                                            <X className="h-5 w-5 mr-2" />
-                                            Cancelar Inscrição
-                                        </>
-                                    ) : (
-                                        <>
-                                            <CheckCircle className="h-5 w-5 mr-2" />
-                                            Inscrever-se
-                                        </>
-                                    )}
-                                </button>
-                                {isRegistered && (
-                                    <p className="text-sm text-green-600 dark:text-green-400 mt-2 text-center">
-                                        ✓ Você está inscrito neste evento
-                                    </p>
-                                )}
-                                
-                                <button
-                                    onClick={() => {
-                                        setShowRegisterOtherModal(true);
-                                        handleRegisterOtherSearch('');
-                                    }}
-                                    className="w-full px-6 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white border border-blue-700"
-                                >
-                                    <Users className="h-5 w-5 mr-2" />
-                                    Inscrever Familiar
-                                </button>
-                            </div>
-
-                            {hasFood && (
-                                <div className="mt-6 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-                                    <h3 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center">
-                                        🍽️ Alimentação - Escolha o que você pode trazer
-                                    </h3>
-                                    <div className="space-y-2">
-                                        {selectedEvent.comidas.map((comida, index) => {
-                                            const jaEscolhido = comida.responsavel && comida.responsavel !== '';
-                                            const euEscolhi = comida.membro_id === currentMember?.id;
-
-                                            return (
-                                                <label
-                                                    key={index}
-                                                    className={`
-                                                        flex items-center p-3 rounded border cursor-pointer transition-all
-                                                        ${jaEscolhido && !euEscolhi
-                                                            ? 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 opacity-50 cursor-not-allowed'
-                                                            : euEscolhi
-                                                                ? 'bg-green-100 dark:bg-green-900/30 border-green-500 dark:border-green-600'
-                                                                : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:border-amber-500 dark:hover:border-amber-400'
-                                                        }
-                                                    `}
-                                                >
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedFoods[comida.nome] || euEscolhi}
-                                                        onChange={(e) => {
-                                                            if (!jaEscolhido || euEscolhi) {
-                                                                setSelectedFoods({
-                                                                    ...selectedFoods,
-                                                                    [comida.nome]: e.target.checked
-                                                                });
-                                                            }
-                                                        }}
-                                                        disabled={jaEscolhido && !euEscolhi}
-                                                        className="h-5 w-5 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
-                                                    />
-                                                    <span className="ml-3 flex-1">
-                                                        <span className="text-gray-900 dark:text-white font-medium">{comida.nome}</span>
-                                                        {jaEscolhido && (
-                                                            <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">
-                                                                ({euEscolhi ? 'Você escolheu' : `Escolhido por ${comida.responsavel}`})
-                                                            </span>
-                                                        )}
-                                                    </span>
-                                                    {jaEscolhido ? (
-                                                        <CheckCircle className="h-5 w-5 text-green-500" />
-                                                    ) : (
-                                                        <Circle className="h-5 w-5 text-gray-400" />
-                                                    )}
-                                                </label>
-                                            );
-                                        })}
-                                    </div>
-                                    {Object.keys(selectedFoods).filter(k => selectedFoods[k]).length > 0 && (
-                                        <button
-                                            onClick={handleConfirmFoodSelection}
-                                            className="mt-4 w-full bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                                        >
-                                            Confirmar Seleção
-                                        </button>
-                                    )}
-                                </div>
-                            )}
-                        </div>
+            <Modal
+                isOpen={showEventDetailsModal}
+                onClose={() => {
+                    setShowEventDetailsModal(false);
+                    setSelectedEvent(null);
+                    setSelectedFoods({});
+                }}
+                title={
+                    <div>
+                        {selectedEvent.tipo === 'oficina' && '🎓 '}
+                        {selectedEvent.nome}
+                        {selectedEvent.tipo === 'oficina' && (
+                            <span className="inline-block mt-2 px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-sm">
+                                Oficina
+                            </span>
+                        )}
                     </div>
+                }
+                maxWidth="max-w-2xl"
+            >
+                <div className="space-y-4">
+                    <div className="flex items-center text-gray-600 dark:text-gray-300">
+                        <Clock className="h-5 w-5 mr-2" />
+                        <span style={{textTransform: 'capitalize'}}>{format(eventDate, "EEEE, d 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })}</span>
+                    </div>
+
+                    {selectedEvent.local && (
+                        <div className="flex items-center text-gray-600 dark:text-gray-300">
+                            <MapPin className="h-5 w-5 mr-2" />
+                            <span>{selectedEvent.local}</span>
+                        </div>
+                    )}
+
+                    {selectedEvent.descricao && (
+                        <div className="mt-4">
+                            <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Descrição</h3>
+                            <p className="text-gray-600 dark:text-gray-300">{selectedEvent.descricao}</p>
+                        </div>
+                    )}
+
+                    {/* Botões de inscrição */}
+                    <div className="mt-6 space-y-3">
+                        <button
+                            onClick={handleEventRegistration}
+                            className={`w-full px-6 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center ${isRegistered
+                                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                                    : 'bg-green-600 hover:bg-green-700 text-white'
+                                }`}
+                        >
+                            {isRegistered ? (
+                                <>
+                                    <X className="h-5 w-5 mr-2" />
+                                    Cancelar Inscrição
+                                </>
+                            ) : (
+                                <>
+                                    <CheckCircle className="h-5 w-5 mr-2" />
+                                    Inscrever-se
+                                </>
+                            )}
+                        </button>
+                        {isRegistered && (
+                            <p className="text-sm text-green-600 dark:text-green-400 mt-2 text-center">
+                                ✓ Você está inscrito neste evento
+                            </p>
+                        )}
+                        
+                        <button
+                            onClick={() => {
+                                setShowRegisterOtherModal(true);
+                                handleRegisterOtherSearch('');
+                            }}
+                            className="w-full px-6 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white border border-blue-700"
+                        >
+                            <Users className="h-5 w-5 mr-2" />
+                            Inscrever Familiar
+                        </button>
+                    </div>
+
+                    {hasFood && (
+                        <div className="mt-6 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                            <h3 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center">
+                                🍽️ Alimentação - Escolha o que você pode trazer
+                            </h3>
+                            <div className="space-y-2">
+                                {selectedEvent.comidas.map((comida, index) => {
+                                    const jaEscolhido = comida.responsavel && comida.responsavel !== '';
+                                    const euEscolhi = comida.membro_id === currentMember?.id;
+
+                                    return (
+                                        <label
+                                            key={index}
+                                            className={`
+                                                flex items-center p-3 rounded border cursor-pointer transition-all
+                                                ${jaEscolhido && !euEscolhi
+                                                    ? 'bg-gray-100 dark:bg-black border-gray-300 dark:border-gray-600 opacity-50 cursor-not-allowed'
+                                                    : euEscolhi
+                                                        ? 'bg-green-100 dark:bg-green-900/30 border-green-500 dark:border-green-600'
+                                                        : 'bg-white dark:bg-black border-gray-300 dark:border-gray-600 hover:border-amber-500 dark:hover:border-amber-400'
+                                                }
+                                            `}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedFoods[comida.nome] || euEscolhi}
+                                                onChange={(e) => {
+                                                    if (!jaEscolhido || euEscolhi) {
+                                                        setSelectedFoods({
+                                                            ...selectedFoods,
+                                                            [comida.nome]: e.target.checked
+                                                        });
+                                                    }
+                                                }}
+                                                disabled={jaEscolhido && !euEscolhi}
+                                                className="h-5 w-5 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
+                                            />
+                                            <span className="ml-3 flex-1">
+                                                <span className="text-gray-900 dark:text-white font-medium">{comida.nome}</span>
+                                                {jaEscolhido && (
+                                                    <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">
+                                                        ({euEscolhi ? 'Você escolheu' : `Escolhido por ${comida.responsavel}`})
+                                                    </span>
+                                                )}
+                                            </span>
+                                            {jaEscolhido ? (
+                                                <CheckCircle className="h-5 w-5 text-green-500" />
+                                            ) : (
+                                                <Circle className="h-5 w-5 text-gray-400" />
+                                            )}
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                            {Object.keys(selectedFoods).filter(k => selectedFoods[k]).length > 0 && (
+                                <button
+                                    onClick={handleConfirmFoodSelection}
+                                    className="mt-4 w-full bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                                >
+                                    Confirmar Seleção
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
-            </div>
+            </Modal>
         );
     };
 
@@ -1332,116 +1399,119 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
     };
 
     return (
-        <div className={`min-h-screen ${darkMode ? 'dark' : ''}`}>
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className={`w-full flex flex-col ${darkMode ? 'dark' : ''}`} style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: '100vh',
+            overflow: 'hidden'
+        }}>
+            <div className="w-full h-full flex flex-col bg-white dark:bg-black overflow-hidden"
+                style={{
+                    paddingTop: 0,
+                    marginTop: 'calc(-1 * env(safe-area-inset-top, 0px))'
+                }}>
                 {/* Header */}
-                <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40"
-                    style={{ paddingTop: 'env(safe-area-inset-top)' }}>
-                    <div className="px-4 py-4">
+                <div className="bg-white dark:bg-black shadow-sm border-b border-gray-200 dark:border-gray-700 shrink-0 z-40"
+                    style={{
+                        paddingTop: 'calc(env(safe-area-inset-top, 44px) + 48px)'
+                    }}>
+                    <div className="px-4 py-3">
                         <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
+                            <div className="flex items-center space-x-2">
                                 <button
                                     onClick={() => setSidebarOpen(!sidebarOpen)}
-                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex items-center justify-center"
+                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-lg transition-colors text-gray-900 dark:text-white"
                                 >
-                                    {sidebarOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+                                    <Menu className="h-6 w-6" />
                                 </button>
                                 <h1 className="text-xl font-bold text-gray-900 dark:text-white">
                                     Olá, {currentMember?.nome?.split(' ')[0] || 'Membro'}!
                                 </h1>
                             </div>
-                            <div className="flex items-center space-x-2">
-                                <div className="relative">
-                                    <button
-                                        onClick={() => setShowAvisosDropdown(!showAvisosDropdown)}
-                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors relative flex items-center justify-center"
-                                    >
-                                        <Bell className="h-5 w-5" />
-                                        {unreadAvisosCount > 0 && (
-                                            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center px-1">
-                                                {unreadAvisosCount}
-                                            </span>
-                                        )}
-                                    </button>
-                                    {showAvisosDropdown && (
-                                        <>
-                                            <div className="fixed inset-0 z-40" onClick={() => setShowAvisosDropdown(false)} />
-                                            <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50">
-                                                <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                                                    <h3 className="font-bold text-gray-900 dark:text-white">Avisos Recentes</h3>
-                                                </div>
-                                                <div className="p-2">
-                                                    {recentAvisos.length > 0 ? (
-                                                        <div className="space-y-2">
-                                                            {recentAvisos.slice(0, 5).map(aviso => {
-                                                                const notification = aviso.aviso_notifications?.[0];
-                                                                const isUnread = notification && !notification.lido;
-                                                                
-                                                                return (
-                                                                <div 
-                                                                    key={aviso.id} 
-                                                                    className={`p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer transition-colors border-l-4 ${
-                                                                        isUnread 
-                                                                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500' 
-                                                                            : 'bg-transparent border-transparent'
-                                                                    }`}
-                                                                    onClick={() => {
-                                                                        setShowAvisosDropdown(false);
-                                                                        setActiveTab('avisos');
-                                                                        if (isUnread) {
-                                                                            markAvisoAsRead(aviso.id, currentMember.id).then(() => {
-                                                                                getAvisosWithReadStatus(currentMember.id).then(avisosData => {
-                                                                                    setAvisos(avisosData);
-                                                                                });
-                                                                            });
-                                                                        }
-                                                                    }}
-                                                                >
-                                                                    <div className="flex items-start justify-between gap-2">
-                                                                        <p className="font-semibold text-sm text-gray-900 dark:text-white flex-1">{aviso.titulo}</p>
-                                                                        {isUnread && (
-                                                                            <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1"></span>
-                                                                        )}
-                                                                    </div>
-                                                                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">{aviso.mensagem}</p>
-                                                                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                                                        {format(parseISO(aviso.created_at), "d 'de' MMM", { locale: ptBR })}
-                                                                    </p>
-                                                                </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    ) : (
-                                                        <div className="text-center py-8">
-                                                            <Bell className="w-8 h-8 mx-auto text-gray-300 dark:text-gray-700 mb-2" />
-                                                            <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum aviso recente</p>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className="p-3 border-t border-gray-200 dark:border-gray-700">
-                                                    <button
-                                                        onClick={() => {
-                                                            setShowAvisosDropdown(false);
-                                                            setActiveTab('avisos');
-                                                        }}
-                                                        className="w-full text-center text-sm text-gray-900 dark:text-white font-medium hover:underline"
-                                                    >
-                                                        Ver todos os avisos →
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
+                            <div className="relative">
                                 <button
-                                    onClick={() => {
-                                        setDarkMode(!darkMode);
-                                        localStorage.setItem('darkMode', !darkMode);
-                                    }}
-                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex items-center justify-center"
+                                    onClick={() => setShowAvisosDropdown(!showAvisosDropdown)}
+                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-lg transition-colors relative flex items-center justify-center text-gray-900 dark:text-white"
                                 >
-                                    {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                                    <Bell className="h-5 w-5" />
+                                    {unreadAvisosCount > 0 && (
+                                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center px-1">
+                                            {unreadAvisosCount}
+                                        </span>
+                                    )}
                                 </button>
+                                {showAvisosDropdown && (
+                                    <>
+                                        <div className="fixed inset-x-0 top-0 z-40" style={{ bottom: 0 }} onClick={() => setShowAvisosDropdown(false)} />
+                                        <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-white dark:bg-black rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50">
+                                            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                                                <h3 className="font-bold text-gray-900 dark:text-white">Avisos Recentes</h3>
+                                            </div>
+                                            <div className="p-2">
+                                                {recentAvisos.length > 0 ? (
+                                                    <div className="space-y-2">
+                                                        {recentAvisos.slice(0, 5).map(aviso => {
+                                                            const notification = aviso.aviso_notifications?.[0];
+                                                            const isUnread = notification && !notification.lido;
+                                                            
+                                                            return (
+                                                            <div 
+                                                                key={aviso.id} 
+                                                                className={`p-3 hover:bg-gray-50 dark:hover:bg-gray-900 rounded-lg cursor-pointer transition-colors border-l-4 ${
+                                                                    isUnread 
+                                                                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500' 
+                                                                        : 'bg-transparent border-transparent'
+                                                                }`}
+                                                                onClick={() => {
+                                                                    setShowAvisosDropdown(false);
+                                                                    setActiveTab('avisos');
+                                                                    if (isUnread) {
+                                                                        markAvisoAsRead(aviso.id, currentMember.id).then(() => {
+                                                                            getAvisosWithReadStatus(currentMember.id).then(avisosData => {
+                                                                                setAvisos(avisosData);
+                                                                            });
+                                                                        });
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <div className="flex items-start justify-between gap-2">
+                                                                    <p className="font-semibold text-sm text-gray-900 dark:text-white flex-1">{aviso.titulo}</p>
+                                                                    {isUnread && (
+                                                                        <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1"></span>
+                                                                    )}
+                                                                </div>
+                                                                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">{aviso.mensagem}</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                                                    {format(parseISO(aviso.created_at), "d 'de' MMM", { locale: ptBR })}
+                                                                </p>
+                                                            </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-center py-8">
+                                                        <Bell className="w-8 h-8 mx-auto text-gray-300 dark:text-gray-700 mb-2" />
+                                                        <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum aviso recente</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="p-3 border-t border-gray-200 dark:border-gray-700">
+                                                <button
+                                                    onClick={() => {
+                                                        setShowAvisosDropdown(false);
+                                                        setActiveTab('avisos');
+                                                    }}
+                                                    className="w-full text-center text-sm text-gray-900 dark:text-white font-medium hover:underline"
+                                                >
+                                                    Ver todos os avisos →
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -1450,15 +1520,19 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 {/* Menu Modal em Grade */}
                 {sidebarOpen && (
                     <>
-                        <div className="fixed inset-0 bg-black/50 z-30" onClick={() => setSidebarOpen(false)} />
-                        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-gray-800 rounded-t-3xl shadow-2xl max-h-[70vh] overflow-hidden"
-                            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+                        <div className="fixed inset-x-0 top-0 bg-black/50 z-[800]" style={{ bottom: 0 }} onClick={() => setSidebarOpen(false)} />
+                        <div className="fixed bottom-0 left-0 right-0 z-[900] bg-white dark:bg-black rounded-t-3xl shadow-2xl max-h-[70vh] overflow-hidden"
+                            style={{ 
+                                paddingBottom: '1rem',
+                                paddingLeft: 'env(safe-area-inset-left, 0px)',
+                                paddingRight: 'env(safe-area-inset-right, 0px)'
+                            }}>
                             <div className="p-6">
                                 <div className="flex items-center justify-center mb-4">
-                                    <div className="w-12 h-1 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
+                                    <div className="w-12 h-1 bg-gray-300 dark:bg-black rounded-full"></div>
                                 </div>
 
-                                <div className="flex items-center space-x-3 mb-6 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                                <div className="flex items-center space-x-3 mb-6 p-3 bg-gray-100 dark:bg-black rounded-lg">
                                     <div className="h-12 w-12 rounded-full bg-gray-900 dark:bg-white flex items-center justify-center text-white dark:text-gray-900 font-bold">
                                         {currentMember?.nome?.charAt(0) || 'M'}
                                     </div>
@@ -1486,7 +1560,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                 }}
                                                 className={`relative flex flex-col items-center justify-center p-4 rounded-2xl transition-all ${isActive
                                                         ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-lg scale-105'
-                                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:scale-105'
+                                                        : 'bg-gray-100 dark:bg-black text-gray-700 dark:text-gray-300 hover:scale-105'
                                                     }`}
                                             >
                                                 {item.id === 'avisos' && unreadAvisosCount > 0 && (
@@ -1517,55 +1591,17 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                     </>
                 )}
 
-                {/* Botões de navegação centralizados */}
-                <div 
-                    className={`fixed z-40 rounded-full shadow-2xl p-2 flex items-center justify-center gap-2 left-1/2 -translate-x-1/2 transition-all duration-300 backdrop-blur-sm ${
-                        isScrolling || sidebarOpen ? 'opacity-0 pointer-events-none translate-y-20' : 'opacity-100'
-                    }`}
-                    style={{
-                        bottom: `calc(1.5rem + env(safe-area-inset-bottom, 0px))`,
-                        backgroundColor: 'rgba(0, 0, 0, 0.5)'
-                    }}
-                >
-                    <button
-                        onClick={() => setActiveTab('home')}
-                        className={`p-3 rounded-full transition-all active:scale-95 flex items-center justify-center ${
-                            activeTab === 'home'
-                                ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white'
-                                : 'text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100'
-                        }`}
-                    >
-                        <BarChart3 className="w-5 h-5" />
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('perfil')}
-                        className={`p-3 rounded-full transition-all active:scale-95 flex items-center justify-center ${
-                            activeTab === 'perfil'
-                                ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white'
-                                : 'text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100'
-                        }`}
-                    >
-                        <Users className="w-5 h-5" />
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('eventos')}
-                        className={`p-3 rounded-full transition-all active:scale-95 flex items-center justify-center ${
-                            activeTab === 'eventos'
-                                ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white'
-                                : 'text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100'
-                        }`}
-                    >
-                        <Calendar className="w-5 h-5" />
-                    </button>
-                </div>
-
                 {/* Main Content */}
-                <div className="p-4 pb-24" style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom))' }}>
+                <div className="flex-1 overflow-y-auto p-4" style={{ 
+                    paddingLeft: 'calc(1rem + env(safe-area-inset-left, 0px))',
+                    paddingRight: 'calc(1rem + env(safe-area-inset-right, 0px))',
+                    paddingBottom: 0
+                }}>
                     {/* Início */}
                     {activeTab === 'home' && (
                         <div className="space-y-6">
                             {/* Versículo do Dia */}
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
+                            <div className="bg-white dark:bg-black rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
                                 {(() => {
                                     let verse = dailyVerse;
                                     
@@ -1598,12 +1634,26 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
                                         Nossa Programação
                                     </h2>
-                                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 max-w-xl mx-auto">
-                                        <div className="relative h-40 sm:h-44 md:h-48 bg-gray-900">
+                                    <div className="bg-white dark:bg-black rounded-lg shadow-md overflow-hidden border border-gray-200 dark:border-gray-700 max-w-xl mx-auto">
+                                        <div 
+                                            className="relative h-40 sm:h-44 md:h-48 bg-transparent"
+                                            onTouchStart={(e) => setTouchStart(e.targetTouches[0].clientX)}
+                                            onTouchMove={(e) => setTouchEnd(e.targetTouches[0].clientX)}
+                                            onTouchEnd={() => {
+                                                if (touchStart - touchEnd > 50) {
+                                                    // Swipe left - próxima foto
+                                                    setCurrentPhotoIndex((prev) => (prev === photos.length - 1 ? 0 : prev + 1));
+                                                }
+                                                if (touchStart - touchEnd < -50) {
+                                                    // Swipe right - foto anterior
+                                                    setCurrentPhotoIndex((prev) => (prev === 0 ? photos.length - 1 : prev - 1));
+                                                }
+                                            }}
+                                        >
                                         {photos[currentPhotoIndex].url?.match(/\.(mp4|webm|ogg)$/i) ? (
                                             <video
                                                 src={photos[currentPhotoIndex].url}
-                                                className="w-full h-full object-contain"
+                                                className="w-full h-full object-cover"
                                                 controls
                                                 playsInline
                                             />
@@ -1611,7 +1661,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             <img
                                                 src={photos[currentPhotoIndex].url}
                                                 alt={photos[currentPhotoIndex].titulo || 'Foto do culto'}
-                                                className="w-full h-full object-contain"
+                                                className="w-full h-full object-cover"
                                             />
                                         )}
                                         {/* Overlay com legenda */}
@@ -1629,23 +1679,6 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                 )}
                                             </div>
                                         )}
-                                        {/* Botões de navegação */}
-                                        {photos.length > 1 && (
-                                            <>
-                                                <button
-                                                    onClick={() => setCurrentPhotoIndex((prev) => (prev === 0 ? photos.length - 1 : prev - 1))}
-                                                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-transparent hover:bg-black/30 text-white p-3 rounded-full transition-colors flex items-center justify-center"
-                                                >
-                                                    <ChevronLeft className="w-8 h-8" />
-                                                </button>
-                                                <button
-                                                    onClick={() => setCurrentPhotoIndex((prev) => (prev === photos.length - 1 ? 0 : prev + 1))}
-                                                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-transparent hover:bg-black/30 text-white p-3 rounded-full transition-colors flex items-center justify-center"
-                                                >
-                                                    <ChevronRight className="w-8 h-8" />
-                                                </button>
-                                            </>
-                                            )}
                                                 </div>
                                                 </div>
                                                 </div>
@@ -1704,7 +1737,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                             )}
 
                             {/* Próximos Eventos */}
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
+                            <div className="bg-white dark:bg-black rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
                                 <div className="flex items-center justify-between mb-4">
                                     <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                         <Calendar className="w-5 h-5" />
@@ -1723,7 +1756,8 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             <div
                                                 key={event.id}
                                                 onClick={() => handleSelectEvent(event)}
-                                                className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg shadow-sm hover:shadow-md cursor-pointer transition-all border-l-4 border-gray-900 dark:border-white hover:scale-[1.02]"
+                                                className="p-4 rounded-lg shadow-sm hover:shadow-md cursor-pointer transition-all border-l-4 border-gray-900 dark:border-white hover:scale-[1.02]"
+                                                style={{ backgroundColor: darkMode ? '#1C1C1E' : '#ffffff' }}
                                             >
                                                 <p className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                                                     {event.tipo === 'oficina' && '🎓 '}
@@ -1758,7 +1792,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         onClick={() => setEventView('list')}
                                         className={`px-4 py-2 text-sm font-medium rounded-l-lg transition-colors ${eventView === 'list'
                                                 ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900'
-                                                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                                : 'bg-white dark:bg-black text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900'
                                             }`}
                                     >
                                         <List className="h-4 w-4 inline mr-2" />
@@ -1768,7 +1802,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         onClick={() => setEventView('calendar')}
                                         className={`px-4 py-2 text-sm font-medium rounded-r-lg transition-colors ${eventView === 'calendar'
                                                 ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900'
-                                                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                                : 'bg-white dark:bg-black text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900'
                                             }`}
                                     >
                                         <Calendar className="h-4 w-4 inline mr-2" />
@@ -1778,22 +1812,22 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                             </div>
 
                             {eventView === 'calendar' && (
-                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                                <div className="bg-white dark:bg-black rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
                                     {/* Cabeçalho do Mês */}
                                     <div className="flex items-center justify-between mb-6">
-                                        <h2 className="text-3xl font-bold text-gray-900 dark:text-white capitalize">
+                                        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white capitalize">
                                             {format(calendarDate, 'MMMM', { locale: ptBR })}
                                         </h2>
                                         <div className="flex items-center space-x-4">
                                             <button
                                                 onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1))}
-                                                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-lg transition-colors"
                                             >
                                                 <ChevronLeft className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                                             </button>
                                             <button
                                                 onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1))}
-                                                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-lg transition-colors"
                                             >
                                                 <ChevronRight className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                                             </button>
@@ -1830,7 +1864,8 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     <div
                                                         key={event.id}
                                                         onClick={() => handleSelectEvent(event)}
-                                                        className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 border-l-4 border-gray-900 dark:border-white cursor-pointer hover:shadow-md transition-all"
+                                                        className="rounded-lg shadow-sm p-4 border-l-4 border-gray-900 dark:border-white cursor-pointer hover:shadow-md transition-all"
+                                                        style={{ backgroundColor: darkMode ? '#1C1C1E' : '#ffffff' }}
                                                     >
                                                         <div className="flex items-start justify-between">
                                                             <div className="flex-1">
@@ -1839,7 +1874,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                                 </h3>
                                                                 <div className="flex items-center text-sm text-gray-600 dark:text-gray-400 mt-2">
                                                                     <Clock className="h-4 w-4 mr-1" />
-                                                                    <span>{format(eventDate, "EEEE, d 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })}</span>
+                                                                    <span style={{textTransform: 'capitalize'}}>{format(eventDate, "EEEE, d 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })}</span>
                                                                 </div>
                                                                 {event.local && (
                                                                     <div className="flex items-center text-sm text-gray-600 dark:text-gray-400 mt-1">
@@ -1863,7 +1898,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                 );
                                             })
                                     ) : (
-                                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-8 text-center border border-gray-200 dark:border-gray-700">
+                                        <div className="bg-white dark:bg-black rounded-lg shadow-sm p-8 text-center border border-gray-200 dark:border-gray-700">
                                             <Calendar className="h-12 w-12 mx-auto text-gray-400 mb-3" />
                                             <p className="text-gray-500 dark:text-gray-400">Nenhum evento próximo agendado</p>
                                         </div>
@@ -1876,7 +1911,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                     {/* Avisos */}
                     {activeTab === 'avisos' && (
                         <div className="space-y-4">
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                            <div className="bg-white dark:bg-black rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
                                 <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Avisos</h2>
                                 {filteredAvisos.length > 0 ? (
                                     <div className="space-y-3">
@@ -1890,7 +1925,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     className={`p-4 rounded-lg border transition-colors ${
                                                         isUnread 
                                                             ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' 
-                                                            : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600'
+                                                            : 'bg-gray-50 dark:bg-black/50 border-gray-200 dark:border-gray-600'
                                                     }`}
                                                 >
                                                     <div className="flex items-start justify-between">
@@ -1928,7 +1963,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
                     {/* Aniversários */}
                     {activeTab === 'aniversarios' && (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                        <div className="bg-white dark:bg-black rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
                             <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Aniversários</h2>
                             <p className="text-gray-500 dark:text-gray-400">Funcionalidade em desenvolvimento</p>
                         </div>
@@ -1962,10 +1997,10 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
                                     {/* Card de estatísticas */}
                                     <div className="grid grid-cols-1 gap-4">
-                                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                                        <div className="bg-white dark:bg-black rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                                             <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Diáconos</p>
                                             <div className="flex items-center justify-between">
-                                                <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                                                <p className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
                                                     {diaconiaMembers.length}
                                                 </p>
                                                 <Heart className="w-8 h-8 text-purple-500" />
@@ -1974,7 +2009,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </div>
 
                                     {/* Próximas escalas */}
-                                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                    <div className="bg-white dark:bg-black rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                                             <Calendar className="w-5 h-5 text-purple-600" />
                                             Escalas de Diaconia ({diaconiaSchedules?.length || 0})
@@ -1998,7 +2033,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                             className={`p-4 rounded-lg border-l-4 cursor-pointer hover:shadow-lg transition-all ${
                                                                 isProxima 
                                                                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
-                                                                    : 'border-gray-300 bg-white dark:bg-gray-700 dark:border-gray-600'
+                                                                    : 'border-gray-300 bg-white dark:bg-black dark:border-gray-600'
                                                             }`}
                                                             onClick={() => {
                                                                 setDiaconiaScheduleToEdit(escala);
@@ -2060,7 +2095,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                                                 <div key={membroId} className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${
                                                                                     isProxima 
                                                                                         ? 'bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200' 
-                                                                                        : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
+                                                                                        : 'bg-gray-200 dark:bg-black text-gray-700 dark:text-gray-300'
                                                                                 }`}>
                                                                                     <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold">
                                                                                         {membro.nome?.charAt(0) || 'D'}
@@ -2082,7 +2117,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </div>
 
                                     {/* Lista de Diáconos */}
-                                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                    <div className="bg-white dark:bg-black rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                                             <Users className="w-5 h-5 text-purple-600" />
                                             Lista de Diáconos ({diaconiaMembers.length})
@@ -2131,7 +2166,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 </>
                             ) : (
                                 <div className="space-y-4">
-                                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                                    <div className="bg-white dark:bg-black rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
                                         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
                                             <Heart className="w-6 h-6 mr-2 text-purple-600" />
                                             Ministério de Diaconia
@@ -2142,7 +2177,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </div>
 
                                     {/* Escalas para membros normais */}
-                                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                    <div className="bg-white dark:bg-black rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                                             <Calendar className="w-5 h-5 text-purple-600" />
                                             Escalas de Diaconia ({diaconiaSchedules?.length || 0})
@@ -2168,7 +2203,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                                                                     : isEscalado 
                                                                         ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' 
-                                                                        : 'border-gray-300 bg-white dark:bg-gray-700'
+                                                                        : 'border-gray-300 bg-white dark:bg-black'
                                                             }`}
                                                         >
                                                             <div className="flex items-center justify-between mb-3">
@@ -2222,7 +2257,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                                                 <div key={membroId} className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${
                                                                                     isProxima 
                                                                                         ? 'bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200' 
-                                                                                        : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
+                                                                                        : 'bg-gray-200 dark:bg-black text-gray-700 dark:text-gray-300'
                                                                                 }`}>
                                                                                     <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold">
                                                                                         {membro.nome?.charAt(0) || 'D'}
@@ -2283,7 +2318,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     <div className="grid grid-cols-2 gap-4">
                                         <div 
                                             onClick={() => setShowMusiciansModal(true)}
-                                            className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-md hover:scale-105 transition-all"
+                                            className="bg-white dark:bg-black rounded-lg p-4 border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-md hover:scale-105 transition-all"
                                         >
                                             <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Músicos Ativos</p>
                                             <div className="flex items-center justify-between">
@@ -2301,18 +2336,18 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         </div>
                                         <div 
                                             onClick={() => setShowMusicListModal(true)}
-                                            className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-md hover:scale-105 transition-all"
+                                            className="bg-white dark:bg-black rounded-lg p-4 border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-md hover:scale-105 transition-all"
                                         >
                                             <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Músicas Cadastradas</p>
                                             <div className="flex items-center justify-between">
-                                                <p className="text-3xl font-bold text-gray-900 dark:text-white">{playlistMusicas.length}</p>
+                                                <p className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">{playlistMusicas.length}</p>
                                                 <Music className="w-8 h-8 text-green-500" />
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Próximas escalas */}
-                                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                    <div className="bg-white dark:bg-black rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                                             <Calendar className="w-5 h-5 text-purple-600" />
                                             Próximas escalas ({louvorSchedules?.length || 0})
@@ -2332,7 +2367,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     return (
                                                         <div
                                                             key={escala.id}
-                                                            className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all"
+                                                            className="p-4 bg-white dark:bg-black rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all"
                                                             onClick={() => {
                                                                 // Preparar dados para edição
                                                                 const instrumentos = {};
@@ -2403,7 +2438,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </div>
 
                                     {/* Equipe de Louvor */}
-                                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                    <div className="bg-white dark:bg-black rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Equipe de Louvor</h3>
                                         <div className="space-y-2">
                                             {(() => {
@@ -2433,7 +2468,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     return (
                                                         <div
                                                             key={musico.id}
-                                                            className="flex items-center justify-between gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+                                                            className="flex items-center justify-between gap-3 p-3 bg-gray-50 dark:bg-black/50 rounded-lg"
                                                         >
                                                             <div className="flex items-center gap-3">
                                                                 <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center text-white font-bold">
@@ -2457,7 +2492,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 </>
                             ) : (
                                 <div className="space-y-4">
-                                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                                    <div className="bg-white dark:bg-black rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
                                         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
                                             <Music className="w-6 h-6 mr-2 text-purple-600" />
                                             Ministério de Louvor
@@ -2473,7 +2508,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </div>
 
                                     {/* Próximas escalas para membros normais */}
-                                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                                    <div className="bg-white dark:bg-black rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                                             <Calendar className="w-5 h-5 text-purple-600" />
                                             Próximas escalas ({louvorSchedules?.length || 0})
@@ -2492,7 +2527,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     return (
                                                         <div
                                                             key={escala.id}
-                                                            className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all"
+                                                            className="p-4 bg-white dark:bg-black rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all"
                                                             onClick={() => {
                                                                 // Preparar dados para edição
                                                                 const instrumentos = {};
@@ -2572,7 +2607,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Galeria de Fotos</h2>
                             
                             {photos.length === 0 ? (
-                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-12 border border-gray-200 dark:border-gray-700 text-center">
+                                <div className="bg-white dark:bg-black rounded-lg shadow-sm p-12 border border-gray-200 dark:border-gray-700 text-center">
                                     <Image className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
                                     <p className="text-gray-500 dark:text-gray-400">Nenhuma foto na galeria ainda.</p>
                                 </div>
@@ -2581,7 +2616,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     {photos.map((photo) => (
                                         <div 
                                             key={photo.id}
-                                            className="relative group cursor-pointer rounded-lg overflow-hidden shadow-md hover:shadow-xl transition-shadow bg-white dark:bg-gray-800"
+                                            className="relative group cursor-pointer rounded-lg overflow-hidden shadow-md hover:shadow-xl transition-shadow bg-white dark:bg-black"
                                             onClick={() => {
                                                 setSelectedPhoto(photo);
                                                 setShowPhotoDetailsModal(true);
@@ -2608,61 +2643,45 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                             )}
 
                             {/* Modal de Detalhes da Foto */}
-                            {showPhotoDetailsModal && selectedPhoto && (
-                                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                                    <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                                        <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
-                                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">{selectedPhoto.titulo}</h2>
-                                            <button
-                                                onClick={() => setShowPhotoDetailsModal(false)}
-                                                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                                            >
-                                                <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
-                                            </button>
-                                        </div>
+                            {selectedPhoto && (
+                                <Modal
+                                    isOpen={showPhotoDetailsModal}
+                                    onClose={() => setShowPhotoDetailsModal(false)}
+                                    title={selectedPhoto.titulo}
+                                    maxWidth="max-w-4xl"
+                                >
+                                    <div className="space-y-4">
+                                        <img 
+                                            src={selectedPhoto.url} 
+                                            alt={selectedPhoto.titulo}
+                                            className="w-full rounded-lg"
+                                        />
+                                        
+                                        {selectedPhoto.descricao && (
+                                            <p className="text-gray-600 dark:text-gray-400">{selectedPhoto.descricao}</p>
+                                        )}
 
-                                        <div className="p-6 space-y-4">
-                                            <img 
-                                                src={selectedPhoto.url} 
-                                                alt={selectedPhoto.titulo}
-                                                className="w-full rounded-lg"
-                                            />
-                                            
-                                            {selectedPhoto.descricao && (
-                                                <p className="text-gray-600 dark:text-gray-400">{selectedPhoto.descricao}</p>
-                                            )}
-
-                                            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                                                <div>
-                                                    <p className="text-sm text-gray-500 dark:text-gray-400">Categoria</p>
-                                                    <p className="font-medium text-gray-900 dark:text-white capitalize">{selectedPhoto.categoria}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm text-gray-500 dark:text-gray-400">Data</p>
-                                                    <p className="font-medium text-gray-900 dark:text-white">
-                                                        {selectedPhoto.data_foto ? format(new Date(selectedPhoto.data_foto), 'dd/MM/yyyy') : '-'}
-                                                    </p>
-                                                </div>
+                                        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                            <div>
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">Categoria</p>
+                                                <p className="font-medium text-gray-900 dark:text-white capitalize">{selectedPhoto.categoria}</p>
                                             </div>
-
-                                            <div className="flex justify-end pt-4">
-                                                <button
-                                                    onClick={() => setShowPhotoDetailsModal(false)}
-                                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                                                >
-                                                    Fechar
-                                                </button>
+                                            <div>
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">Data</p>
+                                                <p className="font-medium text-gray-900 dark:text-white">
+                                                    {selectedPhoto.data_foto ? format(new Date(selectedPhoto.data_foto), 'dd/MM/yyyy') : '-'}
+                                                </p>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
+                                </Modal>
                             )}
                         </div>
                     )}
 
                     {activeTab === 'playlistzoe' && (
                         <div className="space-y-4">
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                            <div className="bg-white dark:bg-black rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
                                 <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
                                     <Music className="w-6 h-6 mr-2 text-red-600" />
                                     Playlist Zoe
@@ -2735,7 +2754,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div 
                                     onClick={() => setShowKidsListModal(true)}
-                                    className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 cursor-pointer hover:border-pink-500 dark:hover:border-pink-400 transition-colors"
+                                    className="bg-white dark:bg-black rounded-lg p-6 border border-gray-200 dark:border-gray-700 cursor-pointer hover:border-pink-500 dark:hover:border-pink-400 transition-colors"
                                 >
                                     <div className="flex items-center justify-between">
                                         <div>
@@ -2750,7 +2769,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 
                                 <div 
                                     onClick={() => setShowProfessoresListModal(true)}
-                                    className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-lg transition-shadow"
+                                    className="bg-white dark:bg-black rounded-lg p-6 border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-lg transition-shadow"
                                 >
                                     <div className="flex items-center justify-between">
                                         <div>
@@ -2764,7 +2783,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 </div>
                             </div>
 
-                            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                            <div className="bg-white dark:bg-black rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                                 <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Crianças por Faixa Etária</h3>
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
@@ -2806,7 +2825,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 </div>
                             </div>
 
-                            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                            <div className="bg-white dark:bg-black rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                                 <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center">
                                     <Calendar className="w-5 h-5 mr-2 text-pink-600" />
                                     Próximas Escalas ({kidsSchedules.length})
@@ -3069,7 +3088,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
                     {/* Configurações */}
                     {activeTab === 'configuracoes' && (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                        <div className="bg-white dark:bg-black rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
                             <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Configurações</h2>
                             <p className="text-gray-500 dark:text-gray-400">Funcionalidade em desenvolvimento</p>
                         </div>
@@ -3078,9 +3097,9 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                     {/* Configurações */}
                     {activeTab === 'configuracoes' && (
                         <div className="space-y-6">
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                            <div className="bg-white dark:bg-black rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
                                 <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
-                                    <Settings className="w-6 h-6 mr-2" />
+                                    <Settings className="w-6 h-6 mr-2 text-black dark:text-white" />
                                     Configurações
                                 </h2>
 
@@ -3088,8 +3107,8 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 <div className="space-y-4">
                                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Meu Perfil</h3>
 
-                                    <div className="flex items-center space-x-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                        <div className="h-16 w-16 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-2xl">
+                                    <div className="flex items-center space-x-4 p-4 bg-gray-50 dark:bg-black/50 rounded-lg">
+                                        <div className="h-16 w-16 rounded-full bg-black flex items-center justify-center text-white font-bold text-2xl">
                                             {currentMember?.nome?.charAt(0) || 'M'}
                                         </div>
                                         <div className="flex-1">
@@ -3125,7 +3144,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                 });
                                                 setShowEditProfileModal(true);
                                             }}
-                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                                            className="px-4 py-2 bg-black hover:bg-gray-800 text-white rounded-lg transition-colors flex items-center gap-2"
                                         >
                                             <Edit className="w-4 h-4" />
                                             Editar Perfil
@@ -3134,11 +3153,11 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
                                     {/* Informações do Perfil */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                        <div className="p-4 bg-gray-50 dark:bg-black/50 rounded-lg">
                                             <p className="text-sm text-gray-600 dark:text-gray-400">Telefone</p>
                                             <p className="font-medium text-gray-900 dark:text-white">{currentMember?.telefone || 'Não informado'}</p>
                                         </div>
-                                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                        <div className="p-4 bg-gray-50 dark:bg-black/50 rounded-lg">
                                             <p className="text-sm text-gray-600 dark:text-gray-400">Data de Nascimento</p>
                                             <p className="font-medium text-gray-900 dark:text-white">
                                                 {currentMember?.nascimento
@@ -3147,7 +3166,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                 }
                                             </p>
                                         </div>
-                                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                        <div className="p-4 bg-gray-50 dark:bg-black/50 rounded-lg">
                                             <p className="text-sm text-gray-600 dark:text-gray-400">Idade</p>
                                             <p className="font-medium text-gray-900 dark:text-white">
                                                 {currentMember?.nascimento
@@ -3156,7 +3175,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                 }
                                             </p>
                                         </div>
-                                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                        <div className="p-4 bg-gray-50 dark:bg-black/50 rounded-lg">
                                             <p className="text-sm text-gray-600 dark:text-gray-400">Família</p>
                                             <p className="font-medium text-gray-900 dark:text-white">{currentMember?.familia || 'Não informado'}</p>
                                         </div>
@@ -3166,20 +3185,14 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 <div className="border-t border-gray-200 dark:border-gray-700 mt-6 pt-6">
                                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Preferências</h3>
 
-                                    <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                    <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-black/50 rounded-lg">
                                         <div>
                                             <p className="font-medium text-gray-900 dark:text-white">Modo Escuro</p>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">Alternar entre tema claro e escuro</p>
+                                            <p className="text-sm text-gray-600 dark:text-gray-400">Sincronizado com o sistema</p>
                                         </div>
-                                        <button
-                                            onClick={() => {
-                                                setDarkMode(!darkMode);
-                                                localStorage.setItem('darkMode', !darkMode);
-                                            }}
-                                            className="p-2 bg-white dark:bg-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-500 transition-colors"
-                                        >
-                                            {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-                                        </button>
+                                        <div className="p-2 bg-white dark:bg-black rounded-lg">
+                                            {darkMode ? <Moon className="h-5 w-5 text-gray-900 dark:text-white" /> : <Sun className="h-5 w-5 text-gray-900 dark:text-white" />}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -3211,7 +3224,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
                             {/* Lista de Famílias */}
                             {myFamily || currentMember?.familia ? (
-                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                                <div className="bg-white dark:bg-black rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                                     <div
                                         className="flex items-center justify-between cursor-pointer p-4"
                                         onClick={() => {
@@ -3250,7 +3263,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                         setShowEditFamilyModal(true);
                                                     }
                                                 }}
-                                                className="p-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center"
+                                                className="p-2 bg-gray-100 dark:bg-black text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center"
                                                 title="Editar Família"
                                             >
                                                 <Edit className="w-5 h-5" />
@@ -3268,7 +3281,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             {myFamily ? (
                                                 // Mostrar membros da família criada
                                                 myFamily.membros.map((member, idx) => (
-                                                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-black/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors">
                                                         <div className="flex items-center gap-3">
                                                             <div className="h-10 w-10 rounded-full bg-gray-900 dark:bg-white flex items-center justify-center text-white dark:text-gray-900 font-semibold text-sm">
                                                                 {member.nome.charAt(0)}
@@ -3287,7 +3300,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                 ))
                                             ) : (
                                                 // Mostrar membro único se tiver família no perfil
-                                                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-black/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors">
                                                     <div className="flex items-center gap-3">
                                                         <div className="h-10 w-10 rounded-full bg-gray-900 dark:bg-white flex items-center justify-center text-white dark:text-gray-900 font-semibold text-sm">
                                                             {currentMember?.nome?.charAt(0) || 'M'}
@@ -3307,7 +3320,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     )}
                                 </div>
                             ) : (
-                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700 text-center">
+                                <div className="bg-white dark:bg-black rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700 text-center">
                                     <Users className="w-16 h-16 mx-auto text-gray-400 dark:text-gray-600 mb-4" />
                                     <p className="text-gray-500 dark:text-gray-400">Você ainda não pertence a uma família.</p>
                                     <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">Clique em "Criar Família" para começar.</p>
@@ -3318,12 +3331,23 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 </div>
 
                 {/* Modal de Adicionar Membro */}
-                {showAddMemberModal && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] overflow-y-auto p-4">
-                        <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
-                            <h3 className="text-base md:text-lg font-semibold mb-4 text-gray-900 dark:text-white">Adicionar Novo Membro</h3>
-
-                            <form onSubmit={async (e) => {
+                <Modal
+                    isOpen={showAddMemberModal}
+                    onClose={() => {
+                        setShowAddMemberModal(false);
+                        setNewMemberData({
+                            nome: '',
+                            telefone: '',
+                            dataNascimento: '',
+                            idade: '',
+                            genero: '',
+                            funcoes: []
+                        });
+                    }}
+                    title="Adicionar Novo Membro"
+                    maxWidth="max-w-2xl"
+                >
+                    <form onSubmit={async (e) => {
                                 e.preventDefault();
 
                                 // Validação: pelo menos uma função deve ser selecionada
@@ -3405,7 +3429,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         required
                                         value={newMemberData.nome}
                                         onChange={(e) => setNewMemberData({ ...newMemberData, nome: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                         placeholder="João Silva"
                                     />
                                 </div>
@@ -3418,7 +3442,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         type="tel"
                                         value={newMemberData.telefone}
                                         onChange={(e) => setNewMemberData({ ...newMemberData, telefone: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                         placeholder="(11) 98765-4321"
                                     />
                                 </div>
@@ -3446,7 +3470,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         type="number"
                                         value={newMemberData.idade}
                                         onChange={(e) => setNewMemberData({ ...newMemberData, idade: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                         placeholder="Ex: 25"
                                         readOnly
                                     />
@@ -3460,7 +3484,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         required
                                         value={newMemberData.genero}
                                         onChange={(e) => setNewMemberData({ ...newMemberData, genero: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                     >
                                         <option value="">Selecione...</option>
                                         <option value="masculino">Masculino</option>
@@ -3472,7 +3496,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
                                         Funções * (Selecione uma ou mais)
                                     </label>
-                                    <div className="space-y-2 p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50">
+                                    <div className="space-y-2 p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-black/50">
                                         {['Membro', 'Jovem', 'Louvor', 'Diaconia', 'Professor kids'].map((funcao) => {
                                             const isChecked = newMemberData.funcoes.includes(funcao);
                                             return (
@@ -3498,7 +3522,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                         />
                                                         <div className={`w-6 h-6 border-2 rounded flex items-center justify-center transition-all ${isChecked
                                                                 ? 'bg-blue-600 border-blue-600'
-                                                                : 'bg-white border-gray-400 dark:bg-gray-700 dark:border-gray-500'
+                                                                : 'bg-white border-gray-400 dark:bg-black dark:border-gray-500'
                                                             }`}>
                                                             {isChecked && (
                                                                 <X className="w-4 h-4 text-white" strokeWidth={3} />
@@ -3515,41 +3539,29 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     )}
                                 </div>
 
-                                <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setShowAddMemberModal(false);
-                                            setNewMemberData({
-                                                nome: '',
-                                                telefone: '',
-                                                dataNascimento: '',
-                                                idade: '',
-                                                genero: '',
-                                                funcoes: []
-                                            });
-                                        }}
-                                        className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                                    >
-                                        Cancelar
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                                    >
-                                        Adicionar Membro
-                                    </button>
-                                </div>
-                            </form>
+                        <div className="flex justify-end space-x-2 pt-4">
+                            <button
+                                type="submit"
+                                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                            >
+                                Adicionar Membro
+                            </button>
                         </div>
-                    </div>
-                )}
+                    </form>
+                </Modal>
 
                 {/* Modal de Criar Família */}
-                {showFamilyModal && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] overflow-y-auto p-4">
-                        <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
-                            <h3 className="text-base md:text-lg font-semibold mb-4 text-gray-900 dark:text-white">Criar Nova Família</h3>
+                <Modal
+                    isOpen={showFamilyModal}
+                    onClose={() => {
+                        setShowFamilyModal(false);
+                        setNewFamilyData({ nome: '', descricao: '' });
+                        setSelectedMembers([]);
+                        setFamilyMemberSearch('');
+                    }}
+                    title="Criar Nova Família"
+                    maxWidth="max-w-2xl"
+                >
 
                             <form onSubmit={async (e) => {
                                 e.preventDefault();
@@ -3609,7 +3621,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         required
                                         value={newFamilyData.nome}
                                         onChange={(e) => setNewFamilyData({ ...newFamilyData, nome: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                         placeholder="Ex: Família Silva"
                                     />
                                 </div>
@@ -3622,7 +3634,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         value={newFamilyData.descricao}
                                         onChange={(e) => setNewFamilyData({ ...newFamilyData, descricao: e.target.value })}
                                         rows="2"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                         placeholder="Informações adicionais sobre a família..."
                                     />
                                 </div>
@@ -3641,7 +3653,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             value={familyMemberSearch}
                                             onChange={(e) => setFamilyMemberSearch(e.target.value)}
                                             placeholder="Digite o nome do membro..."
-                                            className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-gray-700 dark:text-white text-sm"
+                                            className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-black dark:text-white text-sm"
                                         />
                                     </div>
 
@@ -3696,7 +3708,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                                     setSelectedMembers(prev => [...prev, member]);
                                                                 }
                                                             }}
-                                                            className="flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                                                            className="flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-900 cursor-pointer transition-colors"
                                                         >
                                                             <input
                                                                 type="checkbox"
@@ -3725,36 +3737,26 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </div>
                                 </div>
 
-                                <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setShowFamilyModal(false);
-                                            setNewFamilyData({ nome: '', descricao: '' });
-                                            setSelectedMembers([]);
-                                            setFamilyMemberSearch('');
-                                        }}
-                                        className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                                    >
-                                        Cancelar
-                                    </button>
+                                <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
                                     <button
                                         type="submit"
-                                        className="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100"
+                                        className="w-full px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100"
                                     >
                                         Criar Família
                                     </button>
                                 </div>
                             </form>
-                        </div>
-                    </div>
-                )}
+                </Modal>
 
                 {/* Modal de Editar Família */}
-                {showEditFamilyModal && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] overflow-y-auto p-4">
-                        <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
-                            <h3 className="text-base md:text-lg font-semibold mb-4 text-gray-900 dark:text-white">Editar Família</h3>
+                <Modal
+                    isOpen={showEditFamilyModal}
+                    onClose={() => {
+                        setShowEditFamilyModal(false);
+                    }}
+                    title="Editar Família"
+                    maxWidth="max-w-2xl"
+                >
 
                             <form onSubmit={async (e) => {
                                 e.preventDefault();
@@ -3792,7 +3794,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         required
                                         value={editFamilyData.nome}
                                         onChange={(e) => setEditFamilyData({ ...editFamilyData, nome: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                         placeholder="Ex: Família Silva"
                                     />
                                 </div>
@@ -3805,7 +3807,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         value={editFamilyData.descricao}
                                         onChange={(e) => setEditFamilyData({ ...editFamilyData, descricao: e.target.value })}
                                         rows="2"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                         placeholder="Informações adicionais sobre a família..."
                                     />
                                 </div>
@@ -3832,7 +3834,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             myFamily.membros.map((membro) => (
                                                 <div
                                                     key={membro.id}
-                                                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+                                                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-black/50 rounded-lg"
                                                 >
                                                     <div className="flex items-center gap-3">
                                                         <User className="w-8 h-8 text-gray-400 dark:text-gray-500" />
@@ -3897,35 +3899,28 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </div>
                                 </div>
 
-                                <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setShowEditFamilyModal(false);
-                                        }}
-                                        className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                                    >
-                                        Cancelar
-                                    </button>
+                                <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
                                     <button
                                         type="submit"
-                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                                     >
                                         Salvar Alterações
                                     </button>
                                 </div>
                             </form>
-                        </div>
-                    </div>
-                )}
+                </Modal>
 
                 {/* Modal de Buscar e Adicionar Membro Existente */}
-                {showSearchMemberModal && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[110] overflow-y-auto p-4">
-                        <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
-                            <h3 className="text-base md:text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-                                Adicionar Membro à Família
-                            </h3>
+                <Modal
+                    isOpen={showSearchMemberModal}
+                    onClose={() => {
+                        setShowSearchMemberModal(false);
+                        setMemberSearchQuery('');
+                        setMemberSearchResults([]);
+                    }}
+                    title="Adicionar Membro à Família"
+                    maxWidth="max-w-2xl"
+                >
 
                             <div className="mb-4">
                                 <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
@@ -3954,7 +3949,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                 setMemberSearchResults([]);
                                             }
                                         }}
-                                        className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white"
+                                        className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-black dark:text-white"
                                         placeholder="Digite o nome do membro..."
                                     />
                                 </div>
@@ -3970,7 +3965,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 {memberSearchResults.map((membro) => (
                                     <div
                                         key={membro.id}
-                                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-black/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900"
                                     >
                                         <div className="flex items-center gap-3">
                                             <User className="w-8 h-8 text-gray-400 dark:text-gray-500" />
@@ -4026,28 +4021,17 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 ))}
                             </div>
 
-                            <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setShowSearchMemberModal(false);
-                                        setMemberSearchQuery('');
-                                        setMemberSearchResults([]);
-                                    }}
-                                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                                >
-                                    Fechar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                </Modal>
 
                 {/* Modal de Editar Perfil */}
-                {showEditProfileModal && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] overflow-y-auto p-4">
-                        <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
-                            <h3 className="text-base md:text-lg font-semibold mb-4 text-gray-900 dark:text-white">Editar Perfil</h3>
+                <Modal
+                    isOpen={showEditProfileModal}
+                    onClose={() => {
+                        setShowEditProfileModal(false);
+                    }}
+                    title="Editar Perfil"
+                    maxWidth="max-w-2xl"
+                >
 
                             <form onSubmit={async (e) => {
                                 e.preventDefault();
@@ -4104,7 +4088,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         required
                                         value={editProfileData.nome}
                                         onChange={(e) => setEditProfileData({ ...editProfileData, nome: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                     />
                                 </div>
 
@@ -4116,7 +4100,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         type="tel"
                                         value={editProfileData.telefone}
                                         onChange={(e) => setEditProfileData({ ...editProfileData, telefone: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                         placeholder="(00) 00000-0000"
                                     />
                                 </div>
@@ -4129,7 +4113,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         type="date"
                                         value={editProfileData.nascimento}
                                         onChange={(e) => setEditProfileData({ ...editProfileData, nascimento: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                     />
                                 </div>
 
@@ -4140,7 +4124,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     <select
                                         value={editProfileData.genero}
                                         onChange={(e) => setEditProfileData({ ...editProfileData, genero: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                     >
                                         <option value="">Selecione</option>
                                         <option value="masculino">Masculino</option>
@@ -4161,27 +4145,40 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     key={funcao}
                                                     className={`flex items-center space-x-3 p-3 rounded-lg cursor-pointer transition-all ${isChecked
                                                             ? 'bg-blue-50 dark:bg-blue-900/30 border-2 border-blue-500'
-                                                            : 'bg-gray-50 dark:bg-gray-700/50 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600'
+                                                            : 'bg-gray-50 dark:bg-black/50 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600'
                                                         }`}
                                                 >
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={isChecked}
-                                                        onChange={(e) => {
-                                                            if (e.target.checked) {
-                                                                setEditProfileData({
-                                                                    ...editProfileData,
-                                                                    funcoes: [...editProfileData.funcoes, funcao]
-                                                                });
-                                                            } else {
-                                                                setEditProfileData({
-                                                                    ...editProfileData,
-                                                                    funcoes: editProfileData.funcoes.filter(f => f !== funcao)
-                                                                });
-                                                            }
-                                                        }}
-                                                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-                                                    />
+                                                    <div className="relative">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isChecked}
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    setEditProfileData({
+                                                                        ...editProfileData,
+                                                                        funcoes: [...editProfileData.funcoes, funcao]
+                                                                    });
+                                                                } else {
+                                                                    setEditProfileData({
+                                                                        ...editProfileData,
+                                                                        funcoes: editProfileData.funcoes.filter(f => f !== funcao)
+                                                                    });
+                                                                }
+                                                            }}
+                                                            className="sr-only"
+                                                        />
+                                                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                                                            isChecked 
+                                                                ? 'bg-blue-600 border-blue-600' 
+                                                                : 'bg-transparent border-gray-300 dark:border-gray-600'
+                                                        }`}>
+                                                            {isChecked && (
+                                                                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                                </svg>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                     <span className={`text-sm font-medium capitalize ${isChecked
                                                             ? 'text-blue-700 dark:text-blue-300'
                                                             : 'text-gray-700 dark:text-gray-300'
@@ -4194,32 +4191,21 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </div>
                                 </div>
 
-                                <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setShowEditProfileModal(false);
-                                        }}
-                                        className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                                    >
-                                        Cancelar
-                                    </button>
+                                <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
                                     <button
                                         type="submit"
-                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                                     >
                                         Salvar Alterações
                                     </button>
                                 </div>
                             </form>
-                        </div>
-                    </div>
-                )}
+                </Modal>
 
                 {/* Modal de Lista de Crianças */}
                 {showKidsListModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden shadow-2xl">
+                        <div className="bg-white dark:bg-black rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden shadow-2xl">
                             <div className="p-6">
                                 <div className="flex items-center justify-between mb-4">
                                     <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -4228,7 +4214,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </h2>
                                     <button
                                         onClick={() => setShowKidsListModal(false)}
-                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-lg"
                                     >
                                         <X className="h-5 w-5 text-gray-500 dark:text-gray-400" />
                                     </button>
@@ -4249,7 +4235,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                 return (
                                                     <div 
                                                         key={crianca.id}
-                                                        className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/50"
+                                                        className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-black/50"
                                                     >
                                                         <div className="flex items-center justify-between">
                                                             <div className="flex-1">
@@ -4292,7 +4278,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 {/* Modal Lista de Professores */}
                 {showProfessoresListModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="bg-white dark:bg-black rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                             <div className="p-6">
                                 <div className="flex items-center justify-between mb-6">
                                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -4301,7 +4287,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </h2>
                                     <button
                                         onClick={() => setShowProfessoresListModal(false)}
-                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-lg transition-colors"
                                     >
                                         <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
                                     </button>
@@ -4316,7 +4302,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             return (
                                                 <div 
                                                     key={professor.id}
-                                                    className="p-4 rounded-lg border-2 border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-700"
+                                                    className="p-4 rounded-lg border-2 border-blue-200 dark:border-blue-800 bg-white dark:bg-black"
                                                 >
                                                     <div className="flex items-center gap-3">
                                                         <div className="h-12 w-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold text-lg">
@@ -4362,7 +4348,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 <div className="flex justify-end pt-6 border-t border-gray-200 dark:border-gray-700 mt-6">
                                     <button
                                         onClick={() => setShowProfessoresListModal(false)}
-                                        className="px-6 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                                        className="px-6 py-2 bg-gray-300 dark:bg-black text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-9000"
                                     >
                                         Fechar
                                     </button>
@@ -4375,7 +4361,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 {/* Modal de Lista de Jovens */}
                 {showJovensListModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="bg-white dark:bg-black rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                             <div className="p-6">
                                 <div className="flex items-center justify-between mb-6">
                                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -4384,7 +4370,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </h2>
                                     <button
                                         onClick={() => setShowJovensListModal(false)}
-                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-lg transition-colors"
                                     >
                                         <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
                                     </button>
@@ -4405,7 +4391,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             return (
                                                 <div 
                                                     key={jovem.id}
-                                                    className="p-4 rounded-lg border-2 border-indigo-200 dark:border-indigo-800 bg-white dark:bg-gray-700"
+                                                    className="p-4 rounded-lg border-2 border-indigo-200 dark:border-indigo-800 bg-white dark:bg-black"
                                                 >
                                                     <div className="flex items-center gap-3">
                                                         <div className="h-12 w-12 rounded-full bg-indigo-600 flex items-center justify-center text-white font-semibold text-lg">
@@ -4464,7 +4450,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 <div className="flex justify-end pt-6 border-t border-gray-200 dark:border-gray-700 mt-6">
                                     <button
                                         onClick={() => setShowJovensListModal(false)}
-                                        className="px-6 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                                        className="px-6 py-2 bg-gray-300 dark:bg-black text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-9000"
                                     >
                                         Fechar
                                     </button>
@@ -4477,7 +4463,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 {/* Modal de Nova Escala Kids */}
                 {showKidsScheduleModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="bg-white dark:bg-black rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                             <div className="p-6">
                                 <div className="flex items-center justify-between mb-6">
                                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -4494,7 +4480,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                 professoresSelecionados: []
                                             });
                                         }}
-                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-lg transition-colors"
                                     >
                                         <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
                                     </button>
@@ -4531,6 +4517,10 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         const novasEscalas = [...escalasKids, novaEscala];
                                         setEscalasKids(novasEscalas);
                                         localStorage.setItem('escalasKids', JSON.stringify(novasEscalas));
+                                        
+                                        // Atualizar kidsSchedules imediatamente
+                                        setKidsSchedules(prev => [...prev, savedSchedule]);
+                                        
                                         setShowKidsScheduleModal(false);
                                         setNewKidsScheduleData({
                                             turmas: [],
@@ -4598,7 +4588,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     type="date"
                                                     value={newKidsScheduleData.data}
                                                     onChange={(e) => setNewKidsScheduleData({ ...newKidsScheduleData, data: e.target.value })}
-                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 dark:bg-gray-700 dark:text-white"
+                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 dark:bg-black dark:text-white"
                                                     required
                                                 />
                                             </div>
@@ -4610,7 +4600,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     type="time"
                                                     value={newKidsScheduleData.horario}
                                                     onChange={(e) => setNewKidsScheduleData({ ...newKidsScheduleData, horario: e.target.value })}
-                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 dark:bg-gray-700 dark:text-white"
+                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 dark:bg-black dark:text-white"
                                                     required
                                                 />
                                             </div>
@@ -4622,7 +4612,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             </h3>
                                             
                                             {!kidsMembers?.professores || kidsMembers.professores.length === 0 ? (
-                                                <div className="text-center py-8 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                                <div className="text-center py-8 bg-gray-50 dark:bg-black rounded-lg">
                                                     <Users className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
                                                     <p className="text-gray-500 dark:text-gray-400">Nenhum professor cadastrado.</p>
                                                     <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
@@ -4730,23 +4720,16 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 {showEventDetailsModal && renderEventDetails()}
 
                 {/* Modal de Inscrever Familiar */}
-                {showRegisterOtherModal && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full shadow-2xl">
-                            <div className="p-6">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Inscrever Familiar</h2>
-                                    <button
-                                        onClick={() => {
-                                            setShowRegisterOtherModal(false);
-                                            setRegisterOtherSearch('');
-                                            setRegisterOtherResults([]);
-                                        }}
-                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-                                    >
-                                        <X className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-                                    </button>
-                                </div>
+                <Modal
+                    isOpen={showRegisterOtherModal}
+                    onClose={() => {
+                        setShowRegisterOtherModal(false);
+                        setRegisterOtherSearch('');
+                        setRegisterOtherResults([]);
+                    }}
+                    title="Inscrever Familiar"
+                    maxWidth="max-w-md"
+                >
 
                                 {(!myFamily || !myFamily.membros || myFamily.membros.length <= 1) ? (
                                     <p className="text-center text-gray-500 dark:text-gray-400 py-8">
@@ -4760,7 +4743,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                 value={registerOtherSearch}
                                                 onChange={(e) => handleRegisterOtherSearch(e.target.value)}
                                                 placeholder="Buscar familiar por nome..."
-                                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-black text-gray-900 dark:text-white"
                                             />
                                         </div>
 
@@ -4785,15 +4768,12 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         </div>
                                     </>
                                 )}
-                            </div>
-                        </div>
-                    </div>
-                )}
+                </Modal>
 
                 {/* Modal de Detalhes da Escala */}
                 {showScheduleModal && selectedSchedule && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full shadow-2xl">
+                        <div className="bg-white dark:bg-black rounded-2xl max-w-lg w-full shadow-2xl">
                             <div className="p-6">
                                 {/* Cabeçalho */}
                                 <div className="flex items-center justify-between mb-6">
@@ -4826,7 +4806,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             setSelectedSchedule(null);
                                             setScheduleMembers([]);
                                         }}
-                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-lg transition-colors"
                                     >
                                         <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                                     </button>
@@ -4835,7 +4815,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 {/* Conteúdo */}
                                 <div className="space-y-4">
                                     {/* Data e Horário */}
-                                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
+                                    <div className="bg-gray-50 dark:bg-black/50 rounded-xl p-4">
                                         <div className="space-y-2">
                                             <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
                                                 <Calendar className="w-4 h-4" />
@@ -4858,7 +4838,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                                                 Descrição
                                             </h3>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                                            <p className="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-black/50 rounded-lg p-3">
                                                 {selectedSchedule.descricao}
                                             </p>
                                         </div>
@@ -4870,7 +4850,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                                     Local
                                     </h3>
-                                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-black/50 rounded-lg p-3">
                                     <MapPin className="w-4 h-4" />
                                     <span>{selectedSchedule.local}</span>
                                     </div>
@@ -4885,7 +4865,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             </h3>
                                             <div className="space-y-2">
                                                 {selectedSchedule.musicas.map((musica, index) => (
-                                                    <div key={index} className="flex items-center gap-3 p-2 bg-white dark:bg-gray-800 rounded-lg">
+                                                    <div key={index} className="flex items-center gap-3 p-2 bg-white dark:bg-black rounded-lg">
                                                         <div className="h-8 w-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
                                                             <Music className="w-4 h-4 text-green-600 dark:text-green-400" />
                                                         </div>
@@ -4913,7 +4893,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                             className={`flex items-center justify-between gap-3 p-3 rounded-lg ${
                                                                 musico.id === currentMember?.id
                                                                     ? 'bg-purple-100 dark:bg-purple-900/30 border-2 border-purple-300 dark:border-purple-700'
-                                                                    : 'bg-gray-50 dark:bg-gray-700/50'
+                                                                    : 'bg-gray-50 dark:bg-black/50'
                                                             }`}
                                                         >
                                                             <div className="flex items-center gap-3">
@@ -4969,7 +4949,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                                 className={`flex items-center gap-3 p-3 rounded-lg ${
                                                                     member.id === currentMember?.id
                                                                         ? 'bg-purple-100 dark:bg-purple-900/30 border-2 border-purple-300 dark:border-purple-700'
-                                                                        : 'bg-gray-50 dark:bg-gray-700/50'
+                                                                        : 'bg-gray-50 dark:bg-black/50'
                                                                 }`}
                                                             >
                                                                 <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold ${
@@ -5054,7 +5034,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     setSelectedSchedule(null);
                                                     setScheduleMembers([]);
                                                 }}
-                                                className="px-6 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium transition-colors"
+                                                className="px-6 py-2.5 bg-gray-200 dark:bg-black text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium transition-colors"
                                             >
                                                 Fechar
                                             </button>
@@ -5066,7 +5046,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                 setSelectedSchedule(null);
                                                 setScheduleMembers([]);
                                             }}
-                                            className="w-full px-4 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium transition-colors"
+                                            className="w-full px-4 py-2.5 bg-gray-200 dark:bg-black text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium transition-colors"
                                         >
                                             Fechar
                                         </button>
@@ -5080,7 +5060,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 {/* Modal de Lista de Músicas */}
                 {showMusicListModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
-                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+                        <div className="bg-white dark:bg-black p-6 rounded-lg shadow-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                     <Music className="w-6 h-6 text-green-500" />
@@ -5088,7 +5068,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 </h3>
                                 <button
                                     onClick={() => setShowMusicListModal(false)}
-                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-lg"
                                 >
                                     <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                                 </button>
@@ -5152,7 +5132,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                             <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
                                 <button
                                     onClick={() => setShowMusicListModal(false)}
-                                    className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+                                    className="w-full px-4 py-2 bg-gray-200 dark:bg-black text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
                                 >
                                     Fechar
                                 </button>
@@ -5164,7 +5144,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 {/* Modal de Músicos Ativos */}
                 {showMusiciansModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
-                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+                        <div className="bg-white dark:bg-black p-6 rounded-lg shadow-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                     <Music className="w-6 h-6 text-purple-500" />
@@ -5172,7 +5152,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                 </h3>
                                 <button
                                     onClick={() => setShowMusiciansModal(false)}
-                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-lg"
                                 >
                                     <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                                 </button>
@@ -5236,7 +5216,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                             <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
                                 <button
                                     onClick={() => setShowMusiciansModal(false)}
-                                    className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+                                    className="w-full px-4 py-2 bg-gray-200 dark:bg-black text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
                                 >
                                     Fechar
                                 </button>
@@ -5248,7 +5228,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 {/* Modal de Criar Escala de Louvor */}
                 {showCreateScheduleModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
-                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="bg-white dark:bg-black p-6 rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                             <h3 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Nova Escala de Louvor</h3>
                             <form onSubmit={(e) => {
                                 e.preventDefault();
@@ -5261,7 +5241,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     <select
                                         value={newScheduleData.categoria}
                                         onChange={(e) => setNewScheduleData({ ...newScheduleData, categoria: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-black dark:text-white"
                                         required
                                     >
                                         <option value="culto">Culto</option>
@@ -5279,7 +5259,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             required
                                             value={newScheduleData.data}
                                             onChange={(e) => setNewScheduleData({ ...newScheduleData, data: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-black dark:text-white"
                                         />
                                     </div>
                                     <div>
@@ -5291,7 +5271,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             required
                                             value={newScheduleData.horario}
                                             onChange={(e) => setNewScheduleData({ ...newScheduleData, horario: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-black dark:text-white"
                                         />
                                     </div>
                                 </div>
@@ -5321,7 +5301,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                 }
                                             }}
                                             placeholder="Nome da música..."
-                                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white placeholder-gray-400"
+                                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 dark:bg-black dark:text-white placeholder-gray-400"
                                             disabled={(newScheduleData.musicas || []).length >= 5}
                                         />
                                         <button
@@ -5383,7 +5363,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             const musico = musicoId ? louvorMembers.find(m => m.id === musicoId) : null;
                                             
                                             return (
-                                                <div key={instrumento} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                                <div key={instrumento} className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
                                                     <div className="flex items-center justify-between mb-2">
                                                         <div className="flex items-center gap-2">
                                                             <Music className="w-5 h-5 text-purple-600" />
@@ -5404,15 +5384,33 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                         )}
                                                     </div>
                                                     
-                                                    <div className="flex items-center gap-3 p-2 bg-purple-100 dark:bg-purple-900/30 rounded">
-                                                    <div className="h-8 w-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-semibold">
-                                                    {musico?.nome?.charAt(0) || 'M'}
-                                                    </div>
-                                                    <div className="flex-1">
-                                                    <p className="text-sm font-medium text-gray-900 dark:text-white">{musico?.nome || 'Sem músico'}</p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400">{musico?.telefone || '-'}</p>
-                                                    </div>
-                                                    </div>
+                                                    <select
+                                                        value={musicoId || ''}
+                                                        onChange={(e) => {
+                                                            const selectedId = e.target.value;
+                                                            if (selectedId) {
+                                                                setNewScheduleData({
+                                                                    ...newScheduleData,
+                                                                    instrumentos: {
+                                                                        ...instrumentos,
+                                                                        [instrumento]: parseInt(selectedId)
+                                                                    }
+                                                                });
+                                                            } else {
+                                                                const newInstrumentos = { ...instrumentos };
+                                                                delete newInstrumentos[instrumento];
+                                                                setNewScheduleData({ ...newScheduleData, instrumentos: newInstrumentos });
+                                                            }
+                                                        }}
+                                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-black dark:text-white"
+                                                    >
+                                                        <option value="">Selecione um músico</option>
+                                                        {louvorMembers.map(member => (
+                                                            <option key={member.id} value={member.id}>
+                                                                {member.nome}
+                                                            </option>
+                                                        ))}
+                                                    </select>
                                                 </div>
                                             );
                                         })}
@@ -5443,7 +5441,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 {/* Modal de Editar Escala de Louvor */}
                 {showEditScheduleModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
-                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="bg-white dark:bg-black p-6 rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                             <h3 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Editar Escala de Louvor</h3>
                             <form onSubmit={(e) => {
                                 e.preventDefault();
@@ -5456,7 +5454,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     <select
                                         value={newScheduleData.categoria}
                                         onChange={(e) => setNewScheduleData({ ...newScheduleData, categoria: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-black dark:text-white"
                                         required
                                     >
                                         <option value="culto">Culto</option>
@@ -5474,7 +5472,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             required
                                             value={newScheduleData.data}
                                             onChange={(e) => setNewScheduleData({ ...newScheduleData, data: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-black dark:text-white"
                                         />
                                     </div>
                                     <div>
@@ -5486,7 +5484,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             required
                                             value={newScheduleData.horario}
                                             onChange={(e) => setNewScheduleData({ ...newScheduleData, horario: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-black dark:text-white"
                                         />
                                     </div>
                                 </div>
@@ -5516,7 +5514,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                 }
                                             }}
                                             placeholder="Nome da música..."
-                                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white placeholder-gray-400"
+                                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 dark:bg-black dark:text-white placeholder-gray-400"
                                             disabled={(newScheduleData.musicas || []).length >= 5}
                                         />
                                         <button
@@ -5578,7 +5576,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             const musico = musicoId ? louvorMembers.find(m => m.id === musicoId) : null;
                                             
                                             return (
-                                                <div key={instrumento} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                                <div key={instrumento} className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
                                                     <div className="flex items-center justify-between mb-2">
                                                         <div className="flex items-center gap-2">
                                                             <Music className="w-5 h-5 text-purple-600" />
@@ -5599,38 +5597,33 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                         )}
                                                     </div>
                                                     
-                                                    {musico ? (
-                                                        <div className="flex items-center gap-3 p-2 bg-purple-100 dark:bg-purple-900/30 rounded">
-                                                            <div className="h-8 w-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-semibold">
-                                                                {musico.nome?.charAt(0) || 'M'}
-                                                            </div>
-                                                            <div className="flex-1">
-                                                                <p className="text-sm font-medium text-gray-900 dark:text-white">{musico.nome}</p>
-                                                                <p className="text-xs text-gray-500 dark:text-gray-400">{musico.telefone}</p>
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <select
-                                                            value={musicoId || ''}
-                                                            onChange={(e) => {
+                                                    <select
+                                                        value={musicoId || ''}
+                                                        onChange={(e) => {
+                                                            const selectedId = e.target.value;
+                                                            if (selectedId) {
                                                                 setNewScheduleData({
                                                                     ...newScheduleData,
                                                                     instrumentos: {
                                                                         ...instrumentos,
-                                                                        [instrumento]: e.target.value || undefined
+                                                                        [instrumento]: parseInt(selectedId)
                                                                     }
                                                                 });
-                                                            }}
-                                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white text-sm"
-                                                        >
-                                                            <option value="">Selecione um músico</option>
-                                                            {louvorMembers.map((musico) => (
-                                                                <option key={musico.id} value={musico.id}>
-                                                                    {musico.nome}
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                    )}
+                                                            } else {
+                                                                const newInstrumentos = { ...instrumentos };
+                                                                delete newInstrumentos[instrumento];
+                                                                setNewScheduleData({ ...newScheduleData, instrumentos: newInstrumentos });
+                                                            }
+                                                        }}
+                                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-black dark:text-white"
+                                                    >
+                                                        <option value="">Selecione um músico</option>
+                                                        {louvorMembers.map(member => (
+                                                            <option key={member.id} value={member.id}>
+                                                                {member.nome}
+                                                            </option>
+                                                        ))}
+                                                    </select>
                                                 </div>
                                             );
                                         })}
@@ -5676,7 +5669,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 {/* Modal de adicionar música */}
                 {showMusicModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
-                        <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg max-w-md w-full">
+                        <div className="bg-white dark:bg-black p-4 md:p-6 rounded-lg shadow-lg max-w-md w-full">
                             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Adicionar Música</h3>
                             <form onSubmit={handleSubmitMusic} className="space-y-4">
                                 <div>
@@ -5688,7 +5681,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         required
                                         value={newMusicData.nome}
                                         onChange={(e) => setNewMusicData({ ...newMusicData, nome: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                         placeholder="Ex: Bondade de Deus"
                                     />
                                 </div>
@@ -5701,7 +5694,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         type="text"
                                         value={newMusicData.artista}
                                         onChange={(e) => setNewMusicData({ ...newMusicData, artista: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                         placeholder="Ex: Isaías Saad"
                                     />
                                 </div>
@@ -5714,7 +5707,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         type="url"
                                         value={newMusicData.link}
                                         onChange={(e) => setNewMusicData({ ...newMusicData, link: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-600 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                         placeholder="https://www.youtube.com/watch?v=..."
                                     />
                                 </div>
@@ -5742,7 +5735,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 {/* Modal de Oficina */}
                 {showOficinaModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] overflow-y-auto p-4">
-                        <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
+                        <div className="bg-white dark:bg-black p-4 md:p-6 rounded-lg shadow-lg max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
                             <h3 className="text-base md:text-lg font-semibold mb-4 text-gray-900 dark:text-white">
                                 {selectedOficina ? 'Editar Oficina' : 'Nova Oficina'}
                             </h3>
@@ -5757,7 +5750,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         required
                                         value={oficinaFormData.nome}
                                         onChange={(e) => setOficinaFormData({ ...oficinaFormData, nome: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                         placeholder="Ex: Louvor e Adoração"
                                     />
                                 </div>
@@ -5770,7 +5763,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         value={oficinaFormData.descricao}
                                         onChange={(e) => setOficinaFormData({ ...oficinaFormData, descricao: e.target.value })}
                                         rows="3"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                         placeholder="Descrição da oficina"
                                     />
                                 </div>
@@ -5785,7 +5778,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             required
                                             value={oficinaFormData.data}
                                             onChange={(e) => setOficinaFormData({ ...oficinaFormData, data: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                         />
                                     </div>
 
@@ -5798,7 +5791,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             required
                                             value={oficinaFormData.horario}
                                             onChange={(e) => setOficinaFormData({ ...oficinaFormData, horario: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                         />
                                     </div>
                                 </div>
@@ -5811,7 +5804,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         type="text"
                                         value={oficinaFormData.local}
                                         onChange={(e) => setOficinaFormData({ ...oficinaFormData, local: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                         placeholder="Ex: Sala 2"
                                     />
                                 </div>
@@ -5826,7 +5819,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         min="1"
                                         value={oficinaFormData.vagas}
                                         onChange={(e) => setOficinaFormData({ ...oficinaFormData, vagas: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                     />
                                 </div>
 
@@ -5834,11 +5827,11 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
                                         Quem pode se inscrever?
                                     </label>
-                                    <div className="space-y-2 max-h-64 overflow-y-auto p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                                    <div className="space-y-2 max-h-64 overflow-y-auto p-2 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-700 rounded-lg">
                                         <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
                                             oficinaFormData.quem_pode_se_inscrever.includes('todos')
                                                 ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-500 shadow-sm'
-                                                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-900'
                                         }`}>
                                             <div className="relative flex items-center justify-center">
                                                 <input
@@ -5851,7 +5844,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                             setOficinaFormData({ ...oficinaFormData, quem_pode_se_inscrever: [] });
                                                         }
                                                     }}
-                                                    className="w-5 h-5 text-indigo-600 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-500 rounded focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                                                    className="w-5 h-5 text-indigo-600 bg-white dark:bg-black border-2 border-gray-300 dark:border-gray-500 rounded focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                                                 />
                                             </div>
                                             <span className={`ml-3 text-sm font-semibold ${
@@ -5882,7 +5875,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                         ? 'border-gray-200 dark:border-gray-700 opacity-50 cursor-not-allowed'
                                                         : isSelected
                                                             ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-500 shadow-sm'
-                                                            : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                            : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-900'
                                                 }`}>
                                                     <div className="relative flex items-center justify-center">
                                                         <input
@@ -5897,7 +5890,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                                 }
                                                             }}
                                                             disabled={isTodosSelected}
-                                                            className="w-5 h-5 text-indigo-600 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-500 rounded focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                                            className="w-5 h-5 text-indigo-600 bg-white dark:bg-black border-2 border-gray-300 dark:border-gray-500 rounded focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                                                         />
                                                     </div>
                                                     <span className={`ml-3 text-sm ${
@@ -5932,7 +5925,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                 quem_pode_se_inscrever: ['todos']
                                             });
                                         }}
-                                        className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                                        className="px-4 py-2 bg-gray-300 dark:bg-black text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-9000"
                                     >
                                         Cancelar
                                     </button>
@@ -5952,7 +5945,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 {/* Modal de Detalhes da Oficina (para membros não-líderes) */}
                 {showOficinaDetailsModal && oficinaDetails && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-                        <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="bg-white dark:bg-black rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                             <div className="p-6">
                                 <div className="flex justify-between items-start mb-6">
                                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -6028,7 +6021,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                 {oficinaParticipants.map((participant) => (
                                                     <div
                                                         key={participant.id}
-                                                        className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                                                        className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-black rounded-lg"
                                                     >
                                                         <Users className="w-4 h-4 text-gray-500 dark:text-gray-400" />
                                                         <span className="text-sm text-gray-900 dark:text-white">
@@ -6047,7 +6040,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     setShowOficinaDetailsModal(false);
                                                     setOficinaDetails(null);
                                                 }}
-                                                className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
                                             >
                                                 Fechar
                                             </button>
@@ -6101,7 +6094,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 {/* Modal de Editar Oficina */}
                 {showEditOficinaModal && oficinaDetails && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] overflow-y-auto p-4">
-                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
+                        <div className="bg-white dark:bg-black p-6 rounded-lg shadow-lg max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                                     Editar Oficina
@@ -6147,7 +6140,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         required
                                         value={oficinaFormData.nome}
                                         onChange={(e) => setOficinaFormData({ ...oficinaFormData, nome: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                     />
                                 </div>
 
@@ -6159,7 +6152,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         value={oficinaFormData.descricao}
                                         onChange={(e) => setOficinaFormData({ ...oficinaFormData, descricao: e.target.value })}
                                         rows="3"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                     />
                                 </div>
 
@@ -6173,7 +6166,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             required
                                             value={oficinaFormData.data}
                                             onChange={(e) => setOficinaFormData({ ...oficinaFormData, data: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                         />
                                     </div>
 
@@ -6186,7 +6179,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             required
                                             value={oficinaFormData.horario}
                                             onChange={(e) => setOficinaFormData({ ...oficinaFormData, horario: e.target.value })}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                         />
                                     </div>
                                 </div>
@@ -6199,7 +6192,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         type="text"
                                         value={oficinaFormData.local}
                                         onChange={(e) => setOficinaFormData({ ...oficinaFormData, local: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                     />
                                 </div>
 
@@ -6213,7 +6206,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                         min="1"
                                         value={oficinaFormData.vagas}
                                         onChange={(e) => setOficinaFormData({ ...oficinaFormData, vagas: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-black dark:border-gray-600 dark:text-white"
                                     />
                                 </div>
 
@@ -6221,7 +6214,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     <button
                                         type="button"
                                         onClick={() => setShowEditOficinaModal(false)}
-                                        className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                                        className="px-4 py-2 bg-gray-300 dark:bg-black text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-9000"
                                     >
                                         Cancelar
                                     </button>
@@ -6240,7 +6233,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 {/* Modal Criar Escala de Diaconia */}
                 {showDiaconiaScheduleModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
-                        <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="bg-white dark:bg-black rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                             <div className="p-6">
                                 <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Montar Escala de Diaconia</h2>
                                 <form onSubmit={async (e) => {
@@ -6281,7 +6274,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             <select
                                                 value={newDiaconiaScheduleData.categoria}
                                                 onChange={(e) => setNewDiaconiaScheduleData({ ...newDiaconiaScheduleData, categoria: e.target.value })}
-                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-black dark:text-white"
                                                 required
                                             >
                                                 <option value="culto">Culto</option>
@@ -6298,7 +6291,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     type="date"
                                                     value={newDiaconiaScheduleData.data}
                                                     onChange={(e) => setNewDiaconiaScheduleData({ ...newDiaconiaScheduleData, data: e.target.value })}
-                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-black dark:text-white"
                                                     required
                                                 />
                                             </div>
@@ -6310,7 +6303,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     type="time"
                                                     value={newDiaconiaScheduleData.horario}
                                                     onChange={(e) => setNewDiaconiaScheduleData({ ...newDiaconiaScheduleData, horario: e.target.value })}
-                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-black dark:text-white"
                                                     required
                                                 />
                                             </div>
@@ -6328,7 +6321,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                         <div 
                                                             key={diacono.id} 
                                                             className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
-                                                                isSelected ? 'bg-purple-100 dark:bg-purple-900/30' : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'
+                                                                isSelected ? 'bg-purple-100 dark:bg-purple-900/30' : 'bg-gray-50 dark:bg-black hover:bg-gray-100 dark:hover:bg-gray-600'
                                                             }`}
                                                             onClick={() => {
                                                                 const newSelecionados = isSelected
@@ -6393,7 +6386,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                 {/* Modal Editar Escala de Diaconia */}
                 {showEditDiaconiaScheduleModal && diaconiaScheduleToEdit && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
-                        <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="bg-white dark:bg-black rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                             <div className="p-6">
                                 <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Editar Escala de Diaconia</h2>
                                 <form onSubmit={async (e) => {
@@ -6428,7 +6421,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             <select
                                                 value={newDiaconiaScheduleData.categoria}
                                                 onChange={(e) => setNewDiaconiaScheduleData({ ...newDiaconiaScheduleData, categoria: e.target.value })}
-                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-black dark:text-white"
                                                 required
                                             >
                                                 <option value="culto">Culto</option>
@@ -6445,7 +6438,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     type="date"
                                                     value={newDiaconiaScheduleData.data}
                                                     onChange={(e) => setNewDiaconiaScheduleData({ ...newDiaconiaScheduleData, data: e.target.value })}
-                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-black dark:text-white"
                                                     required
                                                 />
                                             </div>
@@ -6457,7 +6450,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     type="time"
                                                     value={newDiaconiaScheduleData.horario}
                                                     onChange={(e) => setNewDiaconiaScheduleData({ ...newDiaconiaScheduleData, horario: e.target.value })}
-                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-black dark:text-white"
                                                     required
                                                 />
                                             </div>
@@ -6475,7 +6468,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                         <div 
                                                             key={diacono.id} 
                                                             className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
-                                                                isSelected ? 'bg-purple-100 dark:bg-purple-900/30' : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'
+                                                                isSelected ? 'bg-purple-100 dark:bg-purple-900/30' : 'bg-gray-50 dark:bg-black hover:bg-gray-100 dark:hover:bg-gray-600'
                                                             }`}
                                                             onClick={() => {
                                                                 const newSelecionados = isSelected
@@ -6557,7 +6550,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                         {/* Modal Detalhes da Escala de Professores Kids */}
                             {showDetalhesEscalaProfessoresModal && selectedKidsSchedule && (
                                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                                        <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                                        <div className="bg-white dark:bg-black rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                                             <div className="p-6">
                                     <div className="flex items-center justify-between mb-6">
                                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -6569,7 +6562,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                 setShowDetalhesEscalaProfessoresModal(false);
                                                 setSelectedKidsSchedule(null);
                                             }}
-                                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-lg transition-colors"
                                         >
                                             <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
                                         </button>
@@ -6634,7 +6627,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     return (
                                                         <div 
                                                             key={i} 
-                                                            className="p-4 rounded-lg border-2 border-pink-200 dark:border-pink-800 bg-white dark:bg-gray-700"
+                                                            className="p-4 rounded-lg border-2 border-pink-200 dark:border-pink-800 bg-white dark:bg-black"
                                                         >
                                                             <div className="flex items-center gap-3">
                                                                 <div className="h-12 w-12 rounded-full bg-pink-600 flex items-center justify-center text-white font-semibold text-lg">
@@ -6711,7 +6704,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                 setShowDetalhesEscalaProfessoresModal(false);
                                                 setSelectedKidsSchedule(null);
                                             }}
-                                            className="px-6 py-3 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                                            className="px-6 py-3 bg-gray-300 dark:bg-black text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-9000"
                                         >
                                             Fechar
                                         </button>
@@ -6724,7 +6717,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                     {/* Modal Editar Escala de Professores */}
                     {showEditEscalaProfessoresModal && selectedKidsSchedule && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                            <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                            <div className="bg-white dark:bg-black rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                                 <div className="p-6">
                                     <div className="flex items-center justify-between mb-6">
                                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -6735,7 +6728,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             onClick={() => {
                                                 setShowEditEscalaProfessoresModal(false);
                                             }}
-                                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-lg transition-colors"
                                         >
                                             <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
                                         </button>
@@ -6828,7 +6821,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     type="date"
                                                     value={editFormDataProfessores.data}
                                                     onChange={(e) => setEditFormDataProfessores(prev => ({ ...prev, data: e.target.value }))}
-                                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent dark:bg-black dark:text-white"
                                                     required
                                                 />
                                             </div>
@@ -6840,7 +6833,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                     type="time"
                                                     value={editFormDataProfessores.horario}
                                                     onChange={(e) => setEditFormDataProfessores(prev => ({ ...prev, horario: e.target.value }))}
-                                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent dark:bg-black dark:text-white"
                                                     required
                                                 />
                                             </div>
@@ -6910,7 +6903,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                             <button
                                                 type="button"
                                                 onClick={() => setShowEditEscalaProfessoresModal(false)}
-                                                className="flex-1 px-6 py-3 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500"
+                                                className="flex-1 px-6 py-3 bg-gray-300 dark:bg-black text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-9000"
                                             >
                                                 Cancelar
                                             </button>

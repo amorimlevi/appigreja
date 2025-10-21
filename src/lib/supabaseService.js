@@ -23,15 +23,44 @@ export const getMemberById = async (id) => {
     return data
 }
 
+// Helper para retry com backoff exponencial
+const retryWithBackoff = async (fn, maxRetries = 3, delay = 1000) => {
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            return await fn();
+        } catch (error) {
+            console.log(`Tentativa ${i + 1} de ${maxRetries} falhou:`, error.message);
+            
+            if (i === maxRetries - 1) {
+                throw error;
+            }
+            
+            // Aguardar antes de tentar novamente (backoff exponencial)
+            const waitTime = delay * Math.pow(2, i);
+            console.log(`Aguardando ${waitTime}ms antes de tentar novamente...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+    }
+};
+
 export const createMember = async (memberData) => {
-    const { data, error } = await supabase
-        .from('members')
-        .insert([memberData])
-        .select()
-        .single()
+    console.log('Creating member with data:', memberData);
     
-    if (error) throw error
-    return data
+    return retryWithBackoff(async () => {
+        const { data, error } = await supabase
+            .from('members')
+            .insert([memberData])
+            .select()
+            .single()
+        
+        if (error) {
+            console.error('Supabase error creating member:', error);
+            throw error;
+        }
+        
+        console.log('Member created successfully:', data);
+        return data;
+    }, 3, 1000);
 }
 
 export const updateMember = async (id, memberData) => {
@@ -476,13 +505,37 @@ export const registerEventParticipant = async (eventId, membroId) => {
 }
 
 export const unregisterEventParticipant = async (eventId, membroId) => {
-    const { error } = await supabase
+    console.log('unregisterEventParticipant - eventId:', eventId, 'type:', typeof eventId);
+    console.log('unregisterEventParticipant - membroId:', membroId, 'type:', typeof membroId);
+    
+    // Ver TODOS os registros da tabela para debug
+    const { data: allRecords } = await supabase
+        .from('event_participants')
+        .select('*')
+    console.log('unregisterEventParticipant - ALL records in table:', allRecords);
+    
+    // Primeiro, vamos verificar se existe o registro
+    const { data: existingData, error: checkError } = await supabase
+        .from('event_participants')
+        .select('*')
+        .eq('event_id', eventId)
+        .eq('membro_id', membroId)
+    
+    console.log('unregisterEventParticipant - existing records:', existingData);
+    console.log('unregisterEventParticipant - check error:', checkError);
+    
+    const { data, error } = await supabase
         .from('event_participants')
         .delete()
         .eq('event_id', eventId)
         .eq('membro_id', membroId)
+        .select()
+    
+    console.log('unregisterEventParticipant - deleted data:', data);
+    console.log('unregisterEventParticipant - delete error:', error);
     
     if (error) throw error
+    return data
 }
 
 export const getEventParticipants = async (eventId) => {
@@ -909,4 +962,100 @@ export const updatePhoto = async (photoId, updates) => {
     
     if (error) throw error
     return data
+}
+
+// ========== CONFIGURAÇÕES DA IGREJA ==========
+
+export const getChurchSettings = async () => {
+    const { data, error } = await supabase
+        .from('church_settings')
+        .select('*')
+    
+    if (error) throw error
+    
+    // Converter array em objeto { key: value }
+    const settings = {}
+    data.forEach(setting => {
+        settings[setting.setting_key] = setting.setting_value
+    })
+    
+    return settings
+}
+
+export const getChurchSetting = async (key) => {
+    const { data, error } = await supabase
+        .from('church_settings')
+        .select('setting_value')
+        .eq('setting_key', key)
+        .single()
+    
+    if (error) {
+        if (error.code === 'PGRST116') {
+            // Não encontrado
+            return null
+        }
+        throw error
+    }
+    
+    return data.setting_value
+}
+
+export const updateChurchSetting = async (key, value) => {
+    const { data, error } = await supabase
+        .from('church_settings')
+        .upsert({ 
+            setting_key: key, 
+            setting_value: value 
+        }, {
+            onConflict: 'setting_key'
+        })
+        .select()
+        .single()
+    
+    if (error) throw error
+    return data
+}
+
+export const uploadChurchLogo = async (file) => {
+    const fileExt = file.name.split('.').pop()
+    const fileName = `logo-${Date.now()}.${fileExt}`
+    const filePath = `${fileName}`
+
+    // Upload do arquivo
+    const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('church-logos')
+        .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false
+        })
+
+    if (uploadError) throw uploadError
+
+    // Obter URL pública
+    const { data: { publicUrl } } = supabase.storage
+        .from('church-logos')
+        .getPublicUrl(filePath)
+
+    // Atualizar configuração com a nova URL
+    await updateChurchSetting('church_logo_url', publicUrl)
+
+    return publicUrl
+}
+
+export const deleteChurchLogo = async (logoUrl) => {
+    // Extrair o caminho do arquivo da URL
+    const urlParts = logoUrl.split('/church-logos/')
+    if (urlParts.length < 2) {
+        throw new Error('URL inválida')
+    }
+    
+    const filePath = urlParts[1]
+    
+    const { error } = await supabase.storage
+        .from('church-logos')
+        .remove([filePath])
+    
+    if (error) throw error
+    
+    return true
 }

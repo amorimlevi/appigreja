@@ -19,12 +19,15 @@ console.log('Root element:', document.getElementById('root'))
 // }
 // setupStatusBar()
 
-const root = document.getElementById('root')
+// Aguardar DOM carregar completamente
+const initApp = () => {
+  const root = document.getElementById('root')
 
-if (!root) {
-  console.error('ERRO: Elemento root não encontrado!')
-  document.body.innerHTML = '<h1 style="color: red; padding: 20px;">ERRO: Elemento root não encontrado!</h1>'
-} else {
+  if (!root) {
+    console.error('ERRO: Elemento root não encontrado!')
+    return
+  }
+
   console.log('Renderizando App...')
   ReactDOM.createRoot(root).render(
     <React.StrictMode>
@@ -32,4 +35,10 @@ if (!root) {
     </React.StrictMode>
   )
   console.log('App renderizado!')
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp)
+} else {
+  initApp()
 }

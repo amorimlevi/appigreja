@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "417819209289",
+    "project_id": "igreja-app-fe3db",
+    "storage_bucket": "igreja-app-fe3db.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:417819209289:android:d6776d797155df3aa2d998",
+        "android_client_info": {
+          "package_name": "com.churchapp.member"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCKj1JbVh8bMhdl3rLrYUl7SeBCyeWoQtU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

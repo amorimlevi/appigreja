@@ -1,11 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LogIn, User, Lock, Eye, EyeOff, UserPlus } from 'lucide-react';
+import { useChurchLogo } from '../hooks/useChurchSettings';
 
 const MemberLogin = ({ members, onLogin, onShowSignup }) => {
     const [emailOrName, setEmailOrName] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
+    const [isDark, setIsDark] = useState(false);
+
+    useEffect(() => {
+        const checkDarkMode = () => {
+            const darkMode = document.documentElement.classList.contains('dark');
+            setIsDark(darkMode);
+        };
+        
+        checkDarkMode();
+        const observer = new MutationObserver(checkDarkMode);
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        
+        return () => observer.disconnect();
+    }, []);
+
+    const { value: logoUrl } = useChurchLogo(isDark);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -25,19 +42,18 @@ const MemberLogin = ({ members, onLogin, onShowSignup }) => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 px-4">
+        <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black px-4">
             <div className="max-w-md w-full space-y-8">
                 <div className="text-center">
                     <img 
-                        src="https://res.cloudinary.com/dxchbdcai/image/upload/v1759592247/Design_sem_nome_10_nwkjse.png" 
+                        src={logoUrl} 
                         alt="Logo da Igreja" 
-                        className="w-48 h-48 mx-auto mb-4 object-contain"
+                        className="w-80 h-80 mx-auto mb-6 object-contain"
                     />
-                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Igreja Zoe</h2>
                     <p className="text-gray-600 dark:text-gray-400">"E perseveravam na doutrina dos apóstolos, e na comunhão, e no partir do pão, e nas orações."</p>
                 </div>
 
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8">
+                <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8">
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div>
                             <label htmlFor="emailOrName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

@@ -179,7 +179,7 @@ export const useSupabaseData = () => {
                 
                 // Atualizar eventos removendo workshops antigos e adicionando novos
                 setEvents(prev => {
-                    const regularEvents = prev.filter(e => !e.id?.startsWith('workshop-'))
+                    const regularEvents = prev.filter(e => !String(e.id).startsWith('workshop-'))
                     return [...regularEvents, ...workshopEvents]
                 })
             },
@@ -208,7 +208,7 @@ export const useSupabaseData = () => {
                 })
                 
                 setEvents(prev => {
-                    const regularEvents = prev.filter(e => !e.id?.startsWith('workshop-'))
+                    const regularEvents = prev.filter(e => !String(e.id).startsWith('workshop-'))
                     return [...regularEvents, ...workshopEvents]
                 })
             },
