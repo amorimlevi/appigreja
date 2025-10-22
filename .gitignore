@@ -1,5 +1,15 @@
 node_modules
-node_modules
-node_modules
-node_modules
-node_modules
+dist
+.env
+
+# Android signing
+android-member/key.properties
+android-member/release-key.keystore
+android-admin/key.properties
+android-admin/release-key.keystore
+
+# Build outputs
+android-member/app/build
+android-admin/app/build
+ios-member/App/build
+ios-admin/App/build

@@ -8,8 +8,10 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    assetsInlineLimit: 0,
     rollupOptions: {
       input: resolve(__dirname, 'index.member.html'),
+      external: ['@capacitor/push-notifications', '@capacitor/core', '@capacitor/status-bar'],
       output: {
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
