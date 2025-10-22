@@ -12,14 +12,19 @@
       "backgroundColor": "#FFFFFF"
     },
     "Keyboard": {
-      "resize": "body",
-      "style": "dark"
+      "resize": "none",
+      "style": "dark",
+      "resizeOnFullScreen": false
     }
   },
   "ios": {
     "path": "ios-admin",
-    "contentInset": "always",
-    "scrollEnabled": true
+    "contentInset": "never",
+    "scrollEnabled": true,
+    "webContentsDebuggingEnabled": true,
+    "allowsLinkPreview": false,
+    "limitsNavigationsToAppBoundDomains": false,
+    "preferredContentMode": "mobile"
   },
   "android": {
     "path": "android-admin",

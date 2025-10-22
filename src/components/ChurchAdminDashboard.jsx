@@ -51,7 +51,6 @@ import { useChurchLogo } from '../hooks/useChurchSettings';
 
 const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], families = [], onAddEvent, onEditEvent, onDeleteEvent, onAddMember, onEditMember, onDeleteMember, onAddFamily, onEditFamily, onLogout }) => {
     console.log('ChurchAdminDashboard renderizando - members:', members.length, 'events:', events.length, 'families:', families.length)
-    const { value: logoUrl } = useChurchLogo();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('dashboard');
     const [genderFilter, setGenderFilter] = useState('all');
@@ -66,6 +65,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
     const [darkMode, setDarkMode] = useState(() => {
         return window.matchMedia('(prefers-color-scheme: dark)').matches;
     });
+    const { value: logoUrl } = useChurchLogo(darkMode);
     const [showMemberModal, setShowMemberModal] = useState(false);
     const [showEventModal, setShowEventModal] = useState(false);
     const [showPrayerModal, setShowPrayerModal] = useState(false);
@@ -124,16 +124,7 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         artista: '',
         link: ''
     });
-    const [playlistMusicas, setPlaylistMusicas] = useState(() => {
-        const saved = localStorage.getItem('playlistZoe');
-        return saved ? JSON.parse(saved) : [
-            { id: 1, nome: 'Bondade de Deus', artista: 'Isaías Saad', link: 'https://www.youtube.com/watch?v=xg7pRPTDkd4' },
-            { id: 2, nome: 'Que Se Abram os Céus', artista: 'Gabriela Rocha', link: 'https://www.youtube.com/watch?v=wLU9bPrGdL8' },
-            { id: 3, nome: 'Reckless Love', artista: 'Thalles Roberto', link: 'https://www.youtube.com/watch?v=Sc6SSHuZvQE' },
-            { id: 4, nome: 'Há Poder', artista: 'Gabriela Rocha', link: 'https://www.youtube.com/watch?v=x57zvpAy4B4' },
-            { id: 5, nome: 'O Céu Vai Reagir', artista: 'Sarah Farias', link: 'https://www.youtube.com/watch?v=bSZxeLnyiaU' }
-        ];
-    });
+    const [playlistMusicas, setPlaylistMusicas] = useState([]);
     const [showEscalaModal, setShowEscalaModal] = useState(false);
     const [showEscalaOptionsModal, setShowEscalaOptionsModal] = useState(false);
     const [showEditEscalaModal, setShowEditEscalaModal] = useState(false);
@@ -260,6 +251,21 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
         }
     }, [darkMode]);
 
+    // Observer para detectar mudanças manuais no dark mode
+    React.useEffect(() => {
+        const checkDarkMode = () => {
+            const isDark = document.documentElement.classList.contains('dark');
+            if (isDark !== darkMode) {
+                setDarkMode(isDark);
+            }
+        };
+        
+        const observer = new MutationObserver(checkDarkMode);
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        
+        return () => observer.disconnect();
+    }, [darkMode]);
+
     // Detectar mudanças na preferência de cor do sistema
     React.useEffect(() => {
         const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -362,6 +368,32 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
             }
         };
         loadPhotos();
+    }, [activeTab]);
+
+    // Carregar músicas da playlist quando acessar a aba
+    useEffect(() => {
+        const loadPlaylist = async () => {
+            if (activeTab === 'playlistzoe') {
+                try {
+                    const { data, error } = await supabase
+                        .from('playlist_zoe')
+                        .select('*')
+                        .order('id', { ascending: true });
+                    
+                    if (error) throw error;
+                    
+                    // Mapear titulo para nome para compatibilidade
+                    const mappedData = (data || []).map(musica => ({
+                        ...musica,
+                        nome: musica.titulo
+                    }));
+                    setPlaylistMusicas(mappedData);
+                } catch (error) {
+                    console.error('Erro ao carregar playlist:', error);
+                }
+            }
+        };
+        loadPlaylist();
     }, [activeTab]);
 
     // Handlers para modais
@@ -1770,9 +1802,9 @@ const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], 
                 </div>
             </div>
 
-            {/* Botão Sair - Fixo na parte inferior */}
+            {/* Botão Sair */}
             {onLogout && (
-                <div className="fixed bottom-4 left-0 right-0 px-4 lg:px-8 max-w-7xl mx-auto">
+                <div className="mb-24">
                     <button
                         onClick={onLogout}
                         className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium shadow-lg"
@@ -2889,25 +2921,44 @@ Montar escala        </button>
         setShowMusicModal(true);
     };
 
-    const handleSubmitMusic = (e) => {
+    const handleSubmitMusic = async (e) => {
         e.preventDefault();
-        const newMusic = {
-            id: Date.now(),
-            nome: newMusicData.nome,
-            artista: newMusicData.artista,
-            link: newMusicData.link
-        };
-        const updatedPlaylist = [...playlistMusicas, newMusic];
-        setPlaylistMusicas(updatedPlaylist);
-        localStorage.setItem('playlistZoe', JSON.stringify(updatedPlaylist));
-        setShowMusicModal(false);
-        setNewMusicData({ nome: '', artista: '', link: '' });
+        try {
+            const { data, error } = await supabase
+                .from('playlist_zoe')
+                .insert([{
+                    titulo: newMusicData.nome,
+                    artista: newMusicData.artista,
+                    link: newMusicData.link
+                }])
+                .select();
+            
+            if (error) throw error;
+            
+            const newMusic = { ...data[0], nome: data[0].titulo };
+            setPlaylistMusicas([...playlistMusicas, newMusic]);
+            setShowMusicModal(false);
+            setNewMusicData({ nome: '', artista: '', link: '' });
+        } catch (error) {
+            console.error('Erro ao adicionar música:', error);
+            alert('Erro ao adicionar música');
+        }
     };
 
-    const handleDeleteMusic = (id) => {
-        const updatedPlaylist = playlistMusicas.filter(m => m.id !== id);
-        setPlaylistMusicas(updatedPlaylist);
-        localStorage.setItem('playlistZoe', JSON.stringify(updatedPlaylist));
+    const handleDeleteMusic = async (id) => {
+        try {
+            const { error } = await supabase
+                .from('playlist_zoe')
+                .delete()
+                .eq('id', id);
+            
+            if (error) throw error;
+            
+            setPlaylistMusicas(playlistMusicas.filter(m => m.id !== id));
+        } catch (error) {
+            console.error('Erro ao excluir música:', error);
+            alert('Erro ao excluir música');
+        }
     };
 
     const renderPlaylistZoe = () => {
@@ -3111,7 +3162,8 @@ Montar escala        </button>
                 WebkitOverflowScrolling: 'touch'
             }}>
                 <div className="p-4 md:p-6" style={{ 
-                    paddingTop: 'calc(1rem + env(safe-area-inset-top, 0px))'
+                    paddingTop: 'calc(1rem + env(safe-area-inset-top, 0px))',
+                    paddingBottom: '1rem'
                 }}>
                     {activeTab === 'dashboard' && renderDashboard()}
                     {activeTab === 'members' && renderMembers()}
@@ -4035,8 +4087,13 @@ Montar escala        </button>
 
             {/* Modal de edição de membro */}
             {showEditMemberModal && selectedMember && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] overflow-y-auto p-4">
-                    <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] overflow-y-auto p-4" onClick={(e) => {
+                    if (e.target === e.currentTarget) {
+                        setShowEditMemberModal(false);
+                        setSelectedMember(null);
+                    }
+                }}>
+                    <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                         <h3 className="text-base md:text-lg font-semibold mb-4 text-gray-900 dark:text-white">Editar Membro</h3>
 
                         <form onSubmit={(e) => {
@@ -4210,7 +4267,7 @@ Montar escala        </button>
                                         setShowEditMemberModal(false);
                                         setSelectedMember(null);
                                     }}
-                                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                    className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-white rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors"
                                 >
                                     Cancelar
                                 </button>

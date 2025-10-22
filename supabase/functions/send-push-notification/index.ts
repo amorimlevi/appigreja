@@ -182,17 +182,59 @@ serve(async (req) => {
   }
 
   try {
-    const { type, title, body, data } = await req.json()
+    const { type, title, body, data, ministerio } = await req.json()
 
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Buscar todos os tokens de dispositivos
-    const { data: tokens, error: tokensError } = await supabaseClient
-      .from('device_tokens')
-      .select('*')
+    // Se for escala, filtrar por ministério
+    let tokens
+    let tokensError
+    
+    if (type === 'escala' && ministerio) {
+      console.log(`Filtering tokens for ministry: ${ministerio}`)
+      
+      // Buscar tokens de membros que têm a flag do ministério
+      const { data: tokensData, error: error1 } = await supabaseClient
+        .from('device_tokens')
+        .select(`
+          *,
+          members!inner (
+            id,
+            funcoes
+          )
+        `)
+      
+      tokensError = error1
+      
+      // Filtrar tokens onde o membro tem a funcao do ministério
+      if (tokensData) {
+        tokens = tokensData.filter((t: any) => {
+          const funcoes = t.members?.funcoes || []
+          
+          // Mapear ministério para as funcoes correspondentes
+          const ministerioFuncoes: Record<string, string[]> = {
+            'louvor': ['louvor', 'líder de louvor', 'lider de louvor'],
+            'diaconia': ['diaconia', 'diácono', 'diacono'],
+            'kids': ['professor kids', 'lider kids', 'líder kids'],
+            'jovens': ['jovens', 'líder jovens', 'lider jovens']
+          }
+          
+          const funcoesDoMinisterio = ministerioFuncoes[ministerio] || []
+          return funcoes.some((f: string) => funcoesDoMinisterio.includes(f.toLowerCase()))
+        })
+      }
+    } else {
+      // Buscar todos os tokens (para avisos e eventos)
+      const { data: tokensData, error: error2 } = await supabaseClient
+        .from('device_tokens')
+        .select('*')
+      
+      tokens = tokensData
+      tokensError = error2
+    }
 
     if (tokensError) {
       console.error('Error fetching tokens:', tokensError)

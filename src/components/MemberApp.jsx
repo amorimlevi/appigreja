@@ -37,6 +37,7 @@ import { format, parseISO, isAfter, isBefore, startOfMonth, endOfMonth, isSameMo
 import { ptBR } from 'date-fns/locale';
 import { formatId } from '../utils/formatters';
 import { searchMembers, getEventFoods, updateEventFood, registerEventParticipant, unregisterEventParticipant, checkEventRegistration, updateMember, getMinistrySchedules, getMembers, getFamilyByMemberId, getUnreadAvisosCount, markAvisoAsRead, getAvisosWithReadStatus, getPlaylistMusicas, getMemberById, createMinistrySchedule, updateMinistrySchedule, deleteMinistrySchedule, createPlaylistMusica, deletePlaylistMusica, getWorkshops, createWorkshop, updateWorkshop, deleteWorkshop, registerWorkshopParticipant, unregisterWorkshopParticipant, checkWorkshopRegistration, getWorkshopRegistrations, getPhotos } from '../lib/supabaseService';
+import { supabase } from '../lib/supabaseClient';
 import CustomCalendar from './CustomCalendar';
 import Modal from './Modal';
 import { initializePushNotifications, removeDeviceToken } from '../services/pushNotifications';
@@ -646,6 +647,59 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
         checkLiderAndLoadData();
     }, [activeTab, currentMember]);
+
+    // Realtime: Atualização automática de eventos
+    useEffect(() => {
+        const channel = supabase
+            .channel('events-changes')
+            .on('postgres_changes', 
+                { event: 'INSERT', schema: 'public', table: 'events' },
+                (payload) => {
+                    console.log('Novo evento criado:', payload.new);
+                    // Atualizar lista de eventos via parent
+                    window.location.reload(); // Solução simples - pode melhorar
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
+
+    // Realtime: Atualização automática de escalas
+    useEffect(() => {
+        const channel = supabase
+            .channel('ministry-schedules-changes')
+            .on('postgres_changes',
+                { event: 'INSERT', schema: 'public', table: 'ministry_schedules' },
+                async (payload) => {
+                    console.log('Nova escala criada:', payload.new);
+                    const newSchedule = payload.new;
+                    
+                    // Atualizar a lista correspondente ao ministério
+                    switch (newSchedule.ministerio) {
+                        case 'louvor':
+                            setLouvorSchedules(prev => [...prev, newSchedule]);
+                            break;
+                        case 'diaconia':
+                            setDiaconiaSchedules(prev => [...prev, newSchedule]);
+                            break;
+                        case 'kids':
+                            setKidsSchedules(prev => [...prev, newSchedule]);
+                            break;
+                        case 'jovens':
+                            setJovensSchedules(prev => [...prev, newSchedule]);
+                            break;
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
 
     // Detectar scroll para ocultar botões flutuantes
     useEffect(() => {
@@ -5630,7 +5684,7 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                     </div>
                                 </div>
 
-                                <div className="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700 mt-6">
+                                <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700 mt-6">
                                     <button
                                         type="button"
                                         onClick={() => {
@@ -5639,27 +5693,24 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
                                                 setShowEditScheduleModal(false);
                                             }
                                         }}
-                                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2"
+                                        className="p-3 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center transition-colors"
                                     >
-                                        <Trash2 className="w-4 h-4" />
-                                        Excluir
+                                        <Trash2 className="w-5 h-5" />
                                     </button>
-                                    <div className="flex space-x-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowEditScheduleModal(false)}
-                                            className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                                        >
-                                            Cancelar
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            disabled={Object.values(newScheduleData.instrumentos || {}).filter(Boolean).length === 0}
-                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            Salvar Alterações ({Object.values(newScheduleData.instrumentos || {}).filter(Boolean).length} {Object.values(newScheduleData.instrumentos || {}).filter(Boolean).length === 1 ? 'músico' : 'músicos'})
-                                        </button>
-                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowEditScheduleModal(false)}
+                                        className="flex-1 px-6 py-3 bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-600 font-medium transition-colors text-center"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={Object.values(newScheduleData.instrumentos || {}).filter(Boolean).length === 0}
+                                        className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors text-center"
+                                    >
+                                        Salvar ({Object.values(newScheduleData.instrumentos || {}).filter(Boolean).length})
+                                    </button>
                                 </div>
                             </form>
                         </div>

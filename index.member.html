@@ -7,6 +7,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="format-detection" content="telephone=no" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
     <title>Igreja Member</title>
     <style>
       /* Prevenir zoom e scaling no iOS */
@@ -41,6 +43,12 @@
         margin: 0 !important;
         padding: 0 !important;
         overscroll-behavior: none !important;
+        background-color: #ffffff;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background-color: #000000;
+        }
       }
       #root {
         width: 100% !important;
