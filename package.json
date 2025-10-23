@@ -10,8 +10,8 @@
     "dev:admin": "vite --config vite.config.admin.js",
     "build": "vite build",
     "preview": "vite preview",
-    "build:member": "vite build --config vite.config.member.js",
-    "build:admin": "vite build --config vite.config.admin.js",
+    "build:member": "vite build --config vite.config.member.js && node fix-vite-paths.cjs",
+    "build:admin": "vite build --config vite.config.admin.js && node fix-admin-paths.cjs",
     "cap:sync:member": "npm run build:member && mv dist/index.member.html dist/index.html && cp capacitor.config.member.json capacitor.config.json && node node_modules/@capacitor/cli/bin/capacitor sync",
     "cap:sync:admin": "npm run build:admin && cp capacitor.config.admin.json capacitor.config.json && node node_modules/@capacitor/cli/bin/capacitor sync",
     "open:ios:member": "cp capacitor.config.member.json capacitor.config.json && node node_modules/@capacitor/cli/bin/capacitor open ios",
@@ -32,9 +32,11 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.9.4",
-    "recharts": "^3.2.1"
+    "recharts": "^3.2.1",
+    "sharp": "^0.34.4"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@types/react": "^18.2.15",
     "@types/react-dom": "^18.2.7",
     "@vitejs/plugin-react": "^4.0.3",

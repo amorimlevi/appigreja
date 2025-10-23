@@ -1,0 +1,8 @@
+{
+  "android": {
+    "path": "android-member"
+  },
+  "ios": {
+    "path": "ios-member"
+  }
+}

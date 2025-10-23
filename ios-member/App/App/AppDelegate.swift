@@ -4,13 +4,16 @@ import FirebaseCore
 import FirebaseMessaging
 
 @UIApplicationMain
-class AppDelegate: UIResponder, UIApplicationDelegate {
+class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate {
 
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool { 
         // Initialize Firebase
         FirebaseApp.configure()
+        
+        // Set Firebase Messaging delegate
+        Messaging.messaging().delegate = self
         
         // Override point for customization after application launch.
         return true
@@ -51,18 +54,52 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
     
-    // MARK: - Push Notifications
+    // MARK: - Push Notifications (APNs)
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        // Pass the token to Capacitor
+        print("📱 APNs token received")
+        
+        // Pass the APNs token to Capacitor
         NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
         
-        // Also pass to Firebase Messaging
+        // Pass APNs token to Firebase Messaging (required for FCM to work)
         Messaging.messaging().apnsToken = deviceToken
+        
+        // Request FCM token (will be delivered via messaging:didReceiveRegistrationToken)
+        Messaging.messaging().token { token, error in
+            if let error = error {
+                print("❌ Error fetching FCM token: \(error)")
+            } else if let token = token {
+                print("🔑 FCM Token: \(token)")
+                // Send FCM token to JavaScript layer
+                self.sendFCMTokenToCapacitor(token)
+            }
+        }
     }
     
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        // Pass the error to Capacitor
+        print("❌ Failed to register for remote notifications: \(error)")
         NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
     }
-
+    
+    // MARK: - Firebase Messaging Delegate
+    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+        print("🔑 Firebase registration token: \(String(describing: fcmToken))")
+        
+        if let token = fcmToken {
+            // Send FCM token to JavaScript layer
+            sendFCMTokenToCapacitor(token)
+        }
+    }
+    
+    // Send FCM token to Capacitor/JavaScript
+    private func sendFCMTokenToCapacitor(_ token: String) {
+        print("📤 Sending FCM token to Capacitor: \(token)")
+        
+        // Create a custom notification with FCM token
+        NotificationCenter.default.post(
+            name: Notification.Name("FCMTokenReceived"),
+            object: nil,
+            userInfo: ["token": token]
+        )
+    }
 }

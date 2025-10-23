@@ -1,215 +1,79 @@
-# 🚀 Deploy Push Notifications - Passo a Passo
+# 🚀 Deploy de Notificações Push - Método pelo Dashboard
 
-## Situação Atual
+## ✅ Sem precisar de Supabase CLI!
 
-✅ Token APNs sendo gerado no iOS
-✅ Token salvo no Supabase (tabela `device_tokens`)
-✅ Trigger criando avisos na fila (`push_notifications_queue`)
-✅ Edge Function criada (`send-push-notifications`)
-❌ **Edge Function não está deployada/executando**
+### Passo 1: Configurar Secret pelo Dashboard
 
----
+1. Acesse o **Supabase Dashboard**: https://supabase.com/dashboard
+2. Selecione seu projeto
+3. No menu lateral, vá em **Edge Functions**
+4. Clique em **"Create a new function"**
+5. Nome da função: `send-push-v1`
+6. Copie o código do arquivo `supabase/functions/send-push-v1/index.ts`
+7. Cole no editor
+8. Clique em **"Deploy function"**
 
-## Passo 1: Deploy da Edge Function
+### Passo 2: Adicionar Secret
 
-### Opção A: Via Supabase Dashboard (Recomendado)
+1. Ainda em **Edge Functions**, clique na função `send-push-v1`
+2. Vá na aba **"Secrets"**
+3. Clique em **"Add secret"**
+4. Nome: `FIREBASE_SERVICE_ACCOUNT`
+5. Valor: **Cole todo o conteúdo do arquivo JSON** que você baixou (em uma linha)
 
-1. Abra [Supabase Dashboard](https://supabase.com/dashboard)
-2. Vá em **Edge Functions**
-3. Clique em **New function**
-4. Nome: `send-push-notifications`
-5. Cole o conteúdo de `supabase/functions/send-push-notifications/index.ts`
-6. Clique em **Deploy**
-
-### Opção B: Via Supabase CLI
-
-```bash
-# Instalar Supabase CLI (se ainda não tiver)
-npm install -g supabase
-
-# Login
-supabase login
-
-# Link com seu projeto
-supabase link --project-ref [seu-project-ref]
-
-# Deploy da função
-supabase functions deploy send-push-notifications
+O valor deve ser exatamente isto (copie do seu arquivo):
+```json
+{"type":"service_account","project_id":"igreja-app-fe3db","private_key_id":"1e2396f4841ad7ea39437a0eedcdccd630eaaeb2","private_key":"-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCeB6qfIjAgHZcK\n12ssKYAVAAiANwbyCx2uuUT1YC3MIFZaR6rVrcYjjqyHNTpiW76MjkHI7Bpos7Vk\nMQPo/2+wlM5ktB18ckKFtW4d5qRfiMTGpT+XrlgskZtvMRN7Egm88RMlEdEJIUZK\ngri6YBbFNuqhZE1k1ZOUANI0vCpaibNnd634dPUn4m0XBelCHffNsYakHEM3MWX3\n6n5NjZu4ab5vq0cSBO+EZP6VDxCXXFHOYktCO0criuda1vMd0Q330c38a0i06LnF\nS6TTPu+EaAakRlof4RJIPlOgtv/yldWkmd8VEABxawiAsT/UmZ3DAR/kBrtpUhHY\nofMf/rc7AgMBAAECggEADfibiwoYux4ilmDJJtRccH7aQYub35Y//4x9njvskJlj\nSQQBBHcih047zpBUIxH9XKvPARZul0ccCEmVEOpUU4Y0YQ7TdIcdfni1zYrwiUms\nK+u8HYraXMZauY/bKwxDNCMUEDjtBCOe9UNtVXzdRn4+bBpUBVAkhfc0nljsXaif\nUJcB5OCi0LJaKAWIMBeFA84EznU8HO91j6PqXyOobQln4PAVN3ZpbrRC/xmFvt7D\nGR3z1K+0/XvEnLapUhWUQiuGskeji22pDgrbxawtkwZPNmUvtxeUgNPGqzofd0Yu\nOk5B3poirv1VGcJRzo65BrhAIomm0rPxGUaRjJyg4QKBgQDPraiQT2R2SURn/j7Q\nic47qQk3xFWl+fLdRPWsvaF5vYrj1kVcdhM/8EW/xrlx+ABHPySov/x+xRcG9iEw\nBP1wcQ48pefXpauiD3nxiD/Qujkqgs1TPh7p59Q1NwRynOe7TLX3R2h+Jp2aiVMP\nVDHFCfbthUjogZ7qgthtd1+F+QKBgQDCzLSVlHORogi62gz8XuWOk1YC23GrBFrK\nIXBEZJ8B3zgQfPIPY9jnSf7T6Oj6mHHH75pg6XqIi+MJ0P305zZ7sV3RlusarXOB\naR7Dy07cX3DFekOl7j/VeFmHLBIL5zySrZXH9AFo+C2oVC3fKjliPzablKesAf/d\nfqCo9BRj0wKBgQCFkWUGW2l7gifS0nxH1zmiuVbKXSXQt+7xTLbNQLEoATXgzyCR\nFQfQaZISg5clq6FSMVQ8jC2ywsPKoGY74hm2RaAodXOlCFJYyqddJooUjpDRvIqd\n7SgovAeJqjbcF/oaRn4J6g1UhTV7/LJE+5t+5KfBn6WClEtG/JyB2vK+0QKBgE6f\nNmeE0hw+TM21gjY9yuL/nmBq13bRvB8G3fwMrIyh3kvxUfVaNEoteFdpEtdJveqX\nTzS8J0ODSjBFFKrKwxerX5VfFybeSNc7aTpXDU4uiyJ5FWKcRVFQULoY1HPPcYg1\n3VUlq4gFWtAsoZMHxL9dihnDJuVqrS1llUx7rtsXAoGAQWkZghsY2vGY4YbdFPkJ\nXul0BKUDnreNGOmkL6ocNBYB+qqPjxmAxflZcSg8TNJAkO9G2G3dJDslZ94BU9AL\nU4v8yLwqKYHN41E+S572GTh2e5SeGoMSK+Er4DjB7O24N8XI+crzBdnpcjXWoQAb\nmy0TkDYkvqvHXTEwZyT0QD0=\n-----END PRIVATE KEY-----\n","client_email":"firebase-adminsdk-fbsvc@igreja-app-fe3db.iam.gserviceaccount.com","client_id":"102254327500191841864","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_x509_cert_url":"https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40igreja-app-fe3db.iam.gserviceaccount.com","universe_domain":"googleapis.com"}
 ```
 
----
+6. Clique em **"Save"**
 
-## Passo 2: Configurar FCM Server Key
+### Passo 3: Habilitar pg_net
 
-1. No Firebase Console, vá em **Project Settings** > **Cloud Messaging**
-2. Copie a **Server Key** (legacy)
-3. No Supabase Dashboard:
-   - Vá em **Edge Functions** > `send-push-notifications`
-   - Clique em **Settings** ou **Secrets**
-   - Adicione:
-     - Key: `FCM_SERVER_KEY`
-     - Value: [sua server key do Firebase]
-
----
-
-## Passo 3: Executar Triggers SQL
-
-Execute o SQL se ainda não fez:
+No **SQL Editor**, execute:
 
 ```sql
--- No Supabase SQL Editor
-\i setup-push-notification-triggers.sql
+CREATE EXTENSION IF NOT EXISTS pg_net;
 ```
 
----
+### Passo 4: Configurar Variáveis do Banco
 
-## Passo 4: Configurar Execução Automática
-
-### Opção A: Database Webhook (Recomendado)
-
-Crie uma função que chama a Edge Function automaticamente:
+No **SQL Editor**, execute (substitua pelos seus valores):
 
 ```sql
--- Criar função que chama a Edge Function via pg_net
-CREATE OR REPLACE FUNCTION call_send_push_notifications()
-RETURNS TRIGGER AS $$
-BEGIN
-    -- Usar pg_net para chamar a Edge Function
-    PERFORM net.http_post(
-        url := 'https://[seu-projeto].supabase.co/functions/v1/send-push-notifications',
-        headers := jsonb_build_object(
-            'Content-Type', 'application/json',
-            'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
-        ),
-        body := '{}'::jsonb
-    );
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- URL do seu projeto (veja em Settings > API > Project URL)
+ALTER DATABASE postgres SET app.settings.supabase_url = 'https://dvbdvftaklstyhpqznmu.supabase.co';
 
--- Atualizar trigger para chamar a função
-DROP TRIGGER IF EXISTS trigger_send_push_after_queue ON push_notifications_queue;
-CREATE TRIGGER trigger_send_push_after_queue
-    AFTER INSERT ON push_notifications_queue
-    FOR EACH ROW
-    EXECUTE FUNCTION call_send_push_notifications();
+-- Service Role Key (veja em Settings > API > service_role - clique em "Reveal" para ver)
+ALTER DATABASE postgres SET app.settings.service_role_key = 'SUA_SERVICE_ROLE_KEY_AQUI';
 ```
 
-**Configure a variável do service role key:**
+Para obter a Service Role Key:
+1. Dashboard → **Settings** → **API**
+2. Seção **Project API keys**
+3. `service_role` → clique em **"Reveal"**
+4. Copie a chave (começa com `eyJ...`)
 
-```sql
--- No Supabase SQL Editor
-ALTER DATABASE postgres SET app.settings.service_role_key = '[seu-service-role-key]';
-```
+### Passo 5: Criar o Trigger
 
-### Opção B: Supabase Cron (Alternativa)
+No **SQL Editor**, cole e execute todo o conteúdo do arquivo: `trigger-push-fcm-v1.sql`
 
-Se preferir executar a cada minuto:
+### Passo 6: Testar!
 
-1. No Supabase Dashboard, vá em **Database** > **Cron Jobs**
-2. Clique em **Create a new cron job**
-3. Nome: `process-push-notifications`
-4. Schedule: `* * * * *` (a cada minuto)
-5. SQL:
-```sql
-SELECT net.http_post(
-    url := 'https://[seu-projeto].supabase.co/functions/v1/send-push-notifications',
-    headers := jsonb_build_object(
-        'Content-Type', 'application/json',
-        'Authorization', 'Bearer [seu-service-role-key]'
-    ),
-    body := '{}'::jsonb
-);
-```
-
-### Opção C: Chamar Manualmente (Para Testes)
-
-Você pode chamar manualmente via HTTP:
-
-```bash
-curl -X POST \
-  'https://[seu-projeto].supabase.co/functions/v1/send-push-notifications' \
-  -H 'Authorization: Bearer [seu-service-role-key]' \
-  -H 'Content-Type: application/json'
-```
+1. Crie um aviso no app Admin
+2. A notificação deve chegar! 🔔
 
 ---
 
-## Passo 5: Testar
+## 📋 Checklist
 
-1. **Crie um aviso** no app admin
-2. **Verifique no Supabase** se entrou na tabela `push_notifications_queue`:
-   ```sql
-   SELECT * FROM push_notifications_queue ORDER BY created_at DESC LIMIT 5;
-   ```
-3. **Chame a Edge Function** (manualmente ou via trigger)
-4. **Verifique se foi marcada como enviada**:
-   ```sql
-   SELECT * FROM push_notifications_queue WHERE sent = true ORDER BY sent_at DESC LIMIT 5;
-   ```
-5. **Veja os logs** da Edge Function:
-   - Supabase Dashboard > Edge Functions > send-push-notifications > Logs
+- [ ] Edge function `send-push-v1` criada
+- [ ] Secret `FIREBASE_SERVICE_ACCOUNT` configurado
+- [ ] Extensão `pg_net` habilitada
+- [ ] Variáveis `supabase_url` e `service_role_key` configuradas
+- [ ] Trigger `trigger_notify_new_aviso_v1` criado
+- [ ] Testado com um aviso
 
 ---
 
-## 🐛 Troubleshooting
-
-### Notificação não chega
-
-1. **Verifique se está na fila**:
-   ```sql
-   SELECT * FROM push_notifications_queue WHERE sent = false;
-   ```
-
-2. **Verifique se tem tokens**:
-   ```sql
-   SELECT * FROM device_tokens;
-   ```
-
-3. **Chame manualmente** a Edge Function para ver os logs
-
-4. **Verifique a FCM Server Key** está configurada corretamente
-
-### Erro "FCM_SERVER_KEY not configured"
-
-- Configure o secret na Edge Function (Passo 2)
-
-### Erro de autenticação
-
-- Verifique se está usando o **Service Role Key**, não o anon key
-
----
-
-## 📝 Checklist Final
-
-- [ ] Edge Function deployada no Supabase
-- [ ] FCM Server Key configurada nos secrets
-- [ ] Triggers SQL executados (`setup-push-notification-triggers.sql`)
-- [ ] Webhook ou Cron configurado para executar automaticamente
-- [ ] Testado criando um aviso
-- [ ] Notificação chegou no iPhone
-
----
-
-## 🚀 Próximos Passos (Opcional)
-
-### Melhorias:
-1. **Retry logic** - Tentar enviar novamente se falhar
-2. **Rate limiting** - Limitar envios por dispositivo
-3. **Segmentação** - Enviar apenas para usuários específicos
-4. **Analytics** - Rastrear taxa de abertura
-5. **Agendamento** - Enviar notificações em horários específicos
-
-### Para Produção:
-1. Mudar `aps-environment` para `production` no `App.entitlements`
-2. Rebuild com certificado de produção
-3. Testar no TestFlight
-4. Monitorar logs de envio
-
----
-
-## Documentação
-
-- [Supabase Edge Functions](https://supabase.com/docs/guides/functions)
-- [Firebase Cloud Messaging](https://firebase.google.com/docs/cloud-messaging)
-- [Apple Push Notifications](https://developer.apple.com/documentation/usernotifications)
+**Comece pelo Passo 1**: Vá no Dashboard do Supabase → Edge Functions → Create function

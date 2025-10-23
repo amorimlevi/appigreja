@@ -669,34 +669,113 @@ const MemberApp = ({ currentMember, events = [], avisos = [], onAddMember, onLog
 
     // Realtime: Atualização automática de escalas
     useEffect(() => {
+        console.log('🔄 Configurando realtime para escalas...');
+        
         const channel = supabase
             .channel('ministry-schedules-changes')
+            // INSERT - Nova escala
             .on('postgres_changes',
                 { event: 'INSERT', schema: 'public', table: 'ministry_schedules' },
                 async (payload) => {
-                    console.log('Nova escala criada:', payload.new);
+                    console.log('✅ Nova escala criada:', payload.new);
                     const newSchedule = payload.new;
                     
-                    // Atualizar a lista correspondente ao ministério
                     switch (newSchedule.ministerio) {
                         case 'louvor':
-                            setLouvorSchedules(prev => [...prev, newSchedule]);
+                            setLouvorSchedules(prev => [...prev, newSchedule].sort((a, b) => new Date(b.data) - new Date(a.data)));
                             break;
                         case 'diaconia':
-                            setDiaconiaSchedules(prev => [...prev, newSchedule]);
+                            setDiaconiaSchedules(prev => [...prev, newSchedule].sort((a, b) => new Date(b.data) - new Date(a.data)));
                             break;
                         case 'kids':
-                            setKidsSchedules(prev => [...prev, newSchedule]);
+                            setKidsSchedules(prev => [...prev, newSchedule].sort((a, b) => new Date(b.data) - new Date(a.data)));
                             break;
                         case 'jovens':
-                            setJovensSchedules(prev => [...prev, newSchedule]);
+                            setJovensSchedules(prev => [...prev, newSchedule].sort((a, b) => new Date(b.data) - new Date(a.data)));
                             break;
                     }
                 }
             )
-            .subscribe();
+            // UPDATE - Escala atualizada
+            .on('postgres_changes',
+                { event: 'UPDATE', schema: 'public', table: 'ministry_schedules' },
+                async (payload) => {
+                    console.log('🔄 Escala atualizada:', payload.new);
+                    const updatedSchedule = payload.new;
+                    
+                    switch (updatedSchedule.ministerio) {
+                        case 'louvor':
+                            setLouvorSchedules(prev => prev.map(s => s.id === updatedSchedule.id ? updatedSchedule : s));
+                            break;
+                        case 'diaconia':
+                            setDiaconiaSchedules(prev => prev.map(s => s.id === updatedSchedule.id ? updatedSchedule : s));
+                            break;
+                        case 'kids':
+                            setKidsSchedules(prev => prev.map(s => s.id === updatedSchedule.id ? updatedSchedule : s));
+                            break;
+                        case 'jovens':
+                            setJovensSchedules(prev => prev.map(s => s.id === updatedSchedule.id ? updatedSchedule : s));
+                            break;
+                    }
+                }
+            )
+            // DELETE - Escala removida
+            .on('postgres_changes',
+                { event: 'DELETE', schema: 'public', table: 'ministry_schedules' },
+                async (payload) => {
+                    console.log('🗑️ Escala removida:', payload.old);
+                    const deletedSchedule = payload.old;
+                    
+                    switch (deletedSchedule.ministerio) {
+                        case 'louvor':
+                            setLouvorSchedules(prev => prev.filter(s => s.id !== deletedSchedule.id));
+                            break;
+                        case 'diaconia':
+                            setDiaconiaSchedules(prev => prev.filter(s => s.id !== deletedSchedule.id));
+                            break;
+                        case 'kids':
+                            setKidsSchedules(prev => prev.filter(s => s.id !== deletedSchedule.id));
+                            break;
+                        case 'jovens':
+                            setJovensSchedules(prev => prev.filter(s => s.id !== deletedSchedule.id));
+                            break;
+                    }
+                }
+            )
+            .subscribe((status) => {
+                console.log('📡 Status do realtime de escalas:', status);
+            });
 
         return () => {
+            console.log('❌ Removendo canal de realtime de escalas');
+            supabase.removeChannel(channel);
+        };
+    }, []);
+
+    // Realtime: Atualização automática de escalas de louvor
+    useEffect(() => {
+        console.log('🔄 Configurando realtime para escalas de louvor...');
+        
+        const channel = supabase
+            .channel('escalas-louvor-changes')
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'escalas_louvor' },
+                async () => {
+                    console.log('🎵 Escala de louvor alterada, recarregando...');
+                    try {
+                        const schedules = await getEscalasLouvor();
+                        setLouvorSchedules(schedules);
+                    } catch (error) {
+                        console.error('Erro ao recarregar escalas de louvor:', error);
+                    }
+                }
+            )
+            .subscribe((status) => {
+                console.log('📡 Status do realtime de escalas de louvor:', status);
+            });
+
+        return () => {
+            console.log('❌ Removendo canal de realtime de escalas de louvor');
             supabase.removeChannel(channel);
         };
     }, []);

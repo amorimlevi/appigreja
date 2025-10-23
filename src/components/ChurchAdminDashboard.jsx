@@ -48,6 +48,7 @@ import { getEventFoods, getEventParticipants, deleteEventFood, createMinistrySch
 import { supabase } from '../lib/supabaseClient';
 import { useBlockScroll } from '../hooks/useBlockScroll';
 import { useChurchLogo } from '../hooks/useChurchSettings';
+import { notifyNewAviso, notifyNewEvent } from '../services/sendPushNotification';
 
 const ChurchAdminDashboard = ({ members = [], events = [], prayerRequests = [], families = [], onAddEvent, onEditEvent, onDeleteEvent, onAddMember, onEditMember, onDeleteMember, onAddFamily, onEditFamily, onLogout }) => {
     console.log('ChurchAdminDashboard renderizando - members:', members.length, 'events:', events.length, 'families:', families.length)
@@ -6742,6 +6743,10 @@ Montar escala        </button>
                                     const updatedAvisos = [...avisos, novoAviso];
                                     setAvisos(updatedAvisos);
                                     localStorage.setItem('avisos', JSON.stringify(updatedAvisos));
+                                    
+                                    // Enviar notificação push
+                                    await notifyNewAviso(novoAviso.titulo, novoAviso.id);
+                                    
                                     setShowAvisoModal(false);
                                     setNewAvisoData({ titulo: '', mensagem: '', destinatarios: ['todos'] });
                                 } catch (error) {

@@ -3,29 +3,30 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
 
-console.log('main.jsx carregado!')
-console.log('Root element:', document.getElementById('root'))
-
-// Configurar Status Bar (comentado temporariamente para debug)
-// import { StatusBar, Style } from '@capacitor/status-bar'
-// const setupStatusBar = async () => {
-//   try {
-//     await StatusBar.setOverlaysWebView({ overlay: true })
-//     await StatusBar.setStyle({ style: Style.Light })
-//     await StatusBar.setBackgroundColor({ color: '#00000000' })
-//   } catch (error) {
-//     console.log('Status Bar não disponível', error)
-//   }
-// }
-// setupStatusBar()
+console.log('🚀 main.jsx carregado!')
 
 // Aguardar DOM carregar completamente
-const initApp = () => {
+const initApp = async () => {
+  console.log('📍 Root element:', document.getElementById('root'))
+  console.log('🌐 window.location:', window.location.href)
+  
   const root = document.getElementById('root')
 
   if (!root) {
     console.error('ERRO: Elemento root não encontrado!')
     return
+  }
+
+  // Configurar Status Bar após DOM estar pronto
+  try {
+    const { StatusBar, Style } = await import('@capacitor/status-bar')
+    console.log('🎨 Configurando StatusBar...')
+    await StatusBar.setOverlaysWebView({ overlay: false })
+    await StatusBar.setStyle({ style: Style.Dark })
+    await StatusBar.setBackgroundColor({ color: '#000000' })
+    console.log('✅ StatusBar configurado!')
+  } catch (error) {
+    console.error('❌ Erro ao configurar Status Bar:', error)
   }
 
   console.log('Renderizando App...')

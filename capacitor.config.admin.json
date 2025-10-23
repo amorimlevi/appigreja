@@ -8,8 +8,9 @@
   },
   "plugins": {
     "StatusBar": {
-      "style": "LIGHT",
-      "backgroundColor": "#FFFFFF"
+      "style": "DARK",
+      "backgroundColor": "#000000",
+      "overlay": false
     },
     "Keyboard": {
       "resize": "none",

@@ -1,0 +1,8 @@
+{
+  "android": {
+    "path": "android-admin"
+  },
+  "ios": {
+    "path": "ios-admin"
+  }
+}

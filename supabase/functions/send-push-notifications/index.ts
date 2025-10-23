@@ -94,10 +94,13 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+    // Usar variáveis de ambiente automáticas do Supabase
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || 'https://dvbdvftakl5tyhpqznmu.supabase.co'
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_ANON_KEY') || ''
+    
+    console.log('🔧 Creating Supabase client with URL:', supabaseUrl.substring(0, 30) + '...')
+    
+    const supabaseClient = createClient(supabaseUrl, supabaseKey)
 
     // Buscar notificações pendentes
     const { data: notifications, error: notifError } = await supabaseClient

@@ -21,6 +21,7 @@ import {
     createAviso,
     loginMember
 } from './lib/supabaseService'
+import { notifyNewEvent } from './services/sendPushNotification'
 
 console.log('App.jsx carregado!')
 
@@ -523,6 +524,9 @@ function AppContent() {
           });
         }
       }
+      
+      // Enviar notificação push
+      await notifyNewEvent(newEvent.nome, newEvent.id);
       
       // Não adiciona ao estado aqui - a subscription realtime fará isso automaticamente
       // setEvents([...events, newEvent]);

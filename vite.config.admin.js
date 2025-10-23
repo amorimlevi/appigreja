@@ -1,12 +1,22 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { resolve } from 'path'
 
 export default defineConfig({
-  base: '/',
+  base: './',
   build: {
     outDir: 'dist',
     sourcemap: false,
+    assetsInlineLimit: 0,
+    rollupOptions: {
+      input: resolve(__dirname, 'index.html'),
+      output: {
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]'
+      }
+    }
   },
   define: {
     'process.env.VITE_APP_TYPE': JSON.stringify('admin')

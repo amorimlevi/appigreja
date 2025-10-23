@@ -63,6 +63,22 @@ export const initializePushNotifications = async (memberId) => {
         // Register with Apple / Google (after listeners are set)
         await PushNotifications.register();
 
+        // Para iOS: também escutar o token FCM do Firebase
+        const platform = Capacitor.getPlatform();
+        if (platform === 'ios') {
+            console.log('📱 iOS detected - setting up FCM token listener');
+            
+            // Escutar o token FCM do Firebase (enviado pelo AppDelegate)
+            window.addEventListener('FCMTokenReceived', (event) => {
+                const fcmToken = event.detail?.token || event.token;
+                if (fcmToken && memberId) {
+                    console.log('🔑 FCM Token received from Firebase:', fcmToken);
+                    console.log('💾 Saving FCM token to Supabase...');
+                    saveDeviceToken(memberId, fcmToken);
+                }
+            });
+        }
+
     } catch (error) {
         console.error('Error initializing push notifications:', error);
     }
