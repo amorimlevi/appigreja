@@ -179,8 +179,14 @@ serve(async (req) => {
               apns: {
                 payload: {
                   aps: {
+                    alert: {
+                      title: notification.title,
+                      body: notification.body,
+                    },
                     sound: 'default',
                     badge: 1,
+                    'content-available': 1,
+                    'mutable-content': 1,
                   }
                 }
               },
@@ -208,10 +214,12 @@ serve(async (req) => {
           const result = await response.json()
           
           if (response.ok) {
-            console.log(`✅ Notification sent successfully to ${deviceToken.platform} device`)
+            console.log(`✅ Notification sent successfully to ${deviceToken.platform} device (member ${deviceToken.member_id})`)
+            console.log(`   FCM Response:`, JSON.stringify(result))
             sentCount++
           } else {
-            console.error(`❌ Failed to send to ${deviceToken.platform}:`, result)
+            console.error(`❌ Failed to send to ${deviceToken.platform} (member ${deviceToken.member_id}):`, result)
+            console.error(`   Full error details:`, JSON.stringify(result, null, 2))
             
             // Remover tokens inválidos
             if (result.error?.code === 404 || result.error?.status === 'NOT_FOUND' || 

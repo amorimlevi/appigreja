@@ -1,17 +1,14 @@
 {
-  "appId": "com.igreja.member",
-  "appName": "Igreja Member",
+  "appId": "com.igreja.admin",
+  "appName": "Igreja Admin",
   "webDir": "dist",
   "server": {
     "cleartext": true,
-    "allowNavigation": ["*"],
-    "androidScheme": "https",
-    "iosScheme": "https",
-    "hostname": "app"
+    "allowNavigation": ["*"]
   },
   "plugins": {
     "StatusBar": {
-      "style": "LIGHT",
+      "style": "DARK",
       "backgroundColor": "#000000",
       "overlay": false
     },
@@ -19,13 +16,10 @@
       "resize": "none",
       "style": "dark",
       "resizeOnFullScreen": false
-    },
-    "CapacitorHttp": {
-      "enabled": true
     }
   },
   "ios": {
-    "path": "ios-member",
+    "path": "ios-admin",
     "contentInset": "never",
     "scrollEnabled": true,
     "webContentsDebuggingEnabled": true,
@@ -34,10 +28,10 @@
     "preferredContentMode": "mobile"
   },
   "android": {
-    "path": "android-member",
+    "path": "android-admin",
     "buildOptions": {
       "keystorePath": "release-key.keystore",
-      "keystoreAlias": "member-app"
+      "keystoreAlias": "admin-app"
     }
   }
 }

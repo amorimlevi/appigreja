@@ -6,7 +6,7 @@
 -- https://dvbdvftaklstyhpqznmu.supabase.co/storage/v1/object/public/church-logos/logo-zoe-preta.png
 
 UPDATE church_settings
-SET setting_value = 'COLE_AQUI_A_URL_DA_LOGO_PRETA_DO_SUPABASE_STORAGE',
+SET setting_value = 'https://dvbdvftaklstyhpqznmu.supabase.co/storage/v1/object/public/church-logos/WhatsApp%20Image%202025-10-21%20at%2007.30.14.jpeg',
     updated_at = NOW()
 WHERE setting_key = 'church_logo_url';
 

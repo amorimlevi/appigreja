@@ -95,7 +95,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate {
     private func sendFCMTokenToCapacitor(_ token: String) {
         print("📤 Sending FCM token to Capacitor: \(token)")
         
-        // Create a custom notification with FCM token
+        // Enviar via JavaScript bridge do Capacitor
+        DispatchQueue.main.async {
+            if let bridge = (self.window?.rootViewController as? CAPBridgeViewController)?.bridge {
+                bridge.triggerJSEvent(eventName: "FCMTokenReceived", target: "window", data: "{\"token\": \"\(token)\"}")
+                print("✅ FCM token sent to JS bridge")
+            } else {
+                print("❌ Bridge not found")
+            }
+        }
+        
+        // Também enviar via NotificationCenter (fallback)
         NotificationCenter.default.post(
             name: Notification.Name("FCMTokenReceived"),
             object: nil,

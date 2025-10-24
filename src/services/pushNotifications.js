@@ -2,7 +2,10 @@ import { PushNotifications } from '@capacitor/push-notifications';
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '../lib/supabaseClient';
 
+let fcmTokenSaved = false; // Flag para evitar salvamento duplicado
+
 export const initializePushNotifications = async (memberId) => {
+    fcmTokenSaved = false; // Reset flag
     if (!Capacitor.isNativePlatform()) {
         console.log('Push notifications only work on native platforms');
         return;
@@ -34,7 +37,7 @@ export const initializePushNotifications = async (memberId) => {
             console.log('✅ Push registration success!');
             console.log('🔑 Token:', token.value);
             
-            // Save token to Supabase
+            // Salvar token para iOS (APNs) e Android (FCM)
             if (memberId) {
                 console.log('💾 Saving token to Supabase...');
                 await saveDeviceToken(memberId, token.value);
@@ -49,7 +52,12 @@ export const initializePushNotifications = async (memberId) => {
         // Listen for push notifications
         await PushNotifications.addListener('pushNotificationReceived', (notification) => {
             console.log('📬 Push notification received:', notification);
-            // Notificação recebida enquanto o app está aberto
+            // Notificação recebida enquanto o app está aberto (foreground)
+            // No iOS, é preciso mostrar manualmente
+            if (Capacitor.getPlatform() === 'ios') {
+                // Mostrar um alert ou toast
+                alert(`${notification.title}\n\n${notification.body}`);
+            }
         });
 
         // Listen for notification actions
@@ -63,22 +71,6 @@ export const initializePushNotifications = async (memberId) => {
         // Register with Apple / Google (after listeners are set)
         await PushNotifications.register();
 
-        // Para iOS: também escutar o token FCM do Firebase
-        const platform = Capacitor.getPlatform();
-        if (platform === 'ios') {
-            console.log('📱 iOS detected - setting up FCM token listener');
-            
-            // Escutar o token FCM do Firebase (enviado pelo AppDelegate)
-            window.addEventListener('FCMTokenReceived', (event) => {
-                const fcmToken = event.detail?.token || event.token;
-                if (fcmToken && memberId) {
-                    console.log('🔑 FCM Token received from Firebase:', fcmToken);
-                    console.log('💾 Saving FCM token to Supabase...');
-                    saveDeviceToken(memberId, fcmToken);
-                }
-            });
-        }
-
     } catch (error) {
         console.error('Error initializing push notifications:', error);
     }
@@ -87,9 +79,19 @@ export const initializePushNotifications = async (memberId) => {
 const saveDeviceToken = async (memberId, token) => {
     try {
         const platform = Capacitor.getPlatform(); // 'ios' or 'android'
+        
+        // Obter Bundle ID para iOS
+        let bundleId = null;
+        if (platform === 'ios') {
+            const { App } = await import('@capacitor/app');
+            const appInfo = await App.getInfo();
+            bundleId = appInfo.id;
+        }
+        
         console.log('📱 Platform:', platform);
         console.log('👤 Member ID:', memberId);
         console.log('🔑 Token:', token);
+        console.log('📦 Bundle ID:', bundleId);
         
         // Verifica se este token específico já existe
         const { data: existingToken, error: selectError } = await supabase
@@ -111,6 +113,7 @@ const saveDeviceToken = async (memberId, token) => {
                 .update({ 
                     member_id: memberId,
                     platform,
+                    bundle_id: bundleId,
                     updated_at: new Date().toISOString()
                 })
                 .eq('token', token);
@@ -129,6 +132,7 @@ const saveDeviceToken = async (memberId, token) => {
                     member_id: memberId,
                     token,
                     platform,
+                    bundle_id: bundleId,
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 });

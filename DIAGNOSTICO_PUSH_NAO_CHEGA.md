@@ -1,184 +1,309 @@
-# 🔍 Diagnóstico: Notificação Enviada mas Não Chega
+# 🔍 Diagnóstico: Logs OK mas Notificação Não Chega
 
-## ✅ Status Atual
+## Situação Atual
 
-Logs mostram: `✅ Notification sent successfully to iOS device (member 15)`
-
-Isso significa que:
-- ✅ Edge function funcionou
-- ✅ Credenciais APNs corretas
-- ✅ Apple aceitou a notificação (HTTP 200)
-- ❌ **MAS** não está chegando no dispositivo
-
-## 🔍 Possíveis Causas
-
-### 1. Bundle ID Incorreto ⚠️
-
-**Problema mais comum!**
-
-Verifique se o `APNS_BUNDLE_ID` no Supabase é **EXATAMENTE** o mesmo do Xcode.
-
-#### Como verificar:
-
-**No Xcode:**
-1. Abra o projeto do app
-2. Selecione o target (ex: "Igreja Zoe Member")
-3. Aba **Signing & Capabilities**
-4. Veja o **Bundle Identifier** (ex: `com.igrejazoe.member`)
-
-**No Supabase:**
-- Deve ser: `com.igrejazoe.member`
-- **Não** pode ser: `com.igrejazoe.admin` (se for app member)
-
-### 2. Push Notifications Capability Não Habilitada
-
-**No Xcode:**
-1. Selecione o target
-2. Aba **Signing & Capabilities**
-3. Clique no **+ Capability**
-4. Adicione **Push Notifications**
-5. Faça novo build e envie para App Store/TestFlight
-
-### 3. Permissões Negadas no iOS
-
-**No dispositivo:**
-1. Ajustes → [Nome do App]
-2. Notificações
-3. Verificar se está **LIGADO**
-
-### 4. App Fechado vs App Aberto
-
-**Comportamento normal do iOS:**
-- **App fechado/background**: Notificação aparece na barra
-- **App aberto**: Notificação **não** aparece (comportamento padrão)
-
-### 5. Token Expirado ou Inválido
-
-O token pode estar desatualizado.
-
-**Solução:**
-1. Feche completamente o app (swipe up)
-2. Abra novamente
-3. Faça logout e login
-4. Isso registra um novo token
-
-### 6. Ambiente Sandbox vs Production
-
-Verifique se está usando o certificado correto para o ambiente.
-
-## 🛠️ Checklist de Diagnóstico
-
-Execute este SQL no Supabase para ver os tokens:
-
-```sql
--- Ver tokens registrados
-SELECT 
-    id,
-    member_id,
-    platform,
-    LEFT(token, 30) || '...' as token_preview,
-    created_at,
-    updated_at
-FROM device_tokens
-WHERE member_id = 15
-ORDER BY created_at DESC;
-```
-
-Verifique:
-- [ ] Há tokens para o membro 15?
-- [ ] Token foi criado recentemente?
-- [ ] Platform é 'ios'?
-
-## 🧪 Teste Manual
-
-Vamos testar diretamente via SQL:
-
-```sql
--- Trigger manual de notificação
-INSERT INTO avisos (titulo, mensagem, destinatarios)
-VALUES ('Teste Push', 'Esta é uma notificação de teste', ARRAY['todos']);
-```
-
-## 🔧 Soluções
-
-### Solução 1: Verificar e Corrigir Bundle ID
-
-1. Abra o Xcode
-2. Veja o Bundle Identifier exato
-3. Configure no Supabase:
-   - https://supabase.com/dashboard/project/dvbdvftaklstyhpqznmu/settings/functions
-   - Edite `APNS_BUNDLE_ID`
-4. Redeploy:
-   ```bash
-   supabase functions deploy send-push-notification
-   ```
-
-### Solução 2: Reabilitar Push Notifications
-
-**No Xcode:**
-1. Target → Signing & Capabilities
-2. Remova **Push Notifications**
-3. Adicione novamente **Push Notifications**
-4. Build → Archive → Upload para App Store Connect
-
-### Solução 3: Resetar Token no Dispositivo
-
-**No app:**
-1. Logout completo
-2. Feche o app (swipe up)
-3. Reabra
-4. Faça login novamente
-5. Aceite permissão de notificações se aparecer
-
-### Solução 4: Verificar no Console do Dispositivo
-
-**No Mac:**
-1. Conecte o iPhone via USB
-2. Abra **Console.app**
-3. Selecione o iPhone
-4. Filtre por: `apns` ou `notification`
-5. Crie um aviso
-6. Veja os logs - procure por erros
-
-## 📱 Teste Definitivo
-
-Para ter certeza que está funcionando:
-
-1. **Feche completamente o app** no iPhone
-2. **No app admin**, crie um novo aviso
-3. **Aguarde 5-10 segundos**
-4. A notificação deve aparecer na tela de bloqueio
-
-**Se aparecer:** ✅ Funcionando!  
-**Se não aparecer:** Veja checklist abaixo
-
-## 🔍 Checklist Final
-
-- [ ] Bundle ID no Supabase = Bundle ID no Xcode
-- [ ] Push Notifications capability habilitada no Xcode
-- [ ] Notificações permitidas no iOS (Ajustes → App → Notificações)
-- [ ] App está fechado (não aberto) durante o teste
-- [ ] Token foi registrado recentemente (faça logout/login)
-- [ ] Certificado APNs é de produção (não sandbox)
-- [ ] Key ID e Team ID estão corretos
-
-## 🆘 Ainda Não Funciona?
-
-Se ainda não funcionar após tudo isso, o problema pode ser:
-
-1. **Provisioning Profile desatualizado**
-   - Baixe novo perfil no Apple Developer
-   - Configure no Xcode
-   - Faça novo build
-
-2. **App não tem entitlements corretos**
-   - Verifique arquivo `.entitlements`
-   - Deve ter: `aps-environment` = `production`
-
-3. **Problema com a Apple**
-   - Às vezes demora até 15 minutos
-   - Tente reiniciar o iPhone
+✅ Logs mostram: `"Sent successfully to ios device (member 29)"`
+❌ iPhone não recebe a notificação
 
 ---
 
-**Próximo passo:** Execute o checklist e reporte qual item está falhando.
+## 🎯 Possíveis Causas (em ordem de probabilidade)
+
+### 1️⃣ Token foi gerado ANTES de configurar o certificado correto ⭐ MAIS PROVÁVEL
+
+**Problema:**
+- Você configurou o certificado `44UHHU47FR` no Firebase
+- Mas o token iOS foi gerado ANTES dessa configuração
+- O token está "vinculado" ao certificado antigo (`NR39P4964J`)
+- FCM aceita, mas APNS rejeita silenciosamente
+
+**Solução:**
+```sql
+-- Execute este SQL:
+DELETE FROM device_tokens WHERE platform = 'ios';
+```
+
+Depois:
+1. Delete o app do iPhone
+2. Reinstale do TestFlight
+3. Faça login novamente
+4. Novo token será gerado com certificado correto
+
+---
+
+### 2️⃣ App está ABERTO (foreground)
+
+**Problema:**
+- Notificações iOS NÃO aparecem automaticamente quando o app está aberto
+- O evento `pushNotificationReceived` é disparado, mas sem banner
+
+**Como verificar:**
+- O app está aberto na tela do iPhone?
+- Se SIM, você deve ver um `alert()` (já configuramos isso)
+- Se NÃO está vendo nem o alert, vá para causa #1
+
+**Solução:**
+- FECHE o app completamente:
+  1. Swipe up (gesto de home)
+  2. App switcher
+  3. Swipe UP no app para fechá-lo
+  4. Verifique que NÃO está no app switcher
+
+---
+
+### 3️⃣ Permissões não habilitadas
+
+**Como verificar:**
+
+No iPhone:
+```
+Settings > Notifications > Igreja Member
+```
+
+Deve estar assim:
+- ✅ Allow Notifications = **ON**
+- ✅ Lock Screen = **ON**
+- ✅ Notification Center = **ON**
+- ✅ Banners = **ON**
+- ✅ Sounds = **ON**
+
+**Solução:**
+- Ative todas as opções acima
+
+---
+
+### 4️⃣ Do Not Disturb / Focus está ligado
+
+**Como verificar:**
+
+No iPhone:
+- Control Center (swipe down do canto superior direito)
+- Procure pelo ícone de lua 🌙 ou Focus
+
+**Solução:**
+- Desative Do Not Disturb / Focus
+
+---
+
+### 5️⃣ Build do app está incorreto
+
+**Problema:**
+- O app foi buildado com `aps-environment: development`
+- Mas está instalado via TestFlight (que usa production)
+
+**Como verificar:**
+
+Arquivo: `ios-member/App/App/App-Release.entitlements`
+
+Deve ter:
+```xml
+<key>aps-environment</key>
+<string>production</string>
+```
+
+**Solução:**
+- Se estiver `development`, mude para `production`
+- Rebuild do app
+- Upload nova build para TestFlight
+- Reinstale
+
+---
+
+### 6️⃣ Cache do Firebase/APNS
+
+**Problema:**
+- Às vezes leva alguns minutos para o Firebase atualizar o certificado
+
+**Solução:**
+- Aguarde 5-10 minutos após configurar o certificado
+- Delete tokens e reinstale app
+
+---
+
+## 🔧 Diagnóstico Passo a Passo
+
+### Passo 1: Verificar quando o token foi criado
+
+Execute: `debug-ios-push-nao-chega.sql`
+
+**Resultado esperado:**
+```
+| created_at           | status                                        |
+|---------------------|-----------------------------------------------|
+| 2025-10-23 13:05:00 | ✅ NOVO                                       |
+```
+
+**Se mostrar "⚠️ ANTIGO":**
+→ Esse é o problema! Token precisa ser regenerado.
+
+---
+
+### Passo 2: Clicar na linha do log para ver resposta completa
+
+No dashboard do Supabase:
+1. Edge Functions → send-push-notifications → Logs
+2. Clique na linha: `"Sent successfully to ios device (member 29)"`
+3. Veja a resposta completa do FCM
+
+**Exemplo de sucesso real:**
+```json
+{
+  "name": "projects/igreja-app-fe3db/messages/0:1729694753912345%abc123"
+}
+```
+
+**Se tiver algo diferente, copie e analise**
+
+---
+
+### Passo 3: Verificar estado do app
+
+**No iPhone, o app está:**
+- [ ] Aberto na tela (foreground) → Feche completamente
+- [ ] Minimizado (background) → Notificação deveria aparecer
+- [ ] Fechado (terminated) → Notificação deveria aparecer
+
+---
+
+### Passo 4: Teste com app completamente fechado
+
+1. **Feche o app:**
+   - Swipe up (gesto home)
+   - App switcher
+   - Swipe UP no app
+
+2. **Verifique que foi fechado:**
+   - App não aparece no app switcher
+
+3. **Crie novo aviso**
+
+4. **Aguarde 10 segundos**
+
+5. **Se NÃO aparecer:**
+   → Token precisa ser regenerado (Passo 5)
+
+---
+
+### Passo 5: Regenerar token (SOLUÇÃO DEFINITIVA)
+
+```sql
+-- 1. Deletar tokens iOS
+DELETE FROM device_tokens WHERE platform = 'ios';
+```
+
+**No iPhone:**
+```
+2. Delete o app (pressione e segure → Remove App)
+3. Abra TestFlight
+4. Reinstale "Igreja Member"
+5. Faça login
+6. Aceite permissões de notificação
+```
+
+**Verificar token novo foi salvo:**
+```sql
+SELECT * FROM device_tokens WHERE platform = 'ios' ORDER BY created_at DESC;
+-- Deve mostrar created_at = agora (há poucos segundos)
+```
+
+**Testar novamente:**
+```
+7. FECHE o app (swipe up → app switcher → swipe up)
+8. Crie novo aviso
+9. Aguarde 5 segundos
+10. Notificação DEVE aparecer! 🎉
+```
+
+---
+
+## 📊 Checklist Completo
+
+Antes de criar um aviso de teste, verifique:
+
+### Firebase Console:
+- [x] Certificado `44UHHU47FR` configurado
+- [x] Team ID `LU3NTX93ML` correto
+- [x] Status "Ativa ✓"
+
+### Tokens:
+- [ ] Tokens iOS deletados após configurar certificado
+- [ ] App reinstalado do TestFlight
+- [ ] Novo token gerado (verificado no SQL)
+- [ ] Token criado há menos de 30 minutos
+
+### iPhone:
+- [ ] Permissões habilitadas (Settings > Notifications)
+- [ ] Do Not Disturb desligado
+- [ ] App **fechado completamente** (não no app switcher)
+
+### App Build:
+- [ ] `App-Release.entitlements` tem `production`
+- [ ] Build do TestFlight é recente (após configurar certificado)
+
+Se TODOS os itens acima estiverem ✅, a notificação **DEVE** aparecer!
+
+---
+
+## 🎯 Teste Final Definitivo
+
+Execute este procedimento completo:
+
+```sql
+-- 1. Deletar TUDO
+DELETE FROM device_tokens WHERE platform = 'ios';
+DELETE FROM push_notifications_queue WHERE sent = true;
+```
+
+```bash
+# 2. No iPhone:
+# - Delete o app completamente
+# - Reinstale do TestFlight
+# - Faça login
+# - Aceite permissões
+
+# 3. Verificar token salvo
+SELECT * FROM device_tokens WHERE platform = 'ios';
+# Deve mostrar 1 linha com created_at recente
+
+# 4. FECHAR app completamente
+# - Swipe up → app switcher → swipe up no app
+
+# 5. Criar aviso de teste
+INSERT INTO avisos (titulo, descricao, igreja_id)
+VALUES ('TESTE DEFINITIVO', 'Esta é a notificação de teste definitiva! Se você viu, FUNCIONOU! 🎉🎉🎉', 1);
+
+# 6. Aguardar 5 segundos
+
+# 7. DEVE APARECER! 🚀
+```
+
+---
+
+## ❓ Se AINDA não funcionar
+
+Compartilhe estas informações:
+
+1. **Resultado do SQL:**
+```sql
+SELECT 
+    id,
+    member_id,
+    LEFT(token, 60) as token,
+    created_at,
+    AGE(NOW(), created_at) as idade
+FROM device_tokens 
+WHERE platform = 'ios';
+```
+
+2. **Screenshot das permissões:**
+- Settings > Notifications > Igreja Member
+
+3. **Logs completos do Supabase:**
+- Últimas 10 linhas da edge function
+
+4. **Confirmar:**
+- [ ] App foi fechado completamente? (não apenas minimizado)
+- [ ] Token foi deletado e regenerado APÓS configurar certificado?
+- [ ] Do Not Disturb está desligado?
+
+Com essas informações, conseguiremos identificar o problema exato!

@@ -6744,8 +6744,7 @@ Montar escala        </button>
                                     setAvisos(updatedAvisos);
                                     localStorage.setItem('avisos', JSON.stringify(updatedAvisos));
                                     
-                                    // Enviar notificação push
-                                    await notifyNewAviso(novoAviso.titulo, novoAviso.id);
+                                    // Notificação push é enviada automaticamente pelo trigger do banco
                                     
                                     setShowAvisoModal(false);
                                     setNewAvisoData({ titulo: '', mensagem: '', destinatarios: ['todos'] });

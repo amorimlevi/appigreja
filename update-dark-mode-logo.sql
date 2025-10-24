@@ -6,7 +6,7 @@
 -- https://seu-projeto.supabase.co/storage/v1/object/public/church-logos/camacari-logo-dark.png
 
 UPDATE church_settings
-SET setting_value = 'COLE_AQUI_A_URL_DA_LOGO_ESCURA_DO_SUPABASE_STORAGE',
+SET setting_value = 'https://dvbdvftaklstyhpqznmu.supabase.co/storage/v1/object/public/church-logos/novo%20logo%20zoeBRANCO.png.png',
     updated_at = NOW()
 WHERE setting_key = 'church_logo_url_dark';
 

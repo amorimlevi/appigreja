@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.igreja.member</string>
+	<string>com.igreja.admin</string>
 	<key>PROJECT_ID</key>
 	<string>igreja-app-fe3db</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:417819209289:ios:2fa6b7d3967289e1a2d998</string>
+	<string>1:417819209289:ios:68793fd7264a65fea2d998</string>
 </dict>
 </plist>
