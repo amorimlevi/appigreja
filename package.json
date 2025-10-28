@@ -20,6 +20,7 @@
     "open:android:admin": "cp capacitor.config.admin.json capacitor.config.json && node node_modules/@capacitor/cli/bin/capacitor open android"
   },
   "dependencies": {
+    "@capacitor-firebase/messaging": "^7.3.1",
     "@capacitor/android": "^7.4.3",
     "@capacitor/app": "^7.1.0",
     "@capacitor/core": "^7.4.3",
@@ -28,6 +29,7 @@
     "@capacitor/status-bar": "^7.0.3",
     "@supabase/supabase-js": "^2.74.0",
     "date-fns": "^2.30.0",
+    "firebase": "^11.10.0",
     "lucide-react": "^0.263.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

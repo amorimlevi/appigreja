@@ -4,7 +4,7 @@
 -- Substitua 'SUA_SERVICE_ROLE_KEY_AQUI' pela sua chave real
 -- Pegue em: Supabase Dashboard > Project Settings > API > service_role key
 
-ALTER DATABASE postgres SET app.settings.service_role_key = 'SUA_SERVICE_ROLE_KEY_AQUI';
+ALTER DATABASE postgres SET app.settings.service_role_key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR2YmR2ZnRha2xzdHlocHF6bm11Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTk1Njg0NiwiZXhwIjoyMDc1NTMyODQ2fQ.wyd5_VkLNe8aRhXw1lDUZLzDhsh0Kl6CJt1WBa2X7eA';
 
 -- Recarregar configurações
 SELECT pg_reload_conf();

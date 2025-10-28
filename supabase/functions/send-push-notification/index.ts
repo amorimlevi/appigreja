@@ -236,6 +236,37 @@ serve(async (req) => {
         for (const deviceToken of tokens) {
           try {
             const platform = deviceToken.platform || 'unknown'
+            const token = deviceToken.token
+            const isApnsToken = token.length === 64 && /^[0-9A-Fa-f]+$/.test(token)
+            
+            // Se for token APNs (64 chars hexadecimais), enviar via APNs direto
+            if (platform === 'ios' && isApnsToken) {
+              console.log(`📤 Sending to iOS device (member ${deviceToken.member_id}) via APNs...`)
+              const bundleId = deviceToken.bundle_id || 'com.igreja.member'
+              const response = await sendAPNsNotification(
+                token,
+                notificationTitle,
+                notificationBody,
+                dataPayload,
+                bundleId
+              )
+              
+              if (response.ok) {
+                console.log(`✅ Sent successfully to iOS device (member ${deviceToken.member_id})`)
+                sentCount++
+              } else {
+                const errorText = await response.text()
+                console.error(`❌ Failed to send to iOS (member ${deviceToken.member_id}):`, response.status, errorText)
+                
+                if (response.status === 400 || response.status === 410) {
+                  console.log(`🗑️  Removing invalid APNs token for member ${deviceToken.member_id}`)
+                  await supabaseClient.from('device_tokens').delete().eq('id', deviceToken.id)
+                }
+              }
+              continue
+            }
+            
+            // Para tokens FCM (iOS e Android), enviar via FCM
             const fcmDataPayload: Record<string, string> = {}
             for (const [key, value] of Object.entries(dataPayload)) {
               fcmDataPayload[key] = typeof value === 'string' ? value : JSON.stringify(value)

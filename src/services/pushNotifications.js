@@ -1,11 +1,9 @@
 import { PushNotifications } from '@capacitor/push-notifications';
+import { FirebaseMessaging } from '@capacitor-firebase/messaging';
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '../lib/supabaseClient';
 
-let fcmTokenSaved = false; // Flag para evitar salvamento duplicado
-
 export const initializePushNotifications = async (memberId) => {
-    fcmTokenSaved = false; // Reset flag
     if (!Capacitor.isNativePlatform()) {
         console.log('Push notifications only work on native platforms');
         return;
@@ -14,6 +12,8 @@ export const initializePushNotifications = async (memberId) => {
     console.log('🔔 Initializing push notifications for member:', memberId);
 
     try {
+        const platform = Capacitor.getPlatform();
+        
         // Request permission
         let permStatus = await PushNotifications.checkPermissions();
         console.log('📱 Permission status:', permStatus);
@@ -32,17 +32,36 @@ export const initializePushNotifications = async (memberId) => {
         // Setup listeners BEFORE registering
         console.log('🎧 Setting up push notification listeners...');
         
-        // Listen for registration
-        await PushNotifications.addListener('registration', async (token) => {
-            console.log('✅ Push registration success!');
-            console.log('🔑 Token:', token.value);
+        // Para iOS, usar Firebase Messaging para obter token FCM
+        if (platform === 'ios') {
+            // Listener para token FCM no iOS
+            await FirebaseMessaging.addListener('tokenReceived', async (event) => {
+                console.log('✅ FCM Token received (iOS):', event.token);
+                if (memberId) {
+                    console.log('💾 Saving FCM token to Supabase...');
+                    await saveDeviceToken(memberId, event.token);
+                }
+            });
             
-            // Salvar token para iOS (APNs) e Android (FCM)
-            if (memberId) {
-                console.log('💾 Saving token to Supabase...');
-                await saveDeviceToken(memberId, token.value);
+            // Obter token FCM
+            const { token } = await FirebaseMessaging.getToken();
+            console.log('✅ FCM Token obtained (iOS):', token);
+            if (memberId && token) {
+                console.log('💾 Saving FCM token to Supabase...');
+                await saveDeviceToken(memberId, token);
             }
-        });
+        } else {
+            // Para Android, usar PushNotifications normalmente
+            await PushNotifications.addListener('registration', async (token) => {
+                console.log('✅ Push registration success (Android)!');
+                console.log('🔑 Token:', token.value);
+                
+                if (memberId) {
+                    console.log('💾 Saving token to Supabase...');
+                    await saveDeviceToken(memberId, token.value);
+                }
+            });
+        }
 
         // Listen for registration errors
         await PushNotifications.addListener('registrationError', (error) => {

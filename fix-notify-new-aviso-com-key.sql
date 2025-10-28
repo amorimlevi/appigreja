@@ -10,7 +10,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
     request_id bigint;
-    service_role_key text := 'SUA_SERVICE_ROLE_KEY_AQUI';  -- SUBSTITUA AQUI
+    service_role_key text := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR2YmR2ZnRha2xzdHlocHF6bm11Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTk1Njg0NiwiZXhwIjoyMDc1NTMyODQ2fQ.wyd5_VkLNe8aRhXw1lDUZLzDhsh0Kl6CJt1WBa2X7eA';  -- SUBSTITUA AQUI
 BEGIN
     RAISE WARNING '🔵 notify_new_aviso iniciado: ID=%, Titulo=%', NEW.id, NEW.titulo;
     
