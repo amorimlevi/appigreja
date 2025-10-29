@@ -1,5 +1,4 @@
 import { PushNotifications } from '@capacitor/push-notifications';
-import { FirebaseMessaging } from '@capacitor-firebase/messaging';
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '../lib/supabaseClient';
 
@@ -99,18 +98,9 @@ const saveDeviceToken = async (memberId, token) => {
     try {
         const platform = Capacitor.getPlatform(); // 'ios' or 'android'
         
-        // Obter Bundle ID para iOS
-        let bundleId = null;
-        if (platform === 'ios') {
-            const { App } = await import('@capacitor/app');
-            const appInfo = await App.getInfo();
-            bundleId = appInfo.id;
-        }
-        
         console.log('📱 Platform:', platform);
         console.log('👤 Member ID:', memberId);
         console.log('🔑 Token:', token);
-        console.log('📦 Bundle ID:', bundleId);
         
         // Verifica se este token específico já existe
         const { data: existingToken, error: selectError } = await supabase
